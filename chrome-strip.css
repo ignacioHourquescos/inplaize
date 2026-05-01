@@ -1,0 +1,245 @@
+/**
+ * Medidas y colores compartidos entre la franja de la ventana web (web-shell)
+ * y la barra superior del dock en modo topbar.
+ */
+:root {
+  --ud-chrome-strip-h: 58px;
+  --ud-chrome-strip-pad-y: 8px;
+  --ud-chrome-strip-pad-x: 8px;
+  --ud-chrome-strip-gap: 6px;
+  --ud-chrome-icon: 40px;
+  --ud-chrome-action-w: 46px;
+  --ud-chrome-strip-bg: #121216;
+  --ud-chrome-strip-border: #33333d;
+  --ud-chrome-icon-bg: #2a2a32;
+  --ud-chrome-icon-bg-hover: #36363f;
+  --ud-chrome-icon-border: #33333d;
+  --ud-chrome-icon-border-hover: #4a4a58;
+  --ud-chrome-icon-active-bg: #3d3d48;
+  --ud-chrome-icon-active-border: #6b6b7e;
+  --ud-chrome-icon-muted: #c8c8d4;
+  --ud-chrome-text: #e8e8ef;
+  --ud-chrome-action-hover: #3a3a44;
+  --ud-chrome-action-color: #e4e4ec;
+  --ud-chrome-canvas: #000000;
+  --ud-chrome-edit-tab: #7c6cff;
+}
+
+/* ==========================================================================
+   Componente compartido: ICONO DE LA FRANJA
+   Lo usan la ventana web (.shell-shortcut-item) y el dock en modo topbar
+   (.shortcut-card.shell-shortcut-item). Mismo markup, mismo look.
+   ========================================================================== */
+.shell-shortcut-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ud-chrome-icon);
+  min-width: var(--ud-chrome-icon);
+  max-width: var(--ud-chrome-icon);
+  height: var(--ud-chrome-icon);
+  min-height: var(--ud-chrome-icon);
+  max-height: var(--ud-chrome-icon);
+  align-self: center;
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--ud-chrome-icon-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  cursor: pointer;
+  font: inherit;
+  flex: 0 0 auto;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.shell-shortcut-item:hover {
+  background: var(--ud-chrome-icon-bg-hover);
+  border-color: var(--ud-chrome-icon-border-hover);
+}
+
+.shell-shortcut-item.is-active {
+  background: var(--ud-chrome-icon-active-bg);
+  border-color: var(--ud-chrome-icon-active-border);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.shell-shortcut-item.is-open:not(.is-active) {
+  border-color: var(--ud-chrome-icon-border-hover);
+}
+
+.shell-shortcut-item.shell-shortcut-inactive,
+.shell-shortcut-item.shortcut-web-inactive {
+  opacity: 0.42;
+  filter: grayscale(0.75);
+}
+
+.shell-shortcut-item.shell-shortcut-inactive:hover,
+.shell-shortcut-item.shortcut-web-inactive:hover {
+  opacity: 0.58;
+  filter: grayscale(0.5);
+}
+
+.shell-shortcut-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+}
+
+.shell-shortcut-icon-img,
+.shell-shortcut-item .shortcut-icon-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+  pointer-events: none;
+}
+
+.shell-shortcut-icon-emoji,
+.shell-shortcut-item .shortcut-icon {
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+}
+
+.shell-shortcut-icon-fallback {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ud-chrome-icon-muted);
+}
+
+.shell-strip-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  z-index: 3;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e53935;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.shell-strip-badge.hidden,
+.shell-strip-badge[hidden] {
+  display: none;
+}
+
+/* Edición en el dock: al pulsar un icono, borde violeta */
+.shell-shortcut-item.shortcut-card-editing {
+  border-color: var(--ud-chrome-edit-tab) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* ==========================================================================
+   Gestos sobre el icono de la franja
+   ========================================================================== */
+
+/* Píldora flotante "× Cerrar" debajo del icono. `position: fixed` + z-index
+   extremo para que no la tape ningún overflow ni stacking context. Escala y
+   opacidad avanzan con `--press-progress` (0 → 1) durante el long-press. */
+.strip-drag-close-pill {
+  --press-progress: 0;
+  position: fixed;
+  transform: translate(-50%, 0) scale(calc(0.9 + var(--press-progress, 0) * 0.15));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(
+    90deg,
+    rgba(239, 68, 68, calc(0.85 + var(--press-progress, 0) * 0.15)),
+    rgba(220, 38, 38, calc(0.75 + var(--press-progress, 0) * 0.25))
+  );
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(239, 68, 68, 0.35);
+  pointer-events: none;
+  opacity: calc(0.4 + var(--press-progress, 0) * 0.6);
+  transition: background 0.08s linear;
+  z-index: 2147483000;
+}
+
+.strip-drag-close-pill .strip-drag-close-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.strip-drag-close-pill .strip-drag-close-text {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.strip-drag-close-pill.is-committing {
+  transform: translate(-50%, 6px) scale(1.08);
+  opacity: 0;
+  transition: transform 0.14s ease-out, opacity 0.14s ease-out;
+}
+
+/* ==========================================================================
+   MODO FOCO
+   ========================================================================== */
+
+/* Barra violeta general cuando el modo foco está activo. */
+html.focus-mode-active .shell-top {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(124, 108, 255, 0.28),
+      rgba(124, 108, 255, 0.14)
+    ),
+    var(--ud-chrome-strip-bg);
+  border-bottom-color: rgba(124, 108, 255, 0.45);
+}
+
+/* Miembros de la colección: marco violeta de 3px, sin sombra. */
+.shell-shortcut-item.shell-focus-member {
+  border: 3px solid var(--ud-chrome-edit-tab) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.shell-shortcut-item.shell-focus-member:hover {
+  border-color: var(--ud-chrome-edit-tab) !important;
+  box-shadow: none !important;
+}
+
+/* Los iconos que quedan fuera de la colección conservan su estado habitual
+   (prendido en color / apagado en escala de grises). No los atenuamos: el
+   Modo Foco se distingue con el marco violeta de los miembros y la barra
+   superior, no tapando al resto. */

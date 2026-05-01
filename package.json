@@ -1,0 +1,37 @@
+{
+  "name": "usual-desk",
+  "version": "1.2.3",
+  "description": "Floating dock of quick-access shortcuts for your desktop",
+  "main": "main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electronmon .",
+    "build:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
+    "build:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.usualdesk.app",
+    "productName": "UsualDesk",
+    "forceCodeSigning": false,
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    }
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^41.1.1",
+    "electron-builder": "^26.8.1",
+    "electronmon": "^2.0.3"
+  }
+}

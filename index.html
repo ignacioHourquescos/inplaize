@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es" data-dock-position="left" data-dock-layout="topbar" data-sidebar-density="normal" data-web-host-mode="separate">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jumpto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="dock-toast-stack" class="dock-toast-stack" aria-live="polite" aria-relevant="additions" aria-label="Avisos de páginas web"></div>
+    <!-- Capa pantalla completa cuando el panel está abierto: clic fuera cierra -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden" data-mouse-hit aria-hidden="true"></div>
+    <!-- Indicador lateral (línea roja) + zona para abrir/cerrar panel -->
+    <div id="toggle-area" data-mouse-hit>
+      <button
+        id="toggle-btn"
+        type="button"
+        class="toggle-edge"
+        data-tooltip="Abrir o cerrar el panel del dock (clic). Atajo global: con ventanas web abiertas trae la última al frente; si no hay ninguna, abre o cierra esta barra (Ctrl+Alt+D o Ctrl+Mayús+D)"
+        data-tooltip-placement="right"
+        aria-label="Abrir o cerrar panel"
+      ></button>
+    </div>
+
+    <!-- Sidebar panel -->
+    <div id="sidebar" data-mouse-hit>
+      <div id="sidebar-chrome">
+        <div id="shortcuts-container"></div>
+        <button
+          id="shortcuts-edit-toggle"
+          type="button"
+          data-tooltip="Editar accesos directos"
+          aria-label="Editar accesos directos"
+          aria-pressed="false"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div id="header-actions">
+          <button id="add-btn" type="button" data-tooltip="Añadir acceso directo" aria-label="Añadir acceso directo">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <line x1="9" y1="3" x2="9" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="close-btn" type="button" data-tooltip="Ocultar panel" aria-label="Ocultar panel">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegación suelta">
+        <div class="loose-nav-actions">
+          <button type="button" id="loose-nav-back" class="loose-nav-btn" data-tooltip="Atrás" disabled aria-label="Atrás">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button type="button" id="loose-nav-forward" class="loose-nav-btn" data-tooltip="Adelante" disabled aria-label="Adelante">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button type="button" id="loose-nav-reload" class="loose-nav-btn" data-tooltip="Recargar" aria-label="Recargar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 4v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M20 10a8 8 0 0 0-14.9-3M4 14a8 8 0 0 0 14.9 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <form id="loose-nav-url-form" class="loose-nav-url-form" autocomplete="off">
+          <input type="text" id="loose-nav-url-input" class="loose-nav-url-input" placeholder="Buscar en Google o escribir URL" spellcheck="false" />
+        </form>
+        <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
+        <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-btn loose-nav-new-tab" data-tooltip="Nueva pestaña" aria-label="Nueva pestaña">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <line x1="8" y1="3" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button type="button" id="loose-nav-close-mode" class="loose-nav-btn loose-nav-btn-close" data-tooltip="Cerrar navegación suelta" aria-label="Cerrar navegación suelta">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div id="dock-viewport" class="dock-viewport">
+        <div id="dock-inline-editor" class="dock-inline-editor hidden" data-mouse-hit></div>
+        <div id="loose-nav-surface" class="loose-nav-surface hidden" aria-hidden="true"></div>
+      </div>
+
+      <footer id="sidebar-footer" data-mouse-hit>
+        <button type="button" id="settings-btn" class="btn-footer-settings">Configuración</button>
+        <button type="button" id="quit-app-btn" class="btn-quit-app">Cerrar aplicación</button>
+      </footer>
+    </div>
+
+    <!-- Configuración -->
+    <div id="settings-modal-overlay" class="hidden" data-mouse-hit>
+      <div id="settings-modal" class="settings-modal-card">
+        <h3 class="settings-modal-title">Configuración</h3>
+        <div class="settings-modal-section">
+          <div class="type-field-label" id="dock-position-label">Panel en pantalla</div>
+          <div
+            class="type-segmented type-segmented-triple"
+            id="dock-position-segmented"
+            role="radiogroup"
+            aria-labelledby="dock-position-label"
+          >
+            <button type="button" class="type-segment" role="radio" data-value="left" aria-checked="false" data-tooltip="Barra negra horizontal arriba del escritorio">
+              Izquierda
+            </button>
+            <button type="button" class="type-segment" role="radio" data-value="center" aria-checked="false" data-tooltip="Panel en ventana centrada (modal)">
+              Centro
+            </button>
+            <button type="button" class="type-segment" role="radio" data-value="right" aria-checked="false" data-tooltip="Barra negra horizontal arriba (mismo modo que Izquierda)">
+              Derecha
+            </button>
+          </div>
+        </div>
+        <div class="settings-modal-section">
+          <div class="type-field-label" id="sidebar-density-label">Vista de los accesos directos</div>
+          <div
+            class="type-segmented"
+            id="sidebar-density-segmented"
+            role="radiogroup"
+            aria-labelledby="sidebar-density-label"
+          >
+            <button type="button" class="type-segment" role="radio" data-value="normal" aria-checked="true" data-tooltip="Icono y nombre en cada fila">
+              Normal
+            </button>
+            <button type="button" class="type-segment" role="radio" data-value="minimal" aria-checked="false" data-tooltip="Solo iconos, sin texto">
+              Minimalista
+            </button>
+          </div>
+        </div>
+        <div class="settings-modal-section">
+          <div class="type-field-label" id="web-host-mode-label">Ventanas de páginas web</div>
+          <p class="settings-modal-help" id="web-host-mode-help">
+            Cada acceso web se abre en su propia ventana maximizada (como varias ventanas de Chrome): puedes
+            alternar entre Gmail, WhatsApp y el resto con Alt+Tab y cerrar una sin cerrar las demás. Si el acceso
+            tiene un icono en archivo (PNG, ICO…), se usa también en la barra de título de esa ventana.
+          </p>
+        </div>
+        <div class="settings-modal-section">
+          <label class="settings-checkbox-label" for="settings-in-app-notifications">
+            <input type="checkbox" id="settings-in-app-notifications" />
+            <span class="settings-checkbox-text">Mostrar avisos de las páginas web <strong>dentro del panel</strong> (tarjetas claras). Si lo desactivas, Windows mostrará los toasts habituales.</span>
+          </label>
+        </div>
+        <div class="settings-modal-section" id="chrome-import-section">
+          <div class="type-field-label">Sesión de Google en las pestañas del dock</div>
+          <p class="settings-modal-help">
+            Importa las cookies de Google desde tu Chrome instalado para evitar tener que iniciar sesión
+            de nuevo en Gmail, YouTube o el login de Cursor (con Continuar con Google) dentro de la
+            <strong>Navegación suelta</strong>. Requiere cerrar Chrome antes de importar.
+          </p>
+          <div class="settings-chrome-import-row">
+            <select id="chrome-import-profile" class="settings-chrome-import-select"></select>
+            <button type="button" id="chrome-import-btn" class="btn-primary">Importar</button>
+          </div>
+          <p id="chrome-import-status" class="settings-modal-help" aria-live="polite"></p>
+        </div>
+        <div class="settings-modal-actions">
+          <button type="button" id="settings-modal-close" class="btn-primary settings-modal-done">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="modal-overlay" class="hidden" data-mouse-hit>
+      <div id="modal">
+        <h3 id="modal-title">Añadir acceso directo</h3>
+        <form id="shortcut-form" class="shortcut-form">
+          <div class="form-row form-row-type">
+            <div class="form-group form-group-type">
+              <div class="type-field-label" id="type-field-label">Tipo</div>
+              <input type="hidden" id="input-type" name="type" value="web">
+              <div
+                class="type-segmented"
+                id="type-segmented"
+                role="radiogroup"
+                aria-labelledby="type-field-label"
+              >
+                <button
+                  type="button"
+                  class="type-segment"
+                  role="radio"
+                  data-value="web"
+                  aria-checked="true"
+                  data-tooltip="Página web (URL)"
+                >
+                  Página web
+                </button>
+                <button
+                  type="button"
+                  class="type-segment"
+                  role="radio"
+                  data-value="app"
+                  aria-checked="false"
+                  data-tooltip="Programa o .lnk en el PC"
+                >
+                  Programa
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row form-row-main">
+            <div class="form-group form-group-icon-select">
+              <span id="icon-select-label" class="icon-select-label">Icono <span class="form-label-optional-inline">(opcional)</span></span>
+              <input type="hidden" id="input-icon" name="icon" value="">
+              <div class="icon-select-wrap" id="icon-select-wrap">
+                <button
+                  type="button"
+                  class="icon-select-trigger"
+                  id="icon-select-trigger"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-labelledby="icon-select-label"
+                >
+                  <span class="icon-select-trigger-thumb" id="icon-select-trigger-thumb" aria-hidden="true"></span>
+                  <span class="icon-select-trigger-text" id="icon-select-trigger-text">Sin icono</span>
+                  <span class="icon-select-chevron" aria-hidden="true">▾</span>
+                </button>
+                <ul class="icon-select-list hidden" id="icon-select-list" role="listbox" aria-label="Iconos"></ul>
+              </div>
+              <div id="icon-custom-emoji-wrap" class="icon-custom-emoji-wrap hidden">
+                <label for="input-custom-emoji" class="icon-custom-emoji-label">Emoji</label>
+                <input
+                  type="text"
+                  id="input-custom-emoji"
+                  class="icon-custom-emoji-input"
+                  maxlength="8"
+                  placeholder="Pulsa Win + . para emoji"
+                  autocomplete="off"
+                />
+              </div>
+            </div>
+            <div class="form-group form-group-name">
+              <label for="input-name">Nombre</label>
+              <input type="text" id="input-name" placeholder="Ej. Gmail trabajo" required autocomplete="off">
+            </div>
+          </div>
+          <div class="form-group hidden" id="browse-group">
+            <label>Archivo</label>
+            <button type="button" id="browse-path-btn" class="btn-browse">Buscar .exe o acceso directo…</button>
+          </div>
+          <div class="form-group">
+            <label for="input-url" id="label-url">URL</label>
+            <input type="text" id="input-url" placeholder="https://ejemplo.com" required autocomplete="off">
+          </div>
+
+          <div class="form-group hidden" id="shortcut-web-options">
+            <label class="settings-checkbox-label" for="input-web-notifications-muted">
+              <input type="checkbox" id="input-web-notifications-muted" />
+              <span class="settings-checkbox-text">Desactivar notificaciones del sitio en la ventana web</span>
+            </label>
+            <label class="settings-checkbox-label shortcut-web-option-second" for="input-web-audio-muted">
+              <input type="checkbox" id="input-web-audio-muted" />
+              <span class="settings-checkbox-text">Silenciar audio de la ventana web</span>
+            </label>
+          </div>
+
+          <div class="form-group hidden" id="shortcut-order-group">
+            <div class="type-field-label">Orden en la barra</div>
+            <div class="form-order-actions">
+              <button type="button" id="shortcut-move-up" class="btn-secondary">Subir</button>
+              <button type="button" id="shortcut-move-down" class="btn-secondary">Bajar</button>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" id="modal-cancel" class="btn-secondary">Cancelar</button>
+            <button type="button" id="modal-delete" class="btn-danger hidden">Eliminar</button>
+            <button type="submit" class="btn-primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="ui-tooltip.js"></script>
+  <script src="strip-gestures.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

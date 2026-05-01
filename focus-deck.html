@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focus Deck</title>
+  <link rel="stylesheet" href="focus-deck.css">
+</head>
+<body>
+  <div class="focus-deck-shell" id="focus-deck-shell">
+    <div class="focus-deck-compact-view" id="focus-deck-compact-view">
+      <div class="focus-deck-compact-card">
+        <button
+          type="button"
+          class="focus-deck-bubble"
+          id="focus-deck-bubble"
+          data-tooltip="Mostrar accesos directos"
+          aria-label="Mostrar los cuatro primeros accesos directos"
+          aria-expanded="false"
+        >
+          <span class="focus-deck-bubble-dot" aria-hidden="true"></span>
+          <span class="focus-deck-bubble-badge" id="focus-deck-bubble-badge" hidden></span>
+        </button>
+      </div>
+    </div>
+    <div class="focus-deck-expanded-view" id="focus-deck-expanded-view" hidden>
+      <div class="focus-deck-inner">
+        <div class="focus-deck-icons" id="focus-deck-icons" role="toolbar" aria-label="Primeros cuatro accesos directos"></div>
+        <button type="button" class="focus-deck-collapse" id="focus-deck-collapse" data-tooltip="Volver a la vista compacta" aria-label="Volver a la vista compacta">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button type="button" class="focus-deck-dismiss" id="focus-deck-dismiss" data-tooltip="Ocultar Focus Deck" aria-label="Ocultar Focus Deck">×</button>
+      </div>
+    </div>
+  </div>
+  <script src="ui-tooltip.js"></script>
+  <script src="focus-deck-renderer.js"></script>
+</body>
+</html>

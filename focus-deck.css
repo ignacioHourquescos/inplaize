@@ -1,0 +1,220 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.focus-deck-shell {
+  width: 100%;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+/* ---- Compacto: media esfera (domo), base plana pegada al borde inferior (barra de tareas) ---- */
+.focus-deck-compact-view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 8px 0;
+}
+
+body.is-focus-deck-expanded .focus-deck-compact-view {
+  display: none;
+}
+
+.focus-deck-compact-card {
+  -webkit-app-region: drag;
+}
+
+.focus-deck-bubble {
+  position: relative;
+  width: 56px;
+  height: 28px;
+  border: none;
+  border-radius: 28px 28px 0 0;
+  padding: 0;
+  cursor: pointer;
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 40%, #4f46e5 100%);
+  box-shadow:
+    0 -2px 12px rgba(79, 70, 229, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 5px;
+  -webkit-app-region: no-drag;
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+  overflow: visible;
+}
+
+.focus-deck-bubble:hover {
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.55);
+}
+
+.focus-deck-bubble:active {
+  transform: scale(0.95);
+}
+
+.focus-deck-bubble-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.focus-deck-bubble-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.focus-deck-bubble-badge[hidden] {
+  display: none !important;
+}
+
+/* ---- Expandido: 4 iconos ---- */
+.focus-deck-expanded-view {
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px;
+}
+
+body:not(.is-focus-deck-expanded) .focus-deck-expanded-view {
+  display: none !important;
+}
+
+.focus-deck-expanded-view:not([hidden]) {
+  display: block;
+}
+
+.focus-deck-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  min-height: 44px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  -webkit-app-region: drag;
+}
+
+.focus-deck-icons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: drag;
+}
+
+.focus-deck-slot {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: #f3f4f6;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.12s ease;
+  -webkit-app-region: no-drag;
+  padding: 0;
+}
+
+.focus-deck-slot:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.focus-deck-slot:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.focus-deck-slot:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.focus-deck-slot .shortcut-icon-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.focus-deck-slot .shortcut-icon {
+  font-size: 22px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.focus-deck-collapse {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.focus-deck-collapse:hover {
+  background: rgba(79, 70, 229, 0.1);
+  color: var(--accent, #4f46e5);
+}
+
+.focus-deck-dismiss {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.focus-deck-dismiss:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}

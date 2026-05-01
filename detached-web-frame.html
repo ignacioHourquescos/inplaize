@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es" data-usualdesk-detached-host="true">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>inplaze</title>
+  <link rel="stylesheet" href="web-shell.css" />
+</head>
+<body>
+  <header class="shell-top" role="banner">
+    <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos"></div>
+    <div class="shell-win-btns" aria-label="Controles de ventana">
+      <button type="button" id="shell-win-min" class="shell-win-btn" data-tooltip="Minimizar" data-tooltip-placement="bottom" aria-label="Minimizar">&#8722;</button>
+      <button type="button" id="shell-win-max" class="shell-win-btn" data-tooltip="Maximizar" data-tooltip-placement="bottom" aria-label="Maximizar">&#9633;</button>
+      <button type="button" id="shell-win-close" class="shell-win-btn is-close" data-tooltip="Cerrar ventana" data-tooltip-placement="bottom" aria-label="Cerrar ventana">&#215;</button>
+    </div>
+  </header>
+  <script src="ui-tooltip.js"></script>
+  <script src="strip-gestures.js"></script>
+  <script src="detached-web-frame-renderer.js"></script>
+</body>
+</html>

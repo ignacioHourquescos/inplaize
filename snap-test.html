@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Snap Detection Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+      gap: 20px;
+    }
+    h1 { font-size: 22px; color: #fff; }
+    .subtitle { font-size: 13px; color: #888; max-width: 500px; text-align: center; line-height: 1.5; }
+
+    #start-btn {
+      padding: 12px 32px;
+      background: #e63946;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #start-btn:hover { background: #ff4d5a; }
+    #start-btn:disabled { background: #444; cursor: default; }
+
+    .panels {
+      display: flex;
+      gap: 20px;
+      width: 100%;
+      max-width: 900px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .panel {
+      background: #1a1a2e;
+      border: 1px solid #2a2a3e;
+      border-radius: 14px;
+      padding: 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+
+    .panel h3 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #888;
+    }
+
+    canvas {
+      width: 100%;
+      flex: 1;
+      min-height: 80px;
+      border-radius: 8px;
+      background: #12121e;
+    }
+
+    .meter-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .meter-bar {
+      flex: 1;
+      height: 10px;
+      background: #222;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e, #eab308, #e63946);
+      border-radius: 5px;
+      transition: width 0.05s;
+    }
+
+    .meter-value {
+      min-width: 50px;
+      text-align: right;
+      font-family: monospace;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .detection-zone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #snap-indicator {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: #1e1e2e;
+      border: 3px solid #333;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: #555;
+      transition: all 0.1s;
+    }
+
+    #snap-indicator.single {
+      background: #e6394622;
+      border-color: #e63946;
+      color: #e63946;
+      box-shadow: 0 0 30px #e6394644;
+    }
+
+    #snap-indicator.double {
+      background: #22c55e22;
+      border-color: #22c55e;
+      color: #22c55e;
+      box-shadow: 0 0 40px #22c55e44;
+    }
+
+    .log {
+      max-height: 120px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 11px;
+      color: #777;
+      background: #12121e;
+      border-radius: 8px;
+      padding: 8px 10px;
+      line-height: 1.6;
+    }
+
+    .log .snap-log { color: #e63946; }
+    .log .double-log { color: #22c55e; font-weight: bold; }
+
+    .config-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #aaa;
+    }
+    .config-row label { min-width: 140px; }
+    .config-row input[type="range"] { flex: 1; accent-color: #e63946; }
+    .config-row .val { min-width: 40px; font-family: monospace; color: #fff; text-align: right; }
+
+    .status-panel {
+      width: 100%;
+      background: #12121e;
+      border: 1px solid #2a2a3e;
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .status-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #666;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      gap: 10px;
+    }
+    .status-row .label { color: #aaa; }
+    .status-row .ok { color: #22c55e; font-weight: 600; }
+    .status-row .no { color: #64748b; }
+    .status-row .hot { color: #eab308; font-weight: 600; }
+    .counters {
+      display: flex;
+      gap: 16px;
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid #2a2a3e;
+      font-size: 12px;
+      color: #888;
+    }
+    .counters strong { color: #fff; font-variant-numeric: tabular-nums; }
+    .last-hit {
+      font-size: 11px;
+      color: #555;
+      margin-top: 4px;
+    }
+    .last-hit.has { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <h1>Snap Detection Test</h1>
+  <p class="subtitle">
+    Probá chasquear los dedos para calibrar la detección.
+    Ajustá los parámetros hasta que detecte tus chasquidos sin falsos positivos.
+  </p>
+
+  <button id="start-btn">Iniciar micrófono</button>
+
+  <div class="panels">
+    <div class="panel">
+      <h3>Volumen (RMS)</h3>
+      <div class="meter-row">
+        <span>Vol</span>
+        <div class="meter-bar"><div class="meter-fill" id="vol-fill"></div></div>
+        <span class="meter-value" id="vol-value">0</span>
+      </div>
+      <div class="meter-row">
+        <span>Pico</span>
+        <div class="meter-bar"><div class="meter-fill" id="peak-fill"></div></div>
+        <span class="meter-value" id="peak-value">0</span>
+      </div>
+      <h3>Espectro de frecuencias</h3>
+      <canvas id="spectrum"></canvas>
+
+      <h3>Configuración</h3>
+      <div class="config-row">
+        <label>Umbral de volumen:</label>
+        <input type="range" id="cfg-threshold" min="18" max="80" value="30">
+        <span class="val" id="cfg-threshold-val">30</span>
+      </div>
+      <div class="config-row">
+        <label>Freq mínima (Hz):</label>
+        <input type="range" id="cfg-freq-min" min="500" max="4000" step="100" value="1800">
+        <span class="val" id="cfg-freq-min-val">1800</span>
+      </div>
+      <div class="config-row">
+        <label>Freq máxima (Hz):</label>
+        <input type="range" id="cfg-freq-max" min="2000" max="8000" step="100" value="5000">
+        <span class="val" id="cfg-freq-max-val">5000</span>
+      </div>
+      <div class="config-row">
+        <label>Ventana doble (ms):</label>
+        <input type="range" id="cfg-double-window" min="200" max="1000" step="50" value="500">
+        <span class="val" id="cfg-double-window-val">500</span>
+      </div>
+    </div>
+
+    <div class="panel detection-zone">
+      <h3>Detección</h3>
+      <div id="snap-indicator">Micrófono inactivo</div>
+      <div class="status-panel" id="status-panel" hidden>
+        <div class="status-title">Estado en vivo (¿detectaría ahora?)</div>
+        <div class="status-row">
+          <span class="label">Volumen vs umbral</span>
+          <span id="status-vol" class="no">—</span>
+        </div>
+        <div class="status-row">
+          <span class="label">Energía en banda (≥35%)</span>
+          <span id="status-band" class="no">—</span>
+        </div>
+        <div class="status-row">
+          <span class="label">¿Dispararía chasquido?</span>
+          <span id="status-fire" class="no">No</span>
+        </div>
+        <div class="counters">
+          <span>Simples: <strong id="count-single">0</strong></span>
+          <span>Dobles: <strong id="count-double">0</strong></span>
+        </div>
+        <p class="last-hit" id="last-hit">Aún no hubo detecciones.</p>
+      </div>
+      <h3>Log</h3>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('start-btn');
+    const volFill = document.getElementById('vol-fill');
+    const volValue = document.getElementById('vol-value');
+    const peakFill = document.getElementById('peak-fill');
+    const peakValue = document.getElementById('peak-value');
+    const spectrumCanvas = document.getElementById('spectrum');
+    const specCtx = spectrumCanvas.getContext('2d');
+    const snapIndicator = document.getElementById('snap-indicator');
+    const logEl = document.getElementById('log');
+    const statusPanel = document.getElementById('status-panel');
+    const statusVol = document.getElementById('status-vol');
+    const statusBand = document.getElementById('status-band');
+    const statusFire = document.getElementById('status-fire');
+    const countSingleEl = document.getElementById('count-single');
+    const countDoubleEl = document.getElementById('count-double');
+    const lastHitEl = document.getElementById('last-hit');
+
+    const cfgThreshold = document.getElementById('cfg-threshold');
+    const cfgFreqMin = document.getElementById('cfg-freq-min');
+    const cfgFreqMax = document.getElementById('cfg-freq-max');
+    const cfgDoubleWindow = document.getElementById('cfg-double-window');
+
+    let audioCtx, analyser, dataArray, freqArray, source;
+    let lastSnapTime = 0;
+    let snapCooldown = false;
+    let countSingle = 0;
+    let countDouble = 0;
+    const COOLDOWN_MS = 150;
+    const BAND_MIN_RATIO = 0.35;
+
+    function getConfig() {
+      return {
+        threshold: +cfgThreshold.value,
+        freqMin: +cfgFreqMin.value,
+        freqMax: +cfgFreqMax.value,
+        doubleWindow: +cfgDoubleWindow.value,
+      };
+    }
+
+    [cfgThreshold, cfgFreqMin, cfgFreqMax, cfgDoubleWindow].forEach(el => {
+      el.addEventListener('input', () => {
+        document.getElementById(el.id + '-val').textContent = el.value;
+      });
+    });
+
+    function addLog(msg, cls) {
+      const line = document.createElement('div');
+      if (cls) line.className = cls;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.prepend(line);
+      if (logEl.children.length > 50) logEl.lastChild.remove();
+    }
+
+    function flashIndicator(type, text) {
+      snapIndicator.className = type;
+      snapIndicator.textContent = text;
+      clearTimeout(snapIndicator._timer);
+      snapIndicator._timer = setTimeout(() => {
+        snapIndicator.className = '';
+        snapIndicator.textContent = 'Escuchando…';
+      }, type === 'double' ? 1200 : 600);
+    }
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new AudioContext();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.3;
+
+        source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+
+        dataArray = new Uint8Array(analyser.fftSize);
+        freqArray = new Uint8Array(analyser.frequencyBinCount);
+
+        startBtn.disabled = true;
+        startBtn.textContent = 'Micrófono activo';
+        statusPanel.hidden = false;
+        snapIndicator.textContent = 'Escuchando…';
+        addLog('Micrófono iniciado. ¡Chasqueá los dedos!');
+        loop();
+      } catch (err) {
+        addLog('Error: ' + err.message);
+      }
+    });
+
+    function getRMS() {
+      analyser.getByteTimeDomainData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const v = (dataArray[i] - 128) / 128;
+        sum += v * v;
+      }
+      return Math.sqrt(sum / dataArray.length) * 100;
+    }
+
+    function getDominantFreq() {
+      analyser.getByteFrequencyData(freqArray);
+      let maxVal = 0;
+      let maxIdx = 0;
+      for (let i = 0; i < freqArray.length; i++) {
+        if (freqArray[i] > maxVal) {
+          maxVal = freqArray[i];
+          maxIdx = i;
+        }
+      }
+      const freq = maxIdx * audioCtx.sampleRate / analyser.fftSize;
+      return { freq, magnitude: maxVal };
+    }
+
+    function getFreqBandEnergy(fMin, fMax) {
+      analyser.getByteFrequencyData(freqArray);
+      const binSize = audioCtx.sampleRate / analyser.fftSize;
+      const iMin = Math.floor(fMin / binSize);
+      const iMax = Math.ceil(fMax / binSize);
+      let energy = 0;
+      let total = 0;
+      for (let i = 0; i < freqArray.length; i++) {
+        total += freqArray[i];
+        if (i >= iMin && i <= iMax) energy += freqArray[i];
+      }
+      return total > 0 ? energy / total : 0;
+    }
+
+    function drawSpectrum() {
+      analyser.getByteFrequencyData(freqArray);
+      const w = spectrumCanvas.width;
+      const h = spectrumCanvas.height;
+      specCtx.fillStyle = '#12121e';
+      specCtx.fillRect(0, 0, w, h);
+
+      const cfg = getConfig();
+      const binSize = audioCtx.sampleRate / analyser.fftSize;
+      const maxFreqBin = Math.min(Math.ceil(8000 / binSize), freqArray.length);
+      const barW = w / maxFreqBin;
+
+      const iMin = Math.floor(cfg.freqMin / binSize);
+      const iMax = Math.ceil(cfg.freqMax / binSize);
+
+      // Highlight target band
+      const xMin = (iMin / maxFreqBin) * w;
+      const xMax = (iMax / maxFreqBin) * w;
+      specCtx.fillStyle = '#e6394615';
+      specCtx.fillRect(xMin, 0, xMax - xMin, h);
+
+      for (let i = 0; i < maxFreqBin; i++) {
+        const val = freqArray[i] / 255;
+        const barH = val * h;
+        const inBand = i >= iMin && i <= iMax;
+        specCtx.fillStyle = inBand ? '#e63946' : '#3a3a5e';
+        specCtx.fillRect(i * barW, h - barH, Math.max(barW - 1, 1), barH);
+      }
+
+      // Freq labels
+      specCtx.fillStyle = '#555';
+      specCtx.font = '10px monospace';
+      for (let f = 1000; f <= 7000; f += 1000) {
+        const x = (f / binSize / maxFreqBin) * w;
+        specCtx.fillText(f >= 1000 ? `${f/1000}k` : f, x, h - 3);
+      }
+    }
+
+    let peakHold = 0;
+
+    function loop() {
+      requestAnimationFrame(loop);
+
+      const rms = getRMS();
+      const { freq, magnitude } = getDominantFreq();
+      const cfg = getConfig();
+
+      // Volume meter
+      const volPct = Math.min(rms, 100);
+      volFill.style.width = volPct + '%';
+      volValue.textContent = rms.toFixed(1);
+
+      // Peak hold
+      if (rms > peakHold) peakHold = rms;
+      else peakHold *= 0.98;
+      peakFill.style.width = Math.min(peakHold, 100) + '%';
+      peakValue.textContent = peakHold.toFixed(1);
+
+      // Spectrum
+      const dpr = window.devicePixelRatio || 1;
+      if (spectrumCanvas.width !== spectrumCanvas.clientWidth * dpr) {
+        spectrumCanvas.width = spectrumCanvas.clientWidth * dpr;
+        spectrumCanvas.height = spectrumCanvas.clientHeight * dpr;
+        specCtx.scale(dpr, dpr);
+      }
+      drawSpectrum();
+
+      // Snap detection
+      const bandRatio = getFreqBandEnergy(cfg.freqMin, cfg.freqMax);
+      const isLoud = rms > cfg.threshold;
+      const isInBand = bandRatio > BAND_MIN_RATIO;
+      const wouldFire = isLoud && isInBand && !snapCooldown;
+      const now = Date.now();
+
+      statusVol.className = isLoud ? 'ok' : 'no';
+      statusVol.textContent = isLoud
+        ? `Sí (${rms.toFixed(1)} > ${cfg.threshold})`
+        : `No (${rms.toFixed(1)} ≤ ${cfg.threshold})`;
+
+      statusBand.className = isInBand ? 'ok' : 'no';
+      statusBand.textContent = isInBand
+        ? `Sí (${(bandRatio * 100).toFixed(0)}% ≥ ${BAND_MIN_RATIO * 100}%)`
+        : `No (${(bandRatio * 100).toFixed(0)}% < ${BAND_MIN_RATIO * 100}%)`;
+
+      if (wouldFire) {
+        statusFire.className = 'hot';
+        statusFire.textContent = 'Sí — se cuenta como chasquido';
+      } else if (snapCooldown) {
+        statusFire.className = 'no';
+        statusFire.textContent = 'Enfriando (anti-rebote)…';
+      } else if (!isLoud && !isInBand) {
+        statusFire.className = 'no';
+        statusFire.textContent = 'No — subí volumen y banda';
+      } else if (!isLoud) {
+        statusFire.className = 'no';
+        statusFire.textContent = 'No — falta volumen';
+      } else {
+        statusFire.className = 'no';
+        statusFire.textContent = 'No — poca energía en la banda';
+      }
+
+      if (isLoud && isInBand && !snapCooldown) {
+        snapCooldown = true;
+        setTimeout(() => { snapCooldown = false; }, COOLDOWN_MS);
+
+        const sinceLast = now - lastSnapTime;
+
+        if (sinceLast < cfg.doubleWindow && sinceLast > COOLDOWN_MS) {
+          countDouble += 1;
+          countDoubleEl.textContent = String(countDouble);
+          lastHitEl.className = 'last-hit has';
+          lastHitEl.textContent = `Última: DOBLE a las ${new Date().toLocaleTimeString()}`;
+          flashIndicator('double', 'DOBLE SNAP!');
+          addLog(`DOBLE SNAP | vol=${rms.toFixed(1)} freq=${freq.toFixed(0)}Hz band=${(bandRatio*100).toFixed(0)}%`, 'double-log');
+          lastSnapTime = 0;
+        } else {
+          countSingle += 1;
+          countSingleEl.textContent = String(countSingle);
+          lastHitEl.className = 'last-hit has';
+          lastHitEl.textContent = `Última: SIMPLE a las ${new Date().toLocaleTimeString()}`;
+          flashIndicator('single', 'Snap!');
+          addLog(`Snap | vol=${rms.toFixed(1)} freq=${freq.toFixed(0)}Hz band=${(bandRatio*100).toFixed(0)}%`, 'snap-log');
+          lastSnapTime = now;
+        }
+      }
+    }
+  </script>
+</body>
+</html>

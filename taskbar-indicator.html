@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'" />
+    <title>UsualDesk punto</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+        cursor: default;
+        -webkit-app-region: no-drag;
+      }
+      .wrap {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+      }
+      .dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #f44336;
+        box-shadow:
+          0 0 0 3px rgba(255, 255, 255, 1),
+          0 0 0 5px rgba(0, 0, 0, 0.5),
+          0 0 12px rgba(244, 67, 54, 0.9);
+        flex-shrink: 0;
+        animation: pulse 2.2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.12);
+          opacity: 0.92;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap" id="hit" data-tooltip="Pasa el ratón para abrir el menú (o clic)">
+      <div class="dot" aria-hidden="true"></div>
+    </div>
+    <script src="ui-tooltip.js"></script>
+    <script>
+      function openDock() {
+        if (window.usualDeskTaskbarDot && typeof window.usualDeskTaskbarDot.openDock === 'function') {
+          window.usualDeskTaskbarDot.openDock();
+        }
+      }
+      const hit = document.getElementById('hit');
+      hit.addEventListener('mouseenter', openDock, { passive: true });
+      hit.addEventListener('click', openDock);
+    </script>
+  </body>
+</html>

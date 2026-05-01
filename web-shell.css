@@ -1,0 +1,128 @@
+@import url('chrome-strip.css');
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  background: #1e1e24;
+  color: #e8e8ef;
+  overflow: hidden;
+}
+
+.shell-top {
+  display: flex;
+  align-items: stretch;
+  height: var(--ud-chrome-strip-h);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ud-chrome-strip-border);
+}
+
+html[data-shell-frameless='true'] .shell-top {
+  -webkit-app-region: drag;
+}
+
+html[data-shell-frameless='true'] .shell-win-btns,
+html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item {
+  -webkit-app-region: no-drag;
+}
+
+.shortcut-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--ud-chrome-strip-gap);
+  flex: 1;
+  min-width: 0;
+  min-height: var(--ud-chrome-strip-h);
+  padding: var(--ud-chrome-strip-pad-y) var(--ud-chrome-strip-pad-x);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  -webkit-app-region: inherit;
+}
+
+html[data-shell-frameless='true'] .shortcut-strip {
+  -webkit-app-region: drag;
+}
+
+.shortcut-strip::-webkit-scrollbar {
+  height: 4px;
+}
+
+.shortcut-strip::-webkit-scrollbar-thumb {
+  background: #44444e;
+  border-radius: 4px;
+}
+
+.shell-shortcut-cell {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Estados específicos de la ventana web (los estilos base del icono viven en chrome-strip.css) */
+.shell-shortcut-item.shell-hold-active {
+  outline: 2px solid rgba(229, 57, 53, 0.55);
+  outline-offset: -1px;
+}
+
+.shortcut-strip-empty {
+  align-self: center;
+  opacity: 0.6;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.shell-win-btns {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.shell-win-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ud-chrome-action-w);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ud-chrome-action-color);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shell-win-btn svg {
+  display: block;
+}
+
+.shell-win-btn:hover {
+  background: var(--ud-chrome-action-hover);
+}
+
+.shell-win-btn.is-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+html:not([data-shell-frameless='true']) .shell-win-btns {
+  display: none;
+}
+
+/* Ventana web separada: zona bajo la franja de iconos como “lienzo” negro hasta que pinte la página */
+html[data-usualdesk-detached-host='true'],
+html[data-usualdesk-detached-host='true'] body {
+  background: var(--ud-chrome-canvas);
+}
+
+html[data-usualdesk-detached-host='true'] .shell-top {
+  background: var(--ud-chrome-strip-bg);
+}
