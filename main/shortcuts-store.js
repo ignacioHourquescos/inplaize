@@ -3,7 +3,11 @@
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow } = require('electron');
-const { DEFAULT_SHORTCUTS, MAX_SHORTCUT_UNDO } = require('./constants');
+const {
+  DEFAULT_SHORTCUTS,
+  LOOSE_NAV_DEFAULT_SHORTCUT,
+  MAX_SHORTCUT_UNDO,
+} = require('./constants');
 
 let undoStack = [];
 
@@ -18,18 +22,18 @@ function shortcutArrayFromFilePayload(raw) {
   return null;
 }
 
-/** Acceso por defecto para la ventana de “navegación suelta” (auto-inyectado en instalaciones existentes). */
-function defaultLooseNavShortcut() {
-  return DEFAULT_SHORTCUTS.find((s) => s && s.type === 'loose') || null;
-}
-
+/**
+ * Migración suave: usuarios con shortcuts existentes pero sin el acceso de
+ * "Navegación suelta" lo reciben automáticamente. NO se inyecta en listas
+ * vacías (instalación nueva o usuario que borró todo): ahí queremos que el
+ * onboarding lo guíe a crear su primera ventana sin elementos pre-cargados.
+ */
 function ensureLooseNavShortcutPresent(list) {
   if (!Array.isArray(list)) return { list, mutated: false };
+  if (list.length === 0) return { list, mutated: false };
   const hasLoose = list.some((s) => s && s.type === 'loose');
   if (hasLoose) return { list, mutated: false };
-  const def = defaultLooseNavShortcut();
-  if (!def) return { list, mutated: false };
-  return { list: [...list, def], mutated: true };
+  return { list: [...list, LOOSE_NAV_DEFAULT_SHORTCUT], mutated: true };
 }
 
 function loadShortcuts() {

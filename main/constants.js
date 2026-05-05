@@ -17,21 +17,21 @@ const DOCK_TOGGLE_ACCELERATORS = ['Control+Alt+D', 'Control+Shift+D'];
 const DOCK_TOGGLE_ACCELERATOR = DOCK_TOGGLE_ACCELERATORS[0];
 const MAX_SHORTCUT_UNDO = 25;
 
-const DEFAULT_SHORTCUTS = [
-  { id: '1', name: 'Google', url: 'https://www.google.com', type: 'web' },
-  { id: '2', name: 'YouTube', url: 'https://www.youtube.com', type: 'web' },
-  { id: '3', name: 'Gmail', url: 'https://mail.google.com', type: 'web' },
-  { id: '4', name: 'WhatsApp', url: 'https://web.whatsapp.com', type: 'web' },
-  { id: '5', name: 'GitHub', url: 'https://github.com', type: 'web' },
-  { id: '6', name: 'ChatGPT', url: 'https://chat.openai.com', type: 'web' },
-  {
-    id: 'loose-nav',
-    name: 'Navegación suelta',
-    type: 'loose',
-    url: '',
-    icon: 'assets/icons/loose-nav.svg',
-  },
-];
+/**
+ * En instalaciones nuevas la barra arranca vacía: el onboarding guía al
+ * usuario para que cree su primera ventana. Mantenemos `LOOSE_NAV_DEFAULT_SHORTCUT`
+ * por separado solo para la migración suave de usuarios que ya tenían
+ * shortcuts cargados antes de que existiera el acceso de "Navegación suelta".
+ */
+const DEFAULT_SHORTCUTS = [];
+
+const LOOSE_NAV_DEFAULT_SHORTCUT = {
+  id: 'loose-nav',
+  name: 'Navegación suelta',
+  type: 'loose',
+  url: '',
+  icon: 'assets/icons/loose-nav.svg',
+};
 
 /** URL inicial al pulsar “+” en la ventana de navegación suelta. */
 const LOOSE_NAV_NEW_TAB_URL = 'https://www.google.com';
@@ -45,6 +45,7 @@ module.exports = {
   DOCK_TOGGLE_ACCELERATORS,
   MAX_SHORTCUT_UNDO,
   DEFAULT_SHORTCUTS,
+  LOOSE_NAV_DEFAULT_SHORTCUT,
   LOOSE_NAV_NEW_TAB_URL,
   LOOSE_NAV_SESSION_ID,
 };

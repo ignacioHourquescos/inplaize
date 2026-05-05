@@ -67,6 +67,8 @@ const IPC_CHANNELS = [
 
   'collapse-sidebar',
 
+  'expand-sidebar',
+
   'set-ignore-mouse',
 
   'get-shortcuts',
@@ -449,6 +451,11 @@ function registerIpcHandlers(state) {
 
     return true;
 
+  });
+
+  ipcMain.handle('expand-sidebar', () => {
+    expandDockSidebar();
+    return true;
   });
 
 

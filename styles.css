@@ -1181,6 +1181,29 @@ html[data-dock-layout='modal'] .shortcut-card.shortcut-card-editing {
   font-weight: 600;
 }
 
+.settings-onboarding-replay {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.settings-onboarding-replay:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .settings-modal-actions {
   display: flex;
   justify-content: flex-end;

@@ -15,6 +15,12 @@ const DEFAULTS = {
    * Valores legacy "shell" en disco se migran a "separate" al cargar.
    */
   webHostMode: 'separate',
+  /**
+   * Onboarding de primera vez: cuando es false y la lista de shortcuts está
+   * vacía, el renderer dispara el wizard que guía al usuario a crear su
+   * primera ventana y le enseña los gestos básicos.
+   */
+  onboardingCompleted: false,
 };
 
 const ALLOWED_DOCK = new Set(['left', 'center', 'right']);
@@ -41,6 +47,9 @@ function normalize(raw) {
   }
   if (!ALLOWED_WEB_HOST.has(merged.webHostMode)) {
     merged.webHostMode = DEFAULTS.webHostMode;
+  }
+  if (typeof merged.onboardingCompleted !== 'boolean') {
+    merged.onboardingCompleted = DEFAULTS.onboardingCompleted;
   }
   return merged;
 }

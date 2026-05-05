@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="onboarding.css">
 </head>
 <body>
   <div id="app">
@@ -173,6 +174,16 @@
           </div>
           <p id="chrome-import-status" class="settings-modal-help" aria-live="polite"></p>
         </div>
+        <div class="settings-modal-section">
+          <div class="type-field-label">Tutorial</div>
+          <p class="settings-modal-help">
+            Volvé a ver el recorrido guiado: el atajo Ctrl+Alt+D, cómo agregar tu
+            primera ventana y los gestos del mouse para cerrar y entrar en Modo Foco.
+          </p>
+          <button type="button" id="onboarding-replay-btn" class="btn-secondary settings-onboarding-replay">
+            Ver tutorial otra vez
+          </button>
+        </div>
         <div class="settings-modal-actions">
           <button type="button" id="settings-modal-close" class="btn-primary settings-modal-done">Listo</button>
         </div>
@@ -293,6 +304,7 @@
 
   <script src="ui-tooltip.js"></script>
   <script src="strip-gestures.js"></script>
+  <script src="onboarding.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

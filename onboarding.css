@@ -1,0 +1,364 @@
+/* ==========================================================================
+   Onboarding de primera vez (capa overlay + spotlight + bocadillo).
+   El overlay es solo decorativo (`pointer-events:none`) para que el target
+   real (p. ej. el "+") siga siendo clickeable durante el spotlight.
+   ========================================================================== */
+
+.onboarding-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483600;
+  pointer-events: none;
+}
+
+.onboarding-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 8, 12, 0.72);
+  backdrop-filter: blur(0.5px);
+  -webkit-backdrop-filter: blur(0.5px);
+  animation: onboarding-fade-in 220ms ease-out both;
+}
+
+/* Cuando hay spotlight, su box-shadow gigante ya pinta toda la zona oscura
+   alrededor del target. El dim se esconde para que el área del target
+   quede totalmente nítida (sin el doble velo). */
+.onboarding-layer.has-spotlight .onboarding-dim {
+  display: none;
+}
+
+/* Welcome: el fondo deja de ser un dim plano para mostrar la ilustración
+   de la app (assets/welcome_background.png) con un leve velo oscuro encima
+   para que el copy del modal se lea bien. Si la imagen no existe (todavía
+   no la copiaste a la carpeta), el `background-color` actúa como fallback. */
+.onboarding-layer[data-step-id='welcome'] .onboarding-dim {
+  background-color: rgba(8, 8, 12, 0.72);
+  background-image:
+    linear-gradient(rgba(8, 8, 12, 0.55), rgba(8, 8, 12, 0.55)),
+    url('assets/welcome_background.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.onboarding-spotlight {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-radius: 14px;
+  pointer-events: none;
+  /* "Agujero" hecho con box-shadow gigante: oscurece todo lo que NO sea el
+     target (la zona interior queda transparente) y le agrega un anillo
+     violeta SÓLIDO de 3px alrededor. La capa exterior es un halo más
+     suave que respira con la animación. Sin dim en paralelo: el
+     box-shadow hace todo el trabajo de oscurecimiento del fondo. */
+  box-shadow:
+    0 0 0 9999px rgba(8, 8, 12, 0.74),
+    0 0 0 3px rgb(167, 139, 250),
+    0 0 30px 8px rgba(124, 108, 255, 0.55);
+  background: transparent;
+  opacity: 0;
+  transition:
+    left 180ms ease-out,
+    top 180ms ease-out,
+    width 180ms ease-out,
+    height 180ms ease-out,
+    opacity 220ms ease-out;
+  animation: onboarding-spotlight-pulse 2400ms ease-in-out 220ms infinite;
+}
+
+/* Pulse del propio target (e.g. el "+"): un anillo violeta que respira para
+   atraer la mirada incluso aunque la dim no atrape el mouse. */
+.is-onboarding-target {
+  position: relative;
+  z-index: 2147483601 !important;
+  animation: onboarding-target-pulse 2200ms ease-in-out infinite;
+  border-radius: 10px;
+}
+
+/* Cuando el target es un icono pequeño (el "+" de la cabecera), tintamos su
+   fondo y le subimos el contraste del color para que el ícono se vea con
+   nitidez DENTRO del recuadro violeta del spotlight. */
+html.onboarding-active #add-btn.is-onboarding-target {
+  background: rgba(167, 139, 250, 0.22) !important;
+  color: #ffffff !important;
+}
+
+/* Cuando el onboarding está activo, atenuamos otros elementos de la UI para
+   que el ojo se vaya al target. La franja roja del borde se desactiva
+   visualmente porque el spotlight ya marca la zona. */
+html.onboarding-active #shortcuts-edit-toggle,
+html.onboarding-active #close-btn,
+html.onboarding-active #sidebar-footer {
+  opacity: 0.35;
+  transition: opacity 200ms ease-out;
+}
+
+html.onboarding-active #shortcuts-edit-toggle.is-onboarding-target,
+html.onboarding-active #close-btn.is-onboarding-target,
+html.onboarding-active #add-btn.is-onboarding-target,
+html.onboarding-active #toggle-btn.is-onboarding-target {
+  opacity: 1;
+}
+
+/* ---- Bocadillo (tooltip con copy + acciones) ---- */
+
+.onboarding-bubble {
+  position: fixed;
+  z-index: 2147483602;
+  width: min(360px, calc(100vw - 24px));
+  padding: 18px 18px 14px;
+  border-radius: 14px;
+  background: rgba(20, 22, 27, 0.98);
+  color: #f5f6f8;
+  border: 1px solid rgba(124, 108, 255, 0.45);
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  font-family: 'Miranda Sans', 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  pointer-events: auto;
+  animation: onboarding-bubble-in 220ms ease-out both;
+}
+
+.onboarding-bubble[data-kind='modal'] {
+  width: min(420px, calc(100vw - 24px));
+  padding: 24px 24px 20px;
+}
+
+.onboarding-bubble-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.onboarding-counter {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(167, 139, 250, 0.95);
+}
+
+.onboarding-bubble-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #f9fafb;
+}
+
+.onboarding-bubble[data-kind='modal'] .onboarding-bubble-title {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.onboarding-bubble-body {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(229, 231, 235, 0.92);
+}
+
+/* Teclado dibujado en SVG dentro del bocadillo del paso "Ctrl+Alt+D": tres
+   teclas con la última en violeta. Subimos un poco el contraste con un
+   filtro y centramos el SVG. */
+.onboarding-keyboard-wrap {
+  margin: 4px 0 18px;
+  display: flex;
+  justify-content: center;
+}
+
+.onboarding-keyboard {
+  max-width: 100%;
+  height: auto;
+  filter: drop-shadow(0 6px 14px rgba(124, 108, 255, 0.25));
+}
+
+/* Aviso ámbar/violeta cuando el usuario intenta avanzar sin probar el atajo
+   en el paso "hotkey". Aparece debajo del teclado dibujado y se va al
+   detectar la primera pulsación. */
+.onboarding-bubble-warning {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(167, 139, 250, 0.45);
+  background: rgba(124, 108, 255, 0.12);
+  font-size: 13px;
+  line-height: 1.45;
+  color: #f5f6f8;
+  animation: onboarding-warning-in 220ms ease-out both;
+}
+
+.onboarding-bubble-warning strong {
+  font-weight: 700;
+  color: #e9e6ff;
+}
+
+@keyframes onboarding-warning-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onboarding-bubble-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.onboarding-btn-primary,
+.onboarding-btn-secondary {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 9px;
+  padding: 9px 16px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.12s ease;
+}
+
+.onboarding-btn-primary {
+  background: #8b5cf6;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4);
+}
+
+.onboarding-btn-primary:hover {
+  background: #a78bfa;
+  transform: translateY(-1px);
+}
+
+.onboarding-btn-primary:active {
+  transform: translateY(0);
+}
+
+.onboarding-btn-secondary {
+  background: transparent;
+  color: rgba(229, 231, 235, 0.7);
+}
+
+.onboarding-btn-secondary:hover {
+  color: #f3f4f6;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ---- Flechita del bocadillo apuntando al target ---- */
+
+.onboarding-bubble::before {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: rgba(20, 22, 27, 0.98);
+  border-left: 1px solid rgba(124, 108, 255, 0.45);
+  border-top: 1px solid rgba(124, 108, 255, 0.45);
+  transform: rotate(45deg);
+}
+
+.onboarding-bubble[data-placement='center']::before {
+  display: none;
+}
+
+.onboarding-bubble[data-placement='bottom']::before {
+  top: -7px;
+  left: 50%;
+  margin-left: -6px;
+  transform: rotate(45deg);
+}
+
+.onboarding-bubble[data-placement='top']::before {
+  bottom: -7px;
+  left: 50%;
+  margin-left: -6px;
+  transform: rotate(225deg);
+}
+
+.onboarding-bubble[data-placement='right']::before {
+  left: -7px;
+  top: 50%;
+  margin-top: -6px;
+  transform: rotate(-45deg);
+}
+
+.onboarding-bubble[data-placement='left']::before {
+  right: -7px;
+  top: 50%;
+  margin-top: -6px;
+  transform: rotate(135deg);
+}
+
+/* ---- Animaciones ---- */
+
+@keyframes onboarding-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes onboarding-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes onboarding-spotlight-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 9999px rgba(8, 8, 12, 0.74),
+      0 0 0 3px rgb(167, 139, 250),
+      0 0 30px 8px rgba(124, 108, 255, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9999px rgba(8, 8, 12, 0.74),
+      0 0 0 3px rgb(167, 139, 250),
+      0 0 44px 16px rgba(124, 108, 255, 0.78);
+  }
+}
+
+@keyframes onboarding-target-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(167, 139, 250, 0.55),
+      0 0 0 1px rgba(167, 139, 250, 0);
+  }
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(167, 139, 250, 0),
+      0 0 0 1px rgba(167, 139, 250, 0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-spotlight,
+  .is-onboarding-target {
+    animation: none;
+  }
+  .onboarding-bubble,
+  .onboarding-dim {
+    animation: none;
+  }
+}

@@ -521,6 +521,30 @@ function initAppSettingsUI() {
 
   initChromeCookieImportUI();
 
+  const replayBtn = document.getElementById('onboarding-replay-btn');
+  replayBtn?.addEventListener('click', async () => {
+    if (!window.UsualDeskOnboarding || typeof window.UsualDeskOnboarding.start !== 'function') {
+      return;
+    }
+    closeSettingsModal();
+    // El panel ya estaba abierto (estábamos en Configuración); aseguramos
+    // que siga así por si algún listener lo hubiese colapsado.
+    try {
+      if (window.usualDesk.expandSidebar) {
+        await window.usualDesk.expandSidebar();
+      }
+    } catch {
+      /* no crítico */
+    }
+    setTimeout(() => {
+      try {
+        window.UsualDeskOnboarding.start({ preview: true });
+      } catch (err) {
+        console.error('onboarding-preview-start', err);
+      }
+    }, 120);
+  });
+
   closeBtn?.addEventListener('click', () => closeSettingsModal());
 
   settingsModalOverlay?.addEventListener('click', (e) => {
@@ -867,6 +891,7 @@ async function init() {
   initDockInAppToasts();
   initFooter();
   schedulePointerPassthroughSync();
+  maybeStartOnboarding();
   window.usualDesk.onShortcutTitleBadge(({ shortcutId, count }) => {
     setTitleBadgeOnCard(shortcutId, count);
   });
@@ -897,6 +922,44 @@ function applyFocusModeStateToDock(state) {
   document.documentElement.classList.toggle('focus-mode-active', active);
   syncWebMutedCheckboxesLockedByFocusMode();
   updateAllShortcutFocusMemberStates();
+}
+
+/**
+ * Onboarding de primera vez. Solo se dispara si el usuario nunca lo terminó
+ * Y la lista de shortcuts está vacía: así no molestamos a usuarios que ya
+ * tenían el dock configurado y vienen de una versión previa.
+ */
+async function maybeStartOnboarding() {
+  if (!window.UsualDeskOnboarding || typeof window.UsualDeskOnboarding.start !== 'function') {
+    return;
+  }
+  if (shortcuts.length > 0) return;
+  let settings = null;
+  try {
+    settings = await window.usualDesk.getAppSettings();
+  } catch {
+    /* sin settings asumimos onboarding pendiente: estado por defecto */
+  }
+  if (settings && settings.onboardingCompleted === true) return;
+  // En topbar la ventana del dock arranca de 4 px de alto: el overlay no se
+  // vería. Expandimos el panel para que el usuario tenga lienzo completo
+  // donde leer el bocadillo y el spotlight pueda dibujarse libre.
+  try {
+    if (window.usualDesk.expandSidebar) {
+      await window.usualDesk.expandSidebar();
+    }
+  } catch {
+    /* si falla, igualmente intentamos arrancar el wizard */
+  }
+  // Diferimos un tick para que el primer paint de la barra ya esté listo y
+  // las posiciones de #toggle-btn / #add-btn sean estables al medirlas.
+  setTimeout(() => {
+    try {
+      window.UsualDeskOnboarding.start();
+    } catch (err) {
+      console.error('onboarding-start', err);
+    }
+  }, 250);
 }
 
 document.addEventListener(
@@ -1252,23 +1315,34 @@ function renderShortcuts() {
   shortcutsContainer.innerHTML = '';
 
   if (shortcuts.length === 0) {
-    const wrap = document.createElement('div');
-    wrap.className = 'shortcuts-empty';
-    wrap.innerHTML =
-      '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Pulsa + arriba o aquí abajo para añadir uno (web o programa).</p>'
-      + '<button type="button" class="btn-empty-add">+ Añadir acceso directo</button>';
-    wrap.querySelector('.btn-empty-add').addEventListener('click', () => openAddModal());
-    shortcutsContainer.appendChild(wrap);
+    // En topbar dejamos el strip totalmente vacío: durante el onboarding el
+    // spotlight apunta al "+" de la cabecera (el lugar real donde se crean
+    // ventanas), así no agregamos un CTA paralelo que despiste al usuario.
+    // En sidebar/center mantenemos el CTA chiquito como fallback útil.
+    if (!isDockTopbarLayout()) {
+      const wrap = document.createElement('div');
+      wrap.className = 'shortcuts-empty';
+      wrap.innerHTML =
+        '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Pulsa + arriba o aquí abajo para añadir uno (web o programa).</p>'
+        + '<button type="button" class="btn-empty-add">+ Añadir acceso directo</button>';
+      wrap.querySelector('.btn-empty-add').addEventListener('click', () => openAddModal());
+      shortcutsContainer.appendChild(wrap);
+    }
     applyShortcutsEditModeUi();
     return;
   }
 
   const isTopbar = isDockTopbarLayout();
-  shortcuts.forEach((shortcut) => {
+  shortcuts.forEach((shortcut, index) => {
     const card = document.createElement('div');
     card.className = isTopbar ? 'shortcut-card shell-shortcut-item' : 'shortcut-card';
     card.dataset.shortcutId = shortcut.id;
     card.dataset.shortcutType = shortcut.type || '';
+    if (index === 0) {
+      // Bandera para que el wizard de onboarding pueda hacer spotlight sobre
+      // el primer icono del usuario en los pasos "Cerrar" y "Modo Foco".
+      card.dataset.onboardingTarget = 'first-shortcut';
+    }
     card.draggable = false;
     const bc = titleBadges[shortcut.id];
     const showBadge = bc != null && bc >= 1;
@@ -1334,6 +1408,17 @@ function renderShortcuts() {
 
   applyShortcutsEditModeUi();
   refreshShortcutCardsAccessibility();
+
+  // Onboarding: si el usuario acaba de crear su primera ventana, los cards ya
+  // están montados y el wizard puede hacer spotlight sobre el primero. La API
+  // ignora la llamada salvo que el paso actual espere este evento.
+  if (
+    shortcuts.length > 0 &&
+    window.UsualDeskOnboarding &&
+    typeof window.UsualDeskOnboarding.advance === 'function'
+  ) {
+    window.UsualDeskOnboarding.advance('shortcuts-non-empty');
+  }
 }
 
 function applyFocusMemberClassToCard(card, shortcut) {

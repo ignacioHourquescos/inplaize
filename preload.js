@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('usualDesk', {
   toggleSidebar: () => ipcRenderer.invoke('toggle-sidebar'),
   collapseSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
+  expandSidebar: () => ipcRenderer.invoke('expand-sidebar'),
   setIgnoreMouse: (ignore) => ipcRenderer.invoke('set-ignore-mouse', ignore),
   getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
   saveShortcuts: (shortcuts) => ipcRenderer.invoke('save-shortcuts', shortcuts),
