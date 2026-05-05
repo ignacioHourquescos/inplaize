@@ -214,16 +214,26 @@
    MODO FOCO
    ========================================================================== */
 
-/* Barra violeta general cuando el modo foco está activo. */
+/* Modo foco: indicador violeta — semicírculo centrado arriba (radio 5px), sin franja a todo el ancho. */
 html.focus-mode-active .shell-top {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(124, 108, 255, 0.28),
-      rgba(124, 108, 255, 0.14)
-    ),
-    var(--ud-chrome-strip-bg);
-  border-bottom-color: rgba(124, 108, 255, 0.45);
+  position: relative;
+  background: var(--ud-chrome-strip-bg);
+  border-bottom-color: var(--ud-chrome-strip-border);
+}
+
+html.focus-mode-active .shell-top::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 5px;
+  border-radius: 0;
+  background: var(--ud-chrome-edit-tab);
+  clip-path: circle(5px at 50% 0);
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* Miembros de la colección: marco violeta de 3px, sin sombra. */
@@ -241,5 +251,5 @@ html.focus-mode-active .shell-top {
 
 /* Los iconos que quedan fuera de la colección conservan su estado habitual
    (prendido en color / apagado en escala de grises). No los atenuamos: el
-   Modo Foco se distingue con el marco violeta de los miembros y la barra
-   superior, no tapando al resto. */
+   Modo Foco se distingue con el marco violeta de los miembros y el indicador
+   semicircular arriba, no tapando al resto. */

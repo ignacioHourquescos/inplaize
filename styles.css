@@ -1660,19 +1660,25 @@ html[data-dock-layout='topbar'] #toggle-area.expanded {
   pointer-events: auto;
 }
 
+/* Topbar: indicador centrado (semicírculo, radio 5px), no franja a todo el ancho. */
 html[data-dock-layout='topbar'] #toggle-btn.toggle-edge::after {
-  left: 0;
-  right: 0;
+  left: 50%;
+  right: auto;
   top: 0;
   bottom: auto;
-  width: 100%;
-  height: var(--edge-line-width);
-  background: linear-gradient(
-    90deg,
-    var(--edge-gradient-top) 0%,
-    var(--edge-gradient-bottom) 100%
-  );
-  border-radius: 0 0 3px 3px;
+  width: 10px;
+  height: 5px;
+  transform: translateX(-50%);
+  background: var(--edge-gradient-top);
+  border-radius: 0;
+  /* Semicírculo inferior: arco único (círculo r=5 centrado en el borde superior). */
+  clip-path: circle(5px at 50% 0);
+}
+
+html[data-dock-layout='topbar'] #toggle-btn.toggle-edge:hover::after {
+  width: 10px;
+  height: 5px;
+  transform: translateX(-50%);
 }
 
 /* Panel abierto: pantalla completa, estilo contenedor web (franja superior + resto negro). */
