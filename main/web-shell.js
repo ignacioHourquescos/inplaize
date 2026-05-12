@@ -205,6 +205,7 @@ function ensureShellWindow() {
       preload: path.join(root, 'web-shell-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -332,6 +333,7 @@ async function openOrFocusTab(shortcut) {
       sandbox: true,
       partition,
       preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
+      backgroundThrottling: false,
     },
   });
   try {
@@ -580,6 +582,17 @@ function registerShellIpc(ipcMain) {
   });
 }
 
+/** Id del acceso web de la pestaña activa en el contenedor shell (para abrir el editor en el dock). */
+function getActiveShortcutId() {
+  if (!activeMapKey) return null;
+  const tab = tabs.get(activeMapKey);
+  return tab && tab.shortcutId ? String(tab.shortcutId) : null;
+}
+
+function getShellWindow() {
+  return shellWin && !shellWin.isDestroyed() ? shellWin : null;
+}
+
 module.exports = {
   openOrFocusTab,
   focusTabByMapKey,
@@ -594,4 +607,6 @@ module.exports = {
   raiseShellFromGlobalHotkey,
   broadcastChromeIfOpen,
   closeTabByMapKey,
+  getActiveShortcutId,
+  getShellWindow,
 };

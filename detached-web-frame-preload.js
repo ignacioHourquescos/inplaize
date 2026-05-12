@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('usualDeskDetached', {
   frameAction: (action, arg) => ipcRenderer.invoke('detached-frame-action', action, arg ?? null),
+  openDockWelcomeHome: () => ipcRenderer.invoke('dock-open-welcome-home'),
+  requestShortcutEditor: () => ipcRenderer.invoke('detached-request-shortcut-editor'),
+  requestExitShortcutEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),
+  onShortcutsEditModeSync: (cb) => {
+    ipcRenderer.on('shortcuts-edit-mode-sync', (_e, on) => cb(on === true));
+  },
   onChrome: (cb) => {
     ipcRenderer.on('detached-chrome', (_e, payload) => cb(payload));
   },

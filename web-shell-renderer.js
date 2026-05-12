@@ -213,6 +213,13 @@ if (window.usualDeskShell.onTitleBadge) {
 
 refreshChromeFromMain();
 
+const shellHomeBtn = document.getElementById('shell-home-btn');
+if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
+  shellHomeBtn.addEventListener('click', () => {
+    window.usualDeskShell.openDockWelcomeHome().catch(() => {});
+  });
+}
+
 function initFramelessChrome() {
   if (!window.usualDeskShell?.framelessChrome) return;
   document.documentElement.setAttribute('data-shell-frameless', 'true');

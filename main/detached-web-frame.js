@@ -215,6 +215,8 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
       preload: path.join(root, 'detached-web-frame-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      /** Evita ralentizar timers/red LAN cuando el foco pasa al diálogo de impresión u otra ventana. */
+      backgroundThrottling: false,
     },
   });
 
@@ -249,6 +251,7 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
       sandbox: true,
       partition,
       preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
+      backgroundThrottling: false,
     },
   });
   try {
@@ -342,10 +345,22 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
   }
 }
 
+/** Acceso asociado a la ventana independiente enfocada (modo ventanas separadas). */
+function getFocusedDetachedHostShortcutId() {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (!focused || focused.isDestroyed() || !focused.__usualDeskDetachedChromeHost) return null;
+  const mk = focused.__usualDeskDetachedOwnMapKey;
+  if (!mk || typeof mk !== 'string') return null;
+  const list = loadShortcuts();
+  const s = list.find((x) => x && x.type === 'web' && webMapKey(x) === mk);
+  return s && s.id != null ? String(s.id) : null;
+}
+
 module.exports = {
   createDetachedWebHostWindow,
   registerDetachedFrameIpc,
   broadcastChromeToAllDetachedHosts,
   broadcastTitleBadgeToDetachedHosts,
   buildDetachedChromePayload,
+  getFocusedDetachedHostShortcutId,
 };

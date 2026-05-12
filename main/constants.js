@@ -2,12 +2,11 @@
 
 const DOCK_WINDOW_WIDTH = 320;
 /**
- * Modo barra superior (izq./der.): altura de la franja sensible al clic cuando el panel está cerrado.
- * Se mantiene apenas por encima de --edge-line-width (3 px) para no pisar la franja de iconos del
- * web-shell (que arranca con padding-y de 8 px). Si subís este valor, los iconos de arriba pierden
- * píxeles clickeables y se "comen" los clics.
+ * Izq./der. con panel cerrado: franja superior del BrowserWindow del dock.
+ * El panel se muestra/oculta con el atajo global (Ctrl+Alt+D / Ctrl+Mayús+D).
+ * Esta franja puede ser mínima (1 px).
  */
-const DOCK_COLLAPSED_TOP_HEIGHT = 4;
+const DOCK_COLLAPSED_TOP_HEIGHT = 1;
 /**
  * Atajos para traer la última ventana web (el primero que logre registrar Electron gana;
  * en Windows Ctrl+Alt+D a veces está tomado por el sistema u otra app).

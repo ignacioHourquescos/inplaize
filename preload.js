@@ -1,8 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('usualDesk', {
-  toggleSidebar: () => ipcRenderer.invoke('toggle-sidebar'),
   collapseSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
+  dockWindowMinimize: () => ipcRenderer.invoke('dock-window-minimize'),
+  dockWindowToggleMaximize: () => ipcRenderer.invoke('dock-window-toggle-maximize'),
   expandSidebar: () => ipcRenderer.invoke('expand-sidebar'),
   setIgnoreMouse: (ignore) => ipcRenderer.invoke('set-ignore-mouse', ignore),
   getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
@@ -40,6 +41,18 @@ contextBridge.exposeInMainWorld('usualDesk', {
       const keys = payload && Array.isArray(payload.keys) ? payload.keys : [];
       callback(keys);
     });
+  },
+  peekSuggestedShortcutEditorTarget: () =>
+    ipcRenderer.invoke('peek-suggested-shortcut-editor-target'),
+  onOpenShortcutEditor: (callback) => {
+    ipcRenderer.on('open-shortcut-editor', (_event, payload) => callback(payload));
+  },
+  notifyShortcutsEditMode: (on) => ipcRenderer.invoke('notify-shortcuts-edit-mode', on === true),
+  onDockOpenWelcomeHome: (callback) => {
+    ipcRenderer.on('dock-open-welcome-home', () => callback());
+  },
+  onExitShortcutEditMode: (callback) => {
+    ipcRenderer.on('exit-shortcut-edit-mode', () => callback());
   },
   focusWebWindowByMapKey: (mapKey, notification) =>
     ipcRenderer.invoke('focus-web-window-by-map-key', { mapKey, notification }),

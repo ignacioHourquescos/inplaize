@@ -387,7 +387,7 @@ html[data-dock-position='center'] #sidebar.drop-target-active {
   filter: brightness(1.12) saturate(1.1);
 }
 
-/* Barra superior del panel: lápiz (primera “pestaña”) + lista + acciones */
+/* Barra superior del panel: lista de accesos + acciones */
 #sidebar-chrome {
   flex: 1;
   min-height: 0;
@@ -398,62 +398,46 @@ html[data-dock-position='center'] #sidebar.drop-target-active {
   -webkit-app-region: drag;
 }
 
-#shortcuts-edit-toggle {
-  grid-column: 1;
-  grid-row: 1;
-  align-self: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all var(--transition);
-  -webkit-app-region: no-drag;
-}
-
-#shortcuts-edit-toggle:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
-}
-
 #header-actions {
   grid-column: 3;
   grid-row: 1;
-  align-self: center;
-  display: flex;
-  gap: 6px;
+  align-self: stretch;
   -webkit-app-region: no-drag;
 }
 
-#header-actions button {
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition);
+/* Primer control de la franja: volver a la bienvenida (logo + acciones). */
+#dock-home-btn.dock-home-strip-btn {
+  -webkit-app-region: no-drag;
 }
 
-#header-actions button:hover {
-  background: var(--bg-card-hover);
+html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+}
+
+html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn.shell-shortcut-item {
+  border-color: var(--border);
+  background: var(--bg-card);
   color: var(--text-primary);
 }
 
-#close-btn:hover {
-  background: var(--danger) !important;
-  color: white !important;
+html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn.shell-shortcut-item:hover {
+  background: var(--bg-card-hover);
+}
+
+html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn.shell-shortcut-item.is-active {
+  border-color: var(--accent);
+  background: rgba(79, 70, 229, 0.08);
+  box-shadow: none;
+}
+
+html[data-dock-layout='topbar'] #dock-home-btn.dock-home-strip-btn {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: var(--ud-chrome-strip-pad-x);
+  border-radius: 10px;
 }
 
 /* ---- Shortcuts Container ---- */
@@ -477,11 +461,6 @@ html[data-dock-position='center'] #sidebar.drop-target-active {
   margin-right: 0;
 }
 
-#shortcuts-edit-toggle[aria-pressed='true'] {
-  background: var(--bg-card-hover);
-  color: var(--accent);
-}
-
 html[data-sidebar-density='minimal']:not([data-dock-position='center']) .shortcut-card {
   justify-content: center;
   padding: 10px 8px;
@@ -498,17 +477,6 @@ html[data-sidebar-density='minimal']:not([data-dock-position='center']) .shortcu
 html[data-dock-position='center'][data-sidebar-density='minimal'] .shortcut-card {
   padding-top: 12px;
   padding-bottom: 12px;
-}
-
-#sidebar-footer {
-  flex-shrink: 0;
-  padding: 10px 12px 14px;
-  border-top: 1px solid var(--border);
-  background: #fafafa;
-  -webkit-app-region: no-drag;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .btn-footer-settings {
@@ -714,9 +682,41 @@ html[data-dock-position='center'][data-sidebar-density='minimal'] .shortcut-card
   min-width: 0;
 }
 
-/* Solo iconos en la barra; nombre y opciones en el formulario al editar */
-.shortcut-card .shortcut-name {
-  display: none !important;
+/*
+ * Lista vertical del panel (modal, dock izq./der.): icono arriba, nombre debajo
+ */
+html[data-dock-layout='modal']:not([data-dock-position='center']) .shortcut-card {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 10px 8px 8px;
+  text-align: center;
+}
+
+html[data-dock-layout='modal']:not([data-dock-position='center']) .shortcut-card .shortcut-name {
+  align-self: stretch;
+  flex: 0 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+html[data-dock-layout='modal']:not([data-dock-position='center']) .shortcut-card .shortcut-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  margin-right: 0;
 }
 
 .shortcut-card.shortcut-card-editing {
@@ -1655,14 +1655,8 @@ html[data-dock-layout='topbar'] #app {
 }
 
 /*
- * En topbar la ventana del dock ocupa los primeros DOCK_COLLAPSED_TOP_HEIGHT
- * píxeles del workArea (ver main/constants.js). Esa franja está SIEMPRE encima
- * del web-shell por `alwaysOnTop: 'screen-saver'`, así que la zona sensible
- * tiene que coincidir exactamente con el alto real de la ventana: si la
- * agrandamos por CSS, el resto sería igualmente clipeado por el sistema, pero
- * el cálculo de `data-mouse-hit` reportaría hits fuera de la ventana visible.
- * Mantenemos también el ancho a 100% porque a 4 px de alto no compite con
- * los iconos del web-shell (que empiezan con padding-y de 8 px).
+ * En topbar la ventana del dock es una franja mínima (ver DOCK_COLLAPSED_TOP_HEIGHT).
+ * Para abrir el panel usá Ctrl+Alt+D (o Ctrl+Mayús+D).
  */
 html[data-dock-layout='topbar'] #toggle-area {
   left: 0;
@@ -1670,8 +1664,20 @@ html[data-dock-layout='topbar'] #toggle-area {
   top: 0;
   bottom: auto;
   width: 100%;
-  height: 4px;
+  height: 1px;
+  justify-content: center;
   transition: none;
+  pointer-events: none;
+}
+
+/* Franja reservada por compat.; el toggle visible es el orbe flotante. */
+html[data-dock-layout='topbar'] #toggle-btn.toggle-edge {
+  flex: 0 0 auto;
+  width: 1px;
+  min-width: 1px;
+  max-width: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 html[data-dock-layout='topbar'] #toggle-area.expanded {
@@ -1683,25 +1689,10 @@ html[data-dock-layout='topbar'] #toggle-area.expanded {
   pointer-events: auto;
 }
 
-/* Topbar: indicador centrado (semicírculo, radio 5px), no franja a todo el ancho. */
-html[data-dock-layout='topbar'] #toggle-btn.toggle-edge::after {
-  left: 50%;
-  right: auto;
-  top: 0;
-  bottom: auto;
-  width: 10px;
-  height: 5px;
-  transform: translateX(-50%);
-  background: var(--edge-gradient-top);
-  border-radius: 0;
-  /* Semicírculo inferior: arco único (círculo r=5 centrado en el borde superior). */
-  clip-path: circle(5px at 50% 0);
-}
-
+/* Oculto: el indicador violeta vive en la ventana flotante. */
+html[data-dock-layout='topbar'] #toggle-btn.toggle-edge::after,
 html[data-dock-layout='topbar'] #toggle-btn.toggle-edge:hover::after {
-  width: 10px;
-  height: 5px;
-  transform: translateX(-50%);
+  display: none;
 }
 
 /* Panel abierto: pantalla completa, estilo contenedor web (franja superior + resto negro). */
@@ -1738,7 +1729,7 @@ html[data-dock-layout='topbar']:has(#sidebar.open) #toggle-area {
 
 /*
  * Franja superior = misma lógica que web-shell (.shell-top + .shortcut-strip):
- * altura total 52px sin padding extra en el contenedor; el padding va en la tira de iconos.
+ * altura total de franja vía --ud-chrome-strip-h; el padding va en la tira de iconos.
  */
 html[data-dock-layout='topbar'] #sidebar-chrome {
   display: flex;
@@ -1766,7 +1757,7 @@ html[data-dock-layout='topbar'] #shortcuts-container {
   align-items: center;
   justify-content: flex-start;
   gap: var(--ud-chrome-strip-gap);
-  padding: var(--ud-chrome-strip-pad-y) var(--ud-chrome-strip-pad-x) !important;
+  padding: var(--ud-chrome-strip-pad-y) var(--ud-chrome-strip-pad-x) var(--ud-chrome-strip-pad-y) 0 !important;
   margin: 0 !important;
   border: none !important;
   border-top: none !important;
@@ -1785,63 +1776,98 @@ html[data-dock-layout='topbar'] #shortcuts-container::-webkit-scrollbar-thumb {
   border-radius: 4px;
 }
 
-html[data-dock-layout='topbar'] #shortcuts-edit-toggle {
-  flex-shrink: 0;
-  align-self: center;
-  width: var(--ud-chrome-icon);
-  height: var(--ud-chrome-icon);
-  min-width: var(--ud-chrome-icon);
-  min-height: var(--ud-chrome-icon);
-  padding: 0;
-  border: 1px solid var(--ud-chrome-icon-border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--ud-chrome-icon-muted);
-}
-
-html[data-dock-layout='topbar'] #shortcuts-edit-toggle:hover {
-  background: var(--ud-chrome-icon-bg-hover);
-  border-color: var(--ud-chrome-icon-border-hover);
-  color: var(--ud-chrome-text);
-}
-
-html[data-dock-layout='topbar'] #shortcuts-edit-toggle[aria-pressed='true'] {
-  background: var(--ud-chrome-icon-active-bg);
-  border-color: var(--ud-chrome-icon-active-border);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
-  color: var(--ud-chrome-text);
-}
-
-html[data-dock-layout='topbar'] #header-actions {
+html[data-dock-layout='topbar'] #header-actions.dock-chrome-win-btns {
   flex-shrink: 0;
   align-self: stretch;
-  display: flex;
-  align-items: stretch;
-  gap: 0;
   height: auto;
   min-height: 0;
+  gap: 0;
   -webkit-app-region: no-drag;
 }
 
-html[data-dock-layout='topbar'] #header-actions button {
-  width: var(--ud-chrome-action-w);
-  min-width: var(--ud-chrome-action-w);
-  flex: 0 0 var(--ud-chrome-action-w);
-  height: auto;
-  border-radius: 0;
-  border: none;
-  background: transparent;
-  color: var(--ud-chrome-action-color);
+.dock-edit-mode-banner {
+  display: none;
+  align-items: center;
+  align-self: center;
+  margin-right: 8px;
+  padding-right: 8px;
+  border-right: 1px solid var(--ud-chrome-strip-border);
+  -webkit-app-region: no-drag;
 }
 
-html[data-dock-layout='topbar'] #header-actions button:hover {
-  background: var(--ud-chrome-action-hover);
-  color: var(--ud-chrome-action-color);
+html[data-dock-layout='topbar'][data-shortcuts-edit='on'] .dock-edit-mode-banner {
+  display: inline-flex;
 }
 
-/* Lienzo negro bajo la franja (formulario de edición va aquí en topbar) */
+.dock-edit-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 5px 12px 5px 10px;
+  border: 1px solid rgba(167, 139, 250, 0.75);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.12);
+  color: #c4b5fd;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.dock-edit-mode-chip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: #c4b5fd;
+  opacity: 0.95;
+}
+
+.dock-edit-mode-chip-label {
+  color: inherit;
+}
+
+.dock-edit-mode-chip:hover {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: rgba(196, 181, 253, 0.95);
+  color: #ddd6fe;
+}
+
+.dock-edit-mode-chip:hover .dock-edit-mode-chip-icon {
+  color: #ddd6fe;
+}
+
+.dock-edit-mode-chip:focus-visible {
+  outline: 2px solid rgba(196, 181, 253, 0.9);
+  outline-offset: 2px;
+}
+/* Lienzo bajo la franja (pantalla principal + formulario de edición en topbar) */
 .dock-viewport {
   display: none;
+}
+
+html[data-dock-layout='modal'] .dock-viewport {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  position: relative;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+}
+
+html[data-dock-layout='modal'] #dock-home-panel {
+  flex: 0 0 auto;
+  min-height: 0;
 }
 
 html[data-dock-layout='topbar'] .dock-viewport {
@@ -1849,7 +1875,247 @@ html[data-dock-layout='topbar'] .dock-viewport {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  background: var(--ud-chrome-canvas);
+  position: relative;
+  background-color: var(--ud-chrome-canvas);
+  background-image:
+    radial-gradient(circle at 22% 18%, rgba(139, 92, 246, 0.08), transparent 52%),
+    radial-gradient(circle at 78% 88%, rgba(99, 102, 241, 0.06), transparent 48%);
+}
+
+/* Pantalla principal: marca + acciones con iconos + cerrar aplicación */
+#dock-home-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 4vh, 36px);
+  padding: 24px 20px 32px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 0;
+  -webkit-app-region: no-drag;
+}
+
+.dock-home-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(18px, 3vh, 28px);
+  width: 100%;
+  max-width: min(400px, 100%);
+}
+
+.dock-home-icon-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(14px, 3.5vw, 24px);
+  flex-wrap: wrap;
+}
+
+.dock-home-action-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 88px;
+  flex-shrink: 0;
+}
+
+.dock-home-action-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  max-width: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dock-home-action-cell:has(.dock-home-icon-tile.is-on) .dock-home-action-label,
+.dock-home-action-cell:has(.dock-home-icon-tile[aria-checked='true']) .dock-home-action-label {
+  color: var(--accent);
+}
+
+html[data-dock-layout='topbar'] .dock-home-action-label {
+  color: rgba(232, 232, 239, 0.7);
+}
+
+html[data-dock-layout='topbar'] .dock-home-action-cell:has(.dock-home-icon-tile.is-on) .dock-home-action-label,
+html[data-dock-layout='topbar'] .dock-home-action-cell:has(.dock-home-icon-tile[aria-checked='true']) .dock-home-action-label {
+  color: #c4b5fd;
+}
+
+.dock-home-icon-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-app-region: no-drag;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.dock-home-icon-tile:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border);
+}
+
+.dock-home-icon-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dock-home-icon-tile.is-on,
+.dock-home-icon-tile[aria-checked='true'] {
+  border-color: rgba(124, 108, 255, 0.65);
+  background: rgba(124, 108, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.dock-home-icon-tile-svg {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.dock-home-quit-link {
+  margin: 0;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: color 0.15s ease;
+}
+
+.dock-home-quit-link:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.dock-home-quit-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html[data-dock-layout='topbar'] .dock-home-icon-tile {
+  background: #25252e;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e8e8ef;
+}
+
+html[data-dock-layout='topbar'] .dock-home-icon-tile:hover {
+  background: #2e2e38;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+html[data-dock-layout='topbar'] .dock-home-icon-tile.is-on,
+html[data-dock-layout='topbar'] .dock-home-icon-tile[aria-checked='true'] {
+  border-color: rgba(167, 139, 250, 0.75);
+  background: rgba(167, 139, 250, 0.14);
+  color: #fff;
+}
+
+html[data-dock-layout='topbar'] .dock-home-quit-link {
+  color: rgba(245, 246, 248, 0.5);
+}
+
+html[data-dock-layout='topbar'] .dock-home-quit-link:hover {
+  color: rgba(245, 246, 248, 0.92);
+}
+
+/* Marca (misma idea visual que landing/index.html) */
+.dock-home-branding {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  gap: 0;
+}
+
+.dock-brand-logo {
+  width: 72px;
+  height: 72px;
+  margin: 0 0 20px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 10px 30px rgba(139, 92, 246, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.dock-brand-logo-mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  position: relative;
+}
+
+.dock-brand-logo-mark::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8b5cf6;
+}
+
+.dock-brand-wordmark {
+  margin: 0;
+  font-family:
+    'Inter',
+    'Miranda Sans',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f5f6f8;
+  line-height: 1.1;
+}
+
+html[data-dock-layout='modal'] .dock-brand-wordmark {
+  color: var(--text-primary);
+}
+
+html[data-loose-nav='on'] #dock-home-panel,
+.dock-viewport:has(#dock-inline-editor:not(.hidden)) #dock-home-panel,
+.dock-viewport:has(#loose-nav-surface:not(.hidden)) #dock-home-panel {
+  /* display:none (no solo opacity): si el panel sigue en el flex pero invisible,
+     sigue ocupando mitad del alto y el formulario “cae” debajo. */
+  display: none !important;
 }
 
 html[data-dock-layout='topbar'] .dock-inline-editor {
@@ -1870,6 +2136,8 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
   align-items: flex-start;
   justify-content: flex-start;
   padding: 24px clamp(20px, 4vw, 48px) 32px;
+  position: relative;
+  z-index: 1;
 }
 
 /* ==========================================================================
@@ -2214,11 +2482,6 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
   gap: 16px;
 }
 
-html[data-dock-layout='topbar'] #close-btn:hover {
-  background: #e81123 !important;
-  color: #fff !important;
-}
-
 /*
  * En topbar, las tarjetas (.shortcut-card) además llevan .shell-shortcut-item,
  * así que toda su apariencia (tamaño, borde, icono, badge) la aporta
@@ -2296,33 +2559,6 @@ html[data-dock-layout='topbar'] .shortcuts-empty {
 
 html[data-dock-layout='topbar'] .shortcuts-empty-text {
   display: none;
-}
-
-html[data-dock-layout='topbar'] #sidebar-footer {
-  flex-shrink: 0;
-  margin-top: auto;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: stretch;
-  gap: 8px;
-  padding: 12px 14px 16px;
-  border-top: 1px solid var(--ud-chrome-strip-border);
-  background: var(--ud-chrome-strip-bg);
-}
-
-html[data-dock-layout='topbar'] .btn-footer-settings,
-html[data-dock-layout='topbar'] .btn-quit-app {
-  flex: 1;
-  min-width: 120px;
-  background: var(--dock-btn);
-  color: var(--dock-muted);
-  border-color: var(--dock-border);
-}
-
-html[data-dock-layout='topbar'] .btn-footer-settings:hover,
-html[data-dock-layout='topbar'] .btn-quit-app:hover {
-  background: var(--dock-btn-hover);
-  color: var(--dock-text);
 }
 
 html[data-dock-layout='topbar'] .btn-empty-add {
@@ -2576,6 +2812,7 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   inset: 0;
   background: transparent;
   pointer-events: none;
+  z-index: 1;
 }
 
 .loose-nav-surface.hidden {
@@ -2593,11 +2830,3 @@ html[data-loose-nav='on'] #dock-inline-editor {
   box-shadow: 0 0 0 2px var(--ln-accent, #7c6cff) !important;
   border-color: var(--ln-accent, #7c6cff) !important;
 }
-
-/* El pie del panel (Configuración / Cerrar aplicación) solo aparece cuando el
-   usuario está en modo edición (lápiz activo). En uso normal queda oculto y
-   las pestañas de navegación suelta ganan ese alto extra. */
-html:not([data-shortcuts-edit='on']) #sidebar-footer {
-  display: none !important;
-}
-

@@ -2,10 +2,12 @@ const toggleArea = document.getElementById('toggle-area');
 const toggleBtn = document.getElementById('toggle-btn');
 const sidebarBackdrop = document.getElementById('sidebar-backdrop');
 const sidebar = document.getElementById('sidebar');
-const addBtn = document.getElementById('add-btn');
+const dockHomeAddBtn = document.getElementById('dock-home-add-btn');
 const shortcutsEditToggleBtn = document.getElementById('shortcuts-edit-toggle');
-const closeBtn = document.getElementById('close-btn');
+const dockEditModeBanner = document.getElementById('dock-edit-mode-banner');
+const dockExitEditModeBtn = document.getElementById('dock-exit-edit-mode-btn');
 const shortcutsContainer = document.getElementById('shortcuts-container');
+const dockHomeBtn = document.getElementById('dock-home-btn');
 const modalOverlay = document.getElementById('modal-overlay');
 const dockInlineEditor = document.getElementById('dock-inline-editor');
 const shortcutModalCard = document.getElementById('modal');
@@ -85,8 +87,10 @@ const titleBadges = {};
 let openWebWindowKeys = new Set();
 let editingId = null;
 let dragOperationActive = false;
-/** Panel de accesos: con el lápiz activo, un clic en un icono abre la edición abajo. */
+/** Panel de accesos: con modo edición activo, un clic en un icono abre la edición abajo. */
 let shortcutsEditMode = false;
+/** Evita spam IPC a ventanas chrome en cada renderShortcuts. */
+let lastSyncedShortcutsEditModeToChrome = null;
 /** Modo Foco: colección de mapKeys de shortcuts dentro del foco. */
 let focusModeState = { active: false, members: new Set() };
 
@@ -157,6 +161,25 @@ function initFooter() {
     quitBtn.addEventListener('click', () => {
       window.usualDesk.closeApp();
     });
+  }
+}
+
+function syncDockHomeStripBtn() {
+  const btn = document.getElementById('dock-home-btn');
+  if (!btn) return;
+  const editor = document.getElementById('dock-inline-editor');
+  const lnSurface = document.getElementById('loose-nav-surface');
+  const editorOpen = editor && !editor.classList.contains('hidden');
+  const looseOpen = lnSurface && !lnSurface.classList.contains('hidden');
+  const homeVisible = !editorOpen && !looseOpen;
+  btn.classList.toggle('is-active', homeVisible);
+  btn.setAttribute('aria-pressed', homeVisible ? 'true' : 'false');
+}
+
+async function goToDockWelcomeHome() {
+  closeModal();
+  if (looseNavState?.active && typeof window.usualDesk.looseNavClose === 'function') {
+    await window.usualDesk.looseNavClose().catch(() => {});
   }
 }
 
@@ -871,6 +894,24 @@ function setTitleBadgeOnCard(shortcutId, count) {
   }
 }
 
+async function exitDockShortcutEditModeFromChrome() {
+  if (!shortcutsEditMode) {
+    try {
+      await window.usualDesk.collapseSidebar();
+    } catch {
+      /* noop */
+    }
+    return;
+  }
+  shortcutsEditMode = false;
+  closeModal();
+  try {
+    await window.usualDesk.collapseSidebar();
+  } catch {
+    /* noop */
+  }
+}
+
 async function init() {
   await loadInitialDockPosition();
   shortcuts = await window.usualDesk.getShortcuts();
@@ -890,8 +931,14 @@ async function init() {
   initAppSettingsUI();
   initDockInAppToasts();
   initFooter();
+  initDockChromeWindowControls();
   schedulePointerPassthroughSync();
   maybeStartOnboarding();
+  if (typeof window.usualDesk.onDockOpenWelcomeHome === 'function') {
+    window.usualDesk.onDockOpenWelcomeHome(() => {
+      goToDockWelcomeHome().catch(() => {});
+    });
+  }
   window.usualDesk.onShortcutTitleBadge(({ shortcutId, count }) => {
     setTitleBadgeOnCard(shortcutId, count);
   });
@@ -912,6 +959,23 @@ async function init() {
     } catch {
       /* noop */
     }
+  }
+  if (window.usualDesk.onOpenShortcutEditor) {
+    window.usualDesk.onOpenShortcutEditor((payload) => {
+      const raw = payload && payload.shortcutId != null ? String(payload.shortcutId).trim() : '';
+      shortcutsEditMode = true;
+      const s = raw ? shortcuts.find((x) => String(x.id) === raw) : null;
+      if (s) {
+        openEditModal(s);
+      } else {
+        renderShortcuts();
+      }
+    });
+  }
+  if (window.usualDesk.onExitShortcutEditMode) {
+    window.usualDesk.onExitShortcutEditMode(() => {
+      exitDockShortcutEditModeFromChrome().catch(() => {});
+    });
   }
 }
 
@@ -952,7 +1016,7 @@ async function maybeStartOnboarding() {
     /* si falla, igualmente intentamos arrancar el wizard */
   }
   // Diferimos un tick para que el primer paint de la barra ya esté listo y
-  // las posiciones de #toggle-btn / #add-btn sean estables al medirlas.
+  // las posiciones de #toggle-btn sean estables al medirlas.
   setTimeout(() => {
     try {
       window.UsualDeskOnboarding.start();
@@ -1135,8 +1199,8 @@ function staysInDockDropZones(node) {
 
 async function ensureSidebarOpen() {
   if (sidebar.classList.contains('open')) return;
-  const expanded = await window.usualDesk.toggleSidebar();
-  updateSidebarUI(expanded === true);
+  await window.usualDesk.expandSidebar();
+  updateSidebarUI(true);
 }
 
 async function addShortcutFromDroppedUrl(url) {
@@ -1301,13 +1365,29 @@ function applyShortcutsEditModeUi() {
     shortcutsEditMode ? 'on' : 'off',
   );
   if (shortcutsEditToggleBtn) {
-    shortcutsEditToggleBtn.setAttribute('aria-pressed', shortcutsEditMode ? 'true' : 'false');
+    shortcutsEditToggleBtn.setAttribute('aria-checked', shortcutsEditMode ? 'true' : 'false');
+    shortcutsEditToggleBtn.classList.toggle('is-on', shortcutsEditMode);
+    shortcutsEditToggleBtn.setAttribute(
+      'aria-label',
+      shortcutsEditMode ? 'Modo edición activo; desactivar para uso normal' : 'Modo edición desactivado; activar para editar accesos',
+    );
     shortcutsEditToggleBtn.setAttribute(
       'data-tooltip',
       shortcutsEditMode
-        ? 'Dejar de editar (clic en un icono para cambiar sus datos abajo)'
-        : 'Editar accesos: pulsa un icono para ver nombre, URL, notificaciones y orden abajo',
+        ? 'Modo edición activo: desactivar para volver a las ventanas normales'
+        : 'Modo edición inactivo: activar para editar nombre, icono y opciones de cada ventana',
     );
+  }
+  if (dockEditModeBanner) {
+    const bannerVisible = shortcutsEditMode && isDockTopbarLayout();
+    dockEditModeBanner.setAttribute('aria-hidden', bannerVisible ? 'false' : 'true');
+  }
+  if (
+    lastSyncedShortcutsEditModeToChrome !== shortcutsEditMode &&
+    window.usualDesk.notifyShortcutsEditMode
+  ) {
+    lastSyncedShortcutsEditModeToChrome = shortcutsEditMode;
+    window.usualDesk.notifyShortcutsEditMode(shortcutsEditMode).catch(() => {});
   }
 }
 
@@ -1323,12 +1403,13 @@ function renderShortcuts() {
       const wrap = document.createElement('div');
       wrap.className = 'shortcuts-empty';
       wrap.innerHTML =
-        '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Pulsa + arriba o aquí abajo para añadir uno (web o programa).</p>'
+        '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Ve a Inicio (icono de casa arriba) y pulsa «Añadir acceso directo», o el botón de abajo.</p>'
         + '<button type="button" class="btn-empty-add">+ Añadir acceso directo</button>';
       wrap.querySelector('.btn-empty-add').addEventListener('click', () => openAddModal());
       shortcutsContainer.appendChild(wrap);
     }
     applyShortcutsEditModeUi();
+    syncDockHomeStripBtn();
     return;
   }
 
@@ -1359,7 +1440,6 @@ function renderShortcuts() {
     if (isTopbar) {
       card.innerHTML = `
         <span class="shell-shortcut-icon-wrap">${iconHtml}</span>
-        <span class="shortcut-name">${shortcut.name}</span>
         <span class="shortcut-badge shell-strip-badge"${badgeHidden}${badgeAria}>${badgeText}</span>
       `;
     } else {
@@ -1419,6 +1499,7 @@ function renderShortcuts() {
   ) {
     window.UsualDeskOnboarding.advance('shortcuts-non-empty');
   }
+  syncDockHomeStripBtn();
 }
 
 function applyFocusMemberClassToCard(card, shortcut) {
@@ -1465,14 +1546,15 @@ function bindDockShortcutGestures(card, shortcut, suppressNextClick) {
   });
 }
 
-// Toggle sidebar (modo contenedor: el mismo IPC abre el envoltorio web vía main)
-toggleBtn.addEventListener('click', async () => {
-  try {
-    const expanded = await window.usualDesk.toggleSidebar();
-    updateSidebarUI(expanded === true);
-  } catch (err) {
-    console.error('toggle-sidebar', err);
-  }
+/*
+ * El panel solo se abre con Ctrl+Alt+D (main); no hay clic en la franja toggle para abrirlo.
+ * Respaldo: mouseenter/mouseleave sobre #toggle-btn para desactivar click-through en esa zona.
+ */
+toggleBtn.addEventListener('mouseenter', () => {
+  lastPassthroughIgnore = false;
+  window.usualDesk.setIgnoreMouse(false);
+});
+toggleBtn.addEventListener('mouseleave', () => {
   lastPassthroughIgnore = null;
   schedulePointerPassthroughSync();
 });
@@ -1510,17 +1592,49 @@ if (sidebarBackdrop) {
   });
 }
 
-// X: ocultar panel (no cerrar la app)
-closeBtn.addEventListener('click', async () => {
-  try {
-    await window.usualDesk.collapseSidebar();
-    updateSidebarUI(false);
-    lastPassthroughIgnore = null;
-    schedulePointerPassthroughSync();
-  } catch (err) {
-    console.error('collapse-sidebar', err);
+function initDockChromeWindowControls() {
+  const minBtn = document.getElementById('dock-win-min');
+  const maxBtn = document.getElementById('dock-win-max');
+  const closeDockBtn = document.getElementById('dock-win-close');
+  if (!minBtn || !maxBtn || !closeDockBtn) return;
+
+  function setDockMaxVisual(isMax) {
+    const label = isMax ? 'Restaurar' : 'Maximizar';
+    maxBtn.setAttribute('data-tooltip', label);
+    maxBtn.setAttribute('aria-label', label);
+    if (isMax) {
+      maxBtn.innerHTML =
+        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="4" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="2" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
+    } else {
+      maxBtn.innerHTML =
+        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
+    }
   }
-});
+
+  setDockMaxVisual(false);
+
+  minBtn.addEventListener('click', () => {
+    window.usualDesk.dockWindowMinimize?.().catch(() => {});
+  });
+  maxBtn.addEventListener('click', async () => {
+    try {
+      const isMax = await window.usualDesk.dockWindowToggleMaximize?.();
+      setDockMaxVisual(!!isMax);
+    } catch {
+      /* noop */
+    }
+  });
+  closeDockBtn.addEventListener('click', async () => {
+    try {
+      await window.usualDesk.collapseSidebar();
+      updateSidebarUI(false);
+      lastPassthroughIgnore = null;
+      schedulePointerPassthroughSync();
+    } catch (err) {
+      console.error('collapse-sidebar', err);
+    }
+  });
+}
 
 browsePathBtn.addEventListener('click', async () => {
   const picked = await window.usualDesk.pickAppOrShortcut();
@@ -1531,18 +1645,65 @@ browsePathBtn.addEventListener('click', async () => {
   }
 });
 
-// Add shortcut
-addBtn.addEventListener('click', () => {
-  openAddModal();
-});
+// Add shortcut (solo desde la pantalla de inicio)
+if (dockHomeAddBtn) {
+  dockHomeAddBtn.addEventListener('click', () => {
+    openAddModal();
+  });
+}
+
+if (dockHomeBtn) {
+  dockHomeBtn.addEventListener('click', () => {
+    goToDockWelcomeHome().catch(() => {});
+  });
+}
+
+async function exitShortcutsEditModeFromUi() {
+  const editorWasOpen =
+    isDockTopbarLayout() &&
+    dockInlineEditor &&
+    !dockInlineEditor.classList.contains('hidden');
+  const looseNavOpen = looseNavSurface && !looseNavSurface.classList.contains('hidden');
+  shortcutsEditMode = false;
+  closeModal();
+  if (editorWasOpen || looseNavOpen) {
+    try {
+      await window.usualDesk.collapseSidebar();
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+if (dockExitEditModeBtn) {
+  dockExitEditModeBtn.addEventListener('click', () => {
+    if (!shortcutsEditMode) return;
+    exitShortcutsEditModeFromUi().catch(() => {});
+  });
+}
 
 if (shortcutsEditToggleBtn) {
-  shortcutsEditToggleBtn.addEventListener('click', () => {
+  shortcutsEditToggleBtn.addEventListener('click', async () => {
     if (shortcutsEditMode) {
-      closeModal();
+      await exitShortcutsEditModeFromUi();
+      return;
     }
-    shortcutsEditMode = !shortcutsEditMode;
-    renderShortcuts();
+    let prefId = null;
+    try {
+      if (window.usualDesk.peekSuggestedShortcutEditorTarget) {
+        prefId = await window.usualDesk.peekSuggestedShortcutEditorTarget();
+      }
+    } catch {
+      /* noop */
+    }
+    shortcutsEditMode = true;
+    const s =
+      prefId != null ? shortcuts.find((x) => String(x.id) === String(prefId)) : null;
+    if (s) {
+      openEditModal(s);
+    } else {
+      renderShortcuts();
+    }
   });
 }
 
@@ -1656,6 +1817,7 @@ function showShortcutFormShell() {
     }
     modalOverlay.classList.remove('hidden');
   }
+  syncDockHomeStripBtn();
 }
 
 // Save shortcut
@@ -1967,6 +2129,7 @@ function renderLooseNavBar(state) {
   } else {
     lastSentViewportBounds = null;
   }
+  syncDockHomeStripBtn();
 }
 
 function initLooseNavUiEvents() {

@@ -216,6 +216,13 @@ if (api.onTitleBadge) {
 
 refreshChromeFromMain();
 
+const detachedShellHomeBtn = document.getElementById('shell-home-btn');
+if (detachedShellHomeBtn && window.usualDeskDetached.openDockWelcomeHome) {
+  detachedShellHomeBtn.addEventListener('click', () => {
+    window.usualDeskDetached.openDockWelcomeHome().catch(() => {});
+  });
+}
+
 function initFramelessChrome() {
   if (!api?.framelessChrome) return;
   document.documentElement.setAttribute('data-shell-frameless', 'true');

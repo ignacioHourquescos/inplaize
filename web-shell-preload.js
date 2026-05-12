@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   windowMinimize: () => ipcRenderer.invoke('shell-window-minimize'),
   windowToggleMaximize: () => ipcRenderer.invoke('shell-window-toggle-maximize'),
   windowClose: () => ipcRenderer.invoke('shell-window-close'),
+  openDockWelcomeHome: () => ipcRenderer.invoke('dock-open-welcome-home'),
+  requestShortcutEditor: () => ipcRenderer.invoke('shell-request-shortcut-editor'),
+  requestExitShortcutEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),
+  onShortcutsEditModeSync: (callback) => {
+    ipcRenderer.on('shortcuts-edit-mode-sync', (_event, on) => callback(on === true));
+  },
   onChrome: (callback) => {
     ipcRenderer.on('shell-chrome', (_event, payload) => callback(payload));
   },

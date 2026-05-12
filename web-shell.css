@@ -18,6 +18,7 @@ body {
 .shell-top {
   display: flex;
   align-items: stretch;
+  gap: var(--ud-chrome-strip-gap);
   height: var(--ud-chrome-strip-h);
   flex-shrink: 0;
   border-bottom: 1px solid var(--ud-chrome-strip-border);
@@ -28,8 +29,15 @@ html[data-shell-frameless='true'] .shell-top {
 }
 
 html[data-shell-frameless='true'] .shell-win-btns,
-html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item {
+html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
+html[data-shell-frameless='true'] .shell-home-strip-btn {
   -webkit-app-region: no-drag;
+}
+
+.shell-home-strip-btn {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: var(--ud-chrome-strip-pad-x);
 }
 
 .shortcut-strip {
@@ -39,7 +47,7 @@ html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item {
   flex: 1;
   min-width: 0;
   min-height: var(--ud-chrome-strip-h);
-  padding: var(--ud-chrome-strip-pad-y) var(--ud-chrome-strip-pad-x);
+  padding: var(--ud-chrome-strip-pad-y) var(--ud-chrome-strip-pad-x) var(--ud-chrome-strip-pad-y) 0;
   overflow-x: auto;
   overflow-y: hidden;
   flex-wrap: nowrap;
@@ -77,40 +85,6 @@ html[data-shell-frameless='true'] .shortcut-strip {
   opacity: 0.6;
   padding: 0 8px;
   font-size: 13px;
-}
-
-.shell-win-btns {
-  display: flex;
-  align-items: stretch;
-  flex-shrink: 0;
-  -webkit-app-region: no-drag;
-}
-
-.shell-win-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--ud-chrome-action-w);
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--ud-chrome-action-color);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.shell-win-btn svg {
-  display: block;
-}
-
-.shell-win-btn:hover {
-  background: var(--ud-chrome-action-hover);
-}
-
-.shell-win-btn.is-close:hover {
-  background: #e81123;
-  color: #fff;
 }
 
 html:not([data-shell-frameless='true']) .shell-win-btns {

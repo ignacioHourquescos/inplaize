@@ -63,8 +63,6 @@ const { LOOSE_NAV_SESSION_ID } = require('./constants');
 
 const IPC_CHANNELS = [
 
-  'toggle-sidebar',
-
   'collapse-sidebar',
 
   'expand-sidebar',
@@ -114,6 +112,22 @@ const IPC_CHANNELS = [
   'shell-window-toggle-maximize',
 
   'shell-window-close',
+
+  'shell-request-shortcut-editor',
+
+  'detached-request-shortcut-editor',
+
+  'peek-suggested-shortcut-editor-target',
+
+  'notify-shortcuts-edit-mode',
+
+  'chrome-request-exit-shortcut-edit-mode',
+
+  'dock-window-minimize',
+
+  'dock-window-toggle-maximize',
+
+  'dock-open-welcome-home',
 
   'detached-frame-action',
 
@@ -219,21 +233,55 @@ function registerIpcHandlers(state) {
   }
 
   function collapseDockSidebar() {
-
     state.isExpanded = false;
 
     const dock = state.mainWindow;
 
     if (dock && !dock.isDestroyed()) {
-
       applyDockWindowBounds(dock, false);
 
       dock.setIgnoreMouseEvents(true, { forward: true });
 
       dock.webContents.send('sidebar-state', false);
-
     }
+  }
 
+  /**
+   * Expande el dock y pide al renderer activar modo edición (y opcionalmente abrir un acceso).
+   * @param {string | null | undefined} shortcutId
+   */
+  function openShortcutEditorOnDock(shortcutId) {
+    expandDockSidebar();
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed()) return;
+    const sid =
+      shortcutId != null && String(shortcutId).trim() !== '' ? String(shortcutId).trim() : '';
+    dock.webContents.send('open-shortcut-editor', { shortcutId: sid });
+  }
+
+  /**
+   * Sincroniza el interruptor "modo edición" en ventanas chrome (shell / detached).
+   * @param {boolean} on
+   */
+  function broadcastShortcutsEditModeToChromeHosts(on) {
+    const v = on === true;
+    try {
+      const ws = require('./web-shell');
+      const sw = ws.getShellWindow && ws.getShellWindow();
+      if (sw && !sw.isDestroyed()) {
+        sw.webContents.send('shortcuts-edit-mode-sync', v);
+      }
+    } catch {
+      /* noop */
+    }
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win || win.isDestroyed() || !win.__usualDeskDetachedChromeHost) continue;
+      try {
+        win.webContents.send('shortcuts-edit-mode-sync', v);
+      } catch {
+        /* noop */
+      }
+    }
   }
 
   try {
@@ -346,104 +394,84 @@ function registerIpcHandlers(state) {
    */
   function raiseAppFromGlobalHotkey() {
     if (loadAppSettings().webHostMode === 'shell') {
+        try {
+          require('./web-shell').showOrToggleShellFromHotkey();
+        } catch {
+          /* noop */
+        }
+        if (state.isExpanded) {
+          state.isExpanded = false;
+          const win = state.mainWindow;
+          if (win && !win.isDestroyed()) {
+            applyDockWindowBounds(win, false);
+            try {
+              win.setIgnoreMouseEvents(true, { forward: true });
+            } catch {
+              /* noop */
+            }
+            win.webContents.send('sidebar-state', false);
+          }
+        }
+        return;
+      }
+
+      const dockWin = state.mainWindow;
+      if (!dockWin || dockWin.isDestroyed()) return;
+
+      if (anyWebWindowFocused()) {
+        minimizeAllWebWindows();
+        if (state.isExpanded) {
+          state.isExpanded = false;
+          applyDockWindowBounds(dockWin, false);
+          try {
+            dockWin.setIgnoreMouseEvents(true, { forward: true });
+          } catch {
+            /* noop */
+          }
+          dockWin.webContents.send('sidebar-state', false);
+        }
+        return;
+      }
+
+      const focusedWeb = focusLastWebWindowFromHotkey();
+      if (focusedWeb) {
+        if (state.isExpanded) {
+          state.isExpanded = false;
+          applyDockWindowBounds(dockWin, false);
+          try {
+            dockWin.setIgnoreMouseEvents(true, { forward: true });
+          } catch {
+            /* noop */
+          }
+          dockWin.webContents.send('sidebar-state', false);
+        }
+        return;
+      }
+
+      state.isExpanded = !state.isExpanded;
+      applyDockWindowBounds(dockWin, state.isExpanded);
       try {
-        require('./web-shell').showOrToggleShellFromHotkey();
+        if (state.isExpanded) {
+          dockWin.setIgnoreMouseEvents(false);
+        } else {
+          dockWin.setIgnoreMouseEvents(true, { forward: true });
+        }
       } catch {
         /* noop */
       }
+      dockWin.webContents.send('sidebar-state', state.isExpanded);
       if (state.isExpanded) {
-        state.isExpanded = false;
-        const win = state.mainWindow;
-        if (win && !win.isDestroyed()) {
-          applyDockWindowBounds(win, false);
-          win.webContents.send('sidebar-state', false);
+        forceWindowForeground(dockWin);
+        if (process.platform === 'win32') {
+          setTimeout(() => {
+            if (!dockWin.isDestroyed()) forceWindowForeground(dockWin);
+          }, 90);
+          setTimeout(() => {
+            if (!dockWin.isDestroyed()) forceWindowForeground(dockWin);
+          }, 260);
         }
       }
-      return;
-    }
-
-    const dockWin = state.mainWindow;
-    if (!dockWin || dockWin.isDestroyed()) return;
-
-    if (anyWebWindowFocused()) {
-      minimizeAllWebWindows();
-      if (state.isExpanded) {
-        state.isExpanded = false;
-        applyDockWindowBounds(dockWin, false);
-        dockWin.webContents.send('sidebar-state', false);
-      }
-      return;
-    }
-
-    const focusedWeb = focusLastWebWindowFromHotkey();
-    if (focusedWeb) {
-      if (state.isExpanded) {
-        state.isExpanded = false;
-        applyDockWindowBounds(dockWin, false);
-        dockWin.webContents.send('sidebar-state', false);
-      }
-      return;
-    }
-
-    state.isExpanded = !state.isExpanded;
-    applyDockWindowBounds(dockWin, state.isExpanded);
-    dockWin.webContents.send('sidebar-state', state.isExpanded);
-    if (state.isExpanded) {
-      forceWindowForeground(dockWin);
-      if (process.platform === 'win32') {
-        setTimeout(() => {
-          if (!dockWin.isDestroyed()) forceWindowForeground(dockWin);
-        }, 90);
-        setTimeout(() => {
-          if (!dockWin.isDestroyed()) forceWindowForeground(dockWin);
-        }, 260);
-      }
-    }
   }
-
-  function toggleDockSidebar() {
-    if (loadAppSettings().webHostMode === 'shell') {
-      try {
-        require('./web-shell').showOrToggleShellFromHotkey();
-      } catch {
-        /* noop */
-      }
-      if (state.isExpanded) {
-        state.isExpanded = false;
-        const win = state.mainWindow;
-        if (win && !win.isDestroyed()) {
-          applyDockWindowBounds(win, false);
-          win.webContents.send('sidebar-state', false);
-        }
-      }
-      return false;
-    }
-
-    state.isExpanded = !state.isExpanded;
-
-    const win = state.mainWindow;
-
-    if (win && !win.isDestroyed()) {
-
-      applyDockWindowBounds(win, state.isExpanded);
-
-      win.webContents.send('sidebar-state', state.isExpanded);
-
-      if (state.isExpanded) {
-        forceWindowForeground(win);
-      }
-
-    }
-
-    return state.isExpanded;
-
-  }
-
-
-
-  ipcMain.handle('toggle-sidebar', () => toggleDockSidebar());
-
-
 
   ipcMain.handle('collapse-sidebar', () => {
 
@@ -453,8 +481,94 @@ function registerIpcHandlers(state) {
 
   });
 
+  ipcMain.handle('dock-window-minimize', () => {
+    const dock = state.mainWindow;
+    if (dock && !dock.isDestroyed()) dock.minimize();
+    return true;
+  });
+
+  ipcMain.handle('dock-window-toggle-maximize', () => {
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed()) return false;
+    if (dock.isMaximized()) dock.unmaximize();
+    else dock.maximize();
+    return dock.isMaximized();
+  });
+
   ipcMain.handle('expand-sidebar', () => {
     expandDockSidebar();
+    return true;
+  });
+
+  ipcMain.handle('dock-open-welcome-home', () => {
+    expandDockSidebar();
+    const dock = state.mainWindow;
+    if (dock && !dock.isDestroyed()) {
+      dock.webContents.send('dock-open-welcome-home');
+    }
+    return true;
+  });
+
+  ipcMain.handle('shell-request-shortcut-editor', () => {
+    try {
+      const ws = require('./web-shell');
+      const id = ws.getActiveShortcutId();
+      openShortcutEditorOnDock(id);
+    } catch {
+      openShortcutEditorOnDock(null);
+    }
+    return true;
+  });
+
+  ipcMain.handle('detached-request-shortcut-editor', (event) => {
+    let sid = null;
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win && !win.isDestroyed() && win.__usualDeskDetachedChromeHost) {
+        const mk = win.__usualDeskDetachedOwnMapKey;
+        if (mk) {
+          const list = loadShortcuts();
+          const s = list.find((x) => x && x.type === 'web' && webMapKey(x) === mk);
+          if (s && s.id != null) sid = String(s.id);
+        }
+      }
+    } catch {
+      /* noop */
+    }
+    openShortcutEditorOnDock(sid);
+    return true;
+  });
+
+  ipcMain.handle('peek-suggested-shortcut-editor-target', () => {
+    try {
+      const ws = require('./web-shell');
+      const a = ws.getActiveShortcutId();
+      if (a) return a;
+    } catch {
+      /* noop */
+    }
+    try {
+      const { getFocusedDetachedHostShortcutId } = require('./detached-web-frame');
+      const b = getFocusedDetachedHostShortcutId();
+      if (b) return b;
+    } catch {
+      /* noop */
+    }
+    return null;
+  });
+
+  ipcMain.handle('notify-shortcuts-edit-mode', (event, on) => {
+    const dock = state.mainWindow;
+    const sender = BrowserWindow.fromWebContents(event.sender);
+    if (!dock || dock.isDestroyed() || !sender || sender.id !== dock.id) return false;
+    broadcastShortcutsEditModeToChromeHosts(on === true);
+    return true;
+  });
+
+  ipcMain.handle('chrome-request-exit-shortcut-edit-mode', () => {
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed()) return false;
+    dock.webContents.send('exit-shortcut-edit-mode');
     return true;
   });
 
@@ -832,7 +946,7 @@ function registerIpcHandlers(state) {
 
 
 
-  return { toggleDockSidebar, raiseAppFromGlobalHotkey };
+  return { raiseAppFromGlobalHotkey };
 
 }
 

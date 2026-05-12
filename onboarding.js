@@ -13,7 +13,7 @@
  *   1  Atajo Ctrl+Alt+D — modal centrado con un teclado dibujado mostrando
  *      las tres teclas. Sin spotlight: la idea es que el usuario pruebe el
  *      atajo (que justamente colapsa el panel) antes de pulsar "Siguiente".
- *   2  "+" para crear la primera ventana (#add-btn). Avance automático
+ *   2  "Añadir acceso directo" en inicio (#dock-home-add-btn). Avance automático
  *      cuando shortcuts pasa de 0 a >=1. Sin botón "Siguiente": queremos
  *      que el usuario realmente agregue una ventana (sugerimos Chrome).
  *   3  Click izquierdo mantenido = cerrar/apagar esa ventana (sobre el card
@@ -85,10 +85,10 @@
     {
       id: 'add-first',
       kind: 'spotlight',
-      targetSelector: '#add-btn',
+      targetSelector: '#dock-home-add-btn',
       placement: 'bottom',
       title: 'Agregá tu primera ventana',
-      body: 'Pulsá el "+" arriba a la derecha. Por ejemplo: Chrome.',
+      body: 'En la pantalla de inicio, pulsá «Añadir acceso directo». Por ejemplo: Chrome.',
       primaryLabel: 'Siguiente',
       // En real onboarding "Siguiente" abre el modal de añadir; en preview
       // simplemente avanza al paso 3 sin tocar la lista del usuario.
@@ -478,6 +478,16 @@
 
     clearTargetMark();
     let hasSpotlight = false;
+    if (step.id === 'add-first') {
+      const homeBtn = document.getElementById('dock-home-btn');
+      if (homeBtn) {
+        try {
+          homeBtn.click();
+        } catch {
+          /* noop */
+        }
+      }
+    }
     if (step.kind === 'spotlight' && step.targetSelector) {
       const target = document.querySelector(step.targetSelector);
       if (target) {
@@ -518,14 +528,14 @@
     }
 
     // Paso "add-first" en onboarding real: "Siguiente" significa abrir el
-    // modal de añadir ventana (mismo gesto que pulsar el "+"). Cuando el
-    // usuario guarde, el auto-avance via `shortcuts-non-empty` pasará al
+    // modal de añadir ventana (mismo gesto que «Añadir acceso directo» en inicio).
+    // Cuando el usuario guarde, el auto-avance via `shortcuts-non-empty` pasará al
     // paso siguiente. En preview avanzamos directo sin tocar nada.
     if (step && step.primaryAction === 'open-add-shortcut' && !state.preview) {
-      const addBtn = document.getElementById('add-btn');
-      if (addBtn) {
+      const homeAddBtn = document.getElementById('dock-home-add-btn');
+      if (homeAddBtn) {
         try {
-          addBtn.click();
+          homeAddBtn.click();
         } catch {
           /* fallback: si por alguna razón no funciona, avanzamos */
           advanceToNextStep();

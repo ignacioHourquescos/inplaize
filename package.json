@@ -1,6 +1,6 @@
 {
   "name": "usual-desk",
-  "version": "1.2.3",
+  "version": "1.2.43",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
@@ -13,6 +13,18 @@
     "appId": "com.usualdesk.app",
     "productName": "UsualDesk",
     "forceCodeSigning": false,
+    "files": [
+      "main/**/*",
+      "landing/**/*",
+      "assets/**/*",
+      "*.js",
+      "*.css",
+      "*.html",
+      "package.json",
+      "!**/*.map",
+      "!**/.DS_Store",
+      "!**/Thumbs.db"
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",

@@ -249,7 +249,97 @@ html.focus-mode-active .shell-top::before {
   box-shadow: none !important;
 }
 
-/* Los iconos que quedan fuera de la colección conservan su estado habitual
-   (prendido en color / apagado en escala de grises). No los atenuamos: el
-   Modo Foco se distingue con el marco violeta de los miembros y el indicador
-   semicircular arriba, no tapando al resto. */
+/* Toggle switch compartido (dock topbar + ventanas chrome shell/detached). */
+.ud-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--ud-chrome-icon-border);
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.ud-switch:hover {
+  border-color: var(--ud-chrome-icon-border-hover);
+}
+
+.ud-switch .ud-switch-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.ud-switch .ud-switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ud-chrome-text);
+  transform: translateY(-50%);
+  transition:
+    left 0.18s ease,
+    background 0.18s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.ud-switch.is-on,
+.ud-switch[aria-checked='true'] {
+  background: var(--ud-chrome-edit-tab);
+  border-color: rgba(124, 108, 255, 0.88);
+}
+
+.ud-switch.is-on .ud-switch-thumb,
+.ud-switch[aria-checked='true'] .ud-switch-thumb {
+  left: 21px;
+  background: #fff;
+}
+
+/* Controles de ventana (− □ ×): mismo aspecto en web-shell, detached y dock. */
+.shell-win-btns {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.shell-win-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ud-chrome-action-w);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ud-chrome-action-color);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.shell-win-btn svg {
+  display: block;
+}
+
+.shell-win-btn:hover {
+  background: var(--ud-chrome-action-hover);
+}
+
+.shell-win-btn.is-close:hover {
+  background: #e81123;
+  color: #fff;
+}

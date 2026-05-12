@@ -83,6 +83,7 @@ function createDockWindow(display, state) {
 
   state.mainWindow = win;
   setDockWindow(win);
+
   return win;
 }
 
