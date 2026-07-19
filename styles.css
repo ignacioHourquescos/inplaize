@@ -3336,10 +3336,10 @@ html[data-loose-nav='on'] #dock-inline-editor {
   background: var(--accent);
 }
 
-/* Nombre del archivo superpuesto en la parte superior del tile, con blur. */
+/* Nombre del archivo superpuesto en la parte inferior del tile, con blur. */
 .download-tile-label {
   position: absolute;
-  top: 0;
+  bottom: 0;
   left: 0;
   right: 0;
   z-index: 2;
@@ -3349,7 +3349,7 @@ html[data-loose-nav='on'] #dock-inline-editor {
   line-height: 1.25;
   color: #fff;
   text-align: center;
-  background: rgba(12, 12, 18, 0.42);
+  background: rgba(8, 8, 12, 0.62);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   display: -webkit-box;

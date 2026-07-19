@@ -397,16 +397,34 @@ function downloadInProgress(d) {
 
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif']);
 
+/** Documentos cuya miniatura genera la propia app (no el shell de Windows). */
+const DOC_THUMB_EXTS = new Set(['pdf', 'xlsx', 'xlsm', 'xls', 'csv']);
+
 /** Versión de miniatura por descarga: se incrementa al guardar una edición
  *  para invalidar la caché del <img> (misma ruta de archivo). */
 const downloadThumbVersions = new Map();
 
+/** Caché renderer de miniaturas de documentos: id → url file:// o 'error'.
+ *  Evita re-pedir la miniatura al proceso principal en cada re-render. */
+const docThumbCache = new Map();
+
+function extOfName(filename) {
+  const name = String(filename || '');
+  const dot = name.lastIndexOf('.');
+  if (dot < 0) return '';
+  return name.slice(dot + 1).toLowerCase();
+}
+
 /** ¿El archivo se puede previsualizar como imagen? */
 function isImageDownload(d) {
-  const name = String(d.filename || '');
-  const dot = name.lastIndexOf('.');
-  if (dot < 0) return false;
-  return IMAGE_EXTS.has(name.slice(dot + 1).toLowerCase());
+  const ext = extOfName(d && d.filename);
+  return ext ? IMAGE_EXTS.has(ext) : false;
+}
+
+/** ¿La app puede generar una miniatura del documento (PDF/Excel/CSV)? */
+function isDocThumbDownload(d) {
+  const ext = extOfName(d && d.filename);
+  return ext ? DOC_THUMB_EXTS.has(ext) : false;
 }
 
 /** ¿Es un PDF? Se previsualiza en el drawer con el visor de Chromium. */
@@ -419,6 +437,49 @@ function isPdfDownload(d) {
 /** ¿La descarga se puede abrir en el drawer de vista previa? */
 function isPreviewableDownload(d) {
   return isImageDownload(d) || isPdfDownload(d);
+}
+
+/** Inserta una miniatura (URL file://) cubriendo el tile y quita el chip.
+ *  El tile puede aún no estar insertado en el DOM (caso caché durante el
+ *  re-render): igualmente se agrega la <img> y se conecta al añadir la celda. */
+function swapInDocThumb(tile, extChip, url) {
+  if (!tile) return;
+  if (tile.querySelector('.download-tile-thumb')) return;
+  const img = document.createElement('img');
+  img.className = 'download-tile-thumb';
+  img.alt = '';
+  img.src = url;
+  img.addEventListener('load', () => {
+    if (extChip && extChip.parentNode) extChip.remove();
+  });
+  img.addEventListener('error', () => {
+    img.remove();
+  });
+  tile.prepend(img);
+}
+
+/** Pide (o reutiliza de caché) la miniatura del documento y la muestra. */
+function applyDocThumbnail(tile, extChip, d) {
+  const cached = docThumbCache.get(d.id);
+  if (cached === 'error') return;
+  if (cached) {
+    swapInDocThumb(tile, extChip, cached);
+    return;
+  }
+  if (!window.usualDesk || !window.usualDesk.getDownloadThumbnail) return;
+  window.usualDesk
+    .getDownloadThumbnail(d.id)
+    .then((res) => {
+      if (res && res.ok && res.url) {
+        docThumbCache.set(d.id, res.url);
+        swapInDocThumb(tile, extChip, res.url);
+      } else {
+        docThumbCache.set(d.id, 'error');
+      }
+    })
+    .catch(() => {
+      docThumbCache.set(d.id, 'error');
+    });
 }
 
 /** Convierte una ruta local de Windows en una URL file:// utilizable en <img>. */
@@ -479,6 +540,12 @@ function buildDownloadTile(d) {
     ext.className = 'download-tile-ext';
     ext.textContent = downloadExtLabel(d.filename);
     tile.appendChild(ext);
+
+    // Miniatura de documento (PDF/Excel/CSV) generada por la app: se muestra el
+    // chip de extensión como placeholder y se reemplaza cuando llega el PNG.
+    if (d.state === 'completed' && isDocThumbDownload(d) && d.savePath) {
+      applyDocThumbnail(tile, ext, d);
+    }
   }
 
   // Aro/barra de progreso mientras descarga.

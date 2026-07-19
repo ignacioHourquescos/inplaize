@@ -1087,6 +1087,19 @@ function registerIpcHandlers(state) {
     ipcMain.handle('downloads-ingest-dropped-files', (_event, paths) =>
       downloads.ingestDroppedPaths(paths)
     );
+    // Miniatura de documentos (PDF/Excel/CSV) generada por la app, no por el
+    // shell del sistema. Devuelve una URL file:// a la miniatura cacheada.
+    const thumbnails = require('./thumbnail-service');
+    ipcMain.handle('downloads-get-thumbnail', async (_event, id) => {
+      try {
+        const savePath = downloads.getSavePath(String(id));
+        if (!savePath) return { ok: false };
+        const url = await thumbnails.getThumbnail(savePath);
+        return url ? { ok: true, url } : { ok: false };
+      } catch {
+        return { ok: false };
+      }
+    });
     // Drag nativo: se dispara desde el dragstart del tile en el renderer y se
     // resuelve acá con webContents.startDrag (patrón "on", no invoke, para no
     // bloquear el gesto).

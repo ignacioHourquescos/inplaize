@@ -112,6 +112,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   cancelDownload: (id) => ipcRenderer.invoke('downloads-cancel', id),
   saveDownloadImageEdit: (id, dataUrl) => ipcRenderer.invoke('downloads-save-image-edit', id, dataUrl),
   ingestDroppedFiles: (paths) => ipcRenderer.invoke('downloads-ingest-dropped-files', paths),
+  getDownloadThumbnail: (id) => ipcRenderer.invoke('downloads-get-thumbnail', id),
   startDownloadDrag: (id) => ipcRenderer.send('downloads-drag-start', id),
   onDownloadStarted: (callback) => {
     ipcRenderer.on('dock-download-started', (_event, payload) => callback(payload));

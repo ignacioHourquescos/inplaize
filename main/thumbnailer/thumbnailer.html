@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' file:; style-src 'unsafe-inline'; img-src data: file:; connect-src 'self' file: data: blob:; worker-src file: blob:;" />
+    <title>thumbnailer</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+    </style>
+    <!-- Librerías cargadas como globales del navegador (UMD), sin acceso a Node. -->
+    <script src="../../node_modules/pdfjs-dist/legacy/build/pdf.js"></script>
+    <script src="../../node_modules/xlsx/dist/xlsx.full.min.js"></script>
+  </head>
+  <body>
+    <canvas id="canvas" width="240" height="240"></canvas>
+    <script src="./thumbnailer.js"></script>
+  </body>
+</html>

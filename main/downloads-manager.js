@@ -453,6 +453,17 @@ function findRecord(id) {
 }
 
 /**
+ * Ruta en disco de una descarga completada (para generar su miniatura).
+ * @param {string} id
+ * @returns {string|null}
+ */
+function getSavePath(id) {
+  const rec = findRecord(id);
+  if (!rec || rec.state !== 'completed' || !rec.savePath) return null;
+  return rec.savePath;
+}
+
+/**
  * Abre el archivo descargado con la app por defecto del sistema.
  * @param {string} id
  * @returns {Promise<{ ok: boolean, error?: string }>}
@@ -659,6 +670,7 @@ module.exports = {
   isPathTracked,
   uniqueDestPath,
   getHistory,
+  getSavePath,
   openFile,
   showInFolder,
   cancelDownload,
