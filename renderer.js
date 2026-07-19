@@ -628,19 +628,68 @@ function buildDownloadTile(d) {
   return cell;
 }
 
+/** Secciones por antigüedad, en orden de aparición. */
+const DOWNLOAD_GROUPS = [
+  ['recien', 'Recién'],
+  ['hoy', 'Hoy'],
+  ['mas_antiguos', 'Más antiguos'],
+];
+
+/** Clasifica un timestamp (ms) en una de las secciones del home. */
+function downloadBucketOf(ts, now, todayMs) {
+  if (now - ts < 3600000) return 'recien';
+  if (ts >= todayMs) return 'hoy';
+  return 'mas_antiguos';
+}
+
+/** Divisor violeta a todo el ancho que separa un grupo por fecha. */
+function buildDownloadsDivider(title) {
+  const div = document.createElement('div');
+  div.className = 'downloads-divider';
+  const label = document.createElement('span');
+  label.className = 'downloads-divider-label';
+  label.textContent = title;
+  const line = document.createElement('span');
+  line.className = 'downloads-divider-line';
+  div.append(label, line);
+  return div;
+}
+
 function renderDownloadsHome() {
-  const grid = document.getElementById('downloads-home-grid');
+  const container = document.getElementById('downloads-home-grid');
   const empty = document.getElementById('downloads-home-empty');
-  if (!grid) return;
+  if (!container) return;
+
   const items = [...downloadsRegistry.values()].sort((a, b) => b.startedAt - a.startedAt);
-  // El tile del teléfono (QR) es fijo y siempre queda primero: solo se
-  // reemplazan las celdas de descargas.
-  for (const el of [...grid.children]) {
+
+  // El tile del QR (#downloads-phone-cell) es fijo y queda primero; solo se
+  // reemplazan los divisores y tiles generados dinámicamente.
+  for (const el of [...container.children]) {
     if (el.id !== 'downloads-phone-cell') el.remove();
   }
+
+  const now = Date.now();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayMs = startOfToday.getTime();
+
+  // Agrupa preservando el orden (ya vienen de más nuevo a más viejo).
+  const byBucket = new Map(DOWNLOAD_GROUPS.map(([key]) => [key, []]));
   for (const d of items) {
-    grid.appendChild(buildDownloadTile(d));
+    byBucket.get(downloadBucketOf(Number(d.startedAt) || 0, now, todayMs)).push(d);
   }
+
+  // Una sola grilla densa: por cada grupo con items, un divisor violeta a todo
+  // el ancho (fuerza un renglón nuevo) seguido de sus tiles.
+  for (const [key, title] of DOWNLOAD_GROUPS) {
+    const group = byBucket.get(key);
+    if (!group.length) continue;
+    container.appendChild(buildDownloadsDivider(title));
+    for (const d of group) {
+      container.appendChild(buildDownloadTile(d));
+    }
+  }
+
   if (empty) empty.classList.toggle('hidden', items.length > 0);
   schedulePointerPassthroughSync();
 }

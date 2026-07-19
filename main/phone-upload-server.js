@@ -837,7 +837,7 @@ async function getConnectInfo() {
     const qrDataUrl = await QRCode.toDataURL(url, {
       margin: 1,
       width: 240,
-      color: { dark: '#111114ff', light: '#ffffffff' },
+      color: { dark: '#FFFFFFFF', light: '#00000000' },
     });
     return { ok: true, url, qrDataUrl };
   } catch (err) {
