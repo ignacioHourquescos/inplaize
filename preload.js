@@ -106,6 +106,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   /* ---- Descargas centralizadas en el dock ---- */
   getDownloads: () => ipcRenderer.invoke('downloads-get-history'),
   openDownloadFile: (id) => ipcRenderer.invoke('downloads-open-file', id),
+  markDownloadOpened: (id) => ipcRenderer.invoke('downloads-mark-opened', id),
   showDownloadInFolder: (id) => ipcRenderer.invoke('downloads-show-in-folder', id),
   removeDownload: (id) => ipcRenderer.invoke('downloads-remove', id),
   clearDownloads: () => ipcRenderer.invoke('downloads-clear'),

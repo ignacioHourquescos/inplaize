@@ -195,6 +195,8 @@ const IPC_CHANNELS = [
 
   'downloads-open-file',
 
+  'downloads-mark-opened',
+
   'downloads-show-in-folder',
 
   'downloads-remove',
@@ -1077,6 +1079,7 @@ function registerIpcHandlers(state) {
     downloads.watchDownloadsFolder();
     ipcMain.handle('downloads-get-history', () => downloads.getHistory());
     ipcMain.handle('downloads-open-file', (_event, id) => downloads.openFile(String(id)));
+    ipcMain.handle('downloads-mark-opened', (_event, id) => downloads.markOpened(String(id)));
     ipcMain.handle('downloads-show-in-folder', (_event, id) => downloads.showInFolder(String(id)));
     ipcMain.handle('downloads-remove', (_event, id) => downloads.removeItem(String(id)));
     ipcMain.handle('downloads-clear', () => downloads.clear());

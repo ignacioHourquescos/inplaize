@@ -38,6 +38,7 @@ const registeredPartitions = new Set();
  * @property {number} receivedBytes
  * @property {number} totalBytes
  * @property {number} startedAt
+ * @property {number} [lastOpenedAt] Última vez que el usuario reabrió el archivo.
  * @property {boolean} paused
  */
 
@@ -107,6 +108,7 @@ function toPayload(rec) {
     receivedBytes: rec.receivedBytes,
     totalBytes: rec.totalBytes,
     startedAt: rec.startedAt,
+    lastOpenedAt: rec.lastOpenedAt || 0,
     paused: rec.paused,
   };
 }
@@ -478,6 +480,21 @@ async function openFile(id) {
 }
 
 /**
+ * Marca un registro como reabierto: sella `lastOpenedAt` con la hora actual y
+ * notifica al dock para reordenar/reclasificar el home. No toca `startedAt`, así
+ * conserva la fecha real de descarga.
+ * @param {string} id
+ * @returns {{ ok: boolean }}
+ */
+function markOpened(id) {
+  const rec = findRecord(id);
+  if (!rec) return { ok: false };
+  rec.lastOpenedAt = Date.now();
+  sendToDock('dock-download-updated', toPayload(rec));
+  return { ok: true };
+}
+
+/**
  * Muestra el archivo en su carpeta (Explorer).
  * @param {string} id
  * @returns {{ ok: boolean, error?: string }}
@@ -672,6 +689,7 @@ module.exports = {
   getHistory,
   getSavePath,
   openFile,
+  markOpened,
   showInFolder,
   cancelDownload,
   removeItem,

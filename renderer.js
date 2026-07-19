@@ -608,6 +608,9 @@ function buildDownloadTile(d) {
   // resto se abre con la app del sistema. Si va en curso, cancela.
   tile.addEventListener('click', () => {
     if (d.state === 'completed') {
+      // Reabrir "refresca" el archivo (lastOpenedAt) para reordenar/reclasificar
+      // el home sin perder su fecha real de descarga.
+      window.usualDesk.markDownloadOpened?.(d.id).catch(() => {});
       if (isPreviewableDownload(d) && d.savePath) {
         openImageDrawer(d);
       } else {
@@ -628,12 +631,11 @@ function buildDownloadTile(d) {
   return cell;
 }
 
-/** Secciones por antigüedad, en orden de aparición. */
-const DOWNLOAD_GROUPS = [
-  ['recien', 'Recién'],
-  ['hoy', 'Hoy'],
-  ['mas_antiguos', 'Más antiguos'],
-];
+/** Timestamp efectivo: la más reciente entre la descarga y la última reapertura.
+ *  Reabrir un archivo lo "refresca" sin perder su fecha real de descarga. */
+function effectiveTsOf(d) {
+  return Math.max(Number(d && d.startedAt) || 0, Number(d && d.lastOpenedAt) || 0);
+}
 
 /** Clasifica un timestamp (ms) en una de las secciones del home. */
 function downloadBucketOf(ts, now, todayMs) {
@@ -642,28 +644,24 @@ function downloadBucketOf(ts, now, todayMs) {
   return 'mas_antiguos';
 }
 
-/** Divisor violeta a todo el ancho que separa un grupo por fecha. */
-function buildDownloadsDivider(title) {
-  const div = document.createElement('div');
-  div.className = 'downloads-divider';
-  const label = document.createElement('span');
-  label.className = 'downloads-divider-label';
-  label.textContent = title;
-  const line = document.createElement('span');
-  line.className = 'downloads-divider-line';
-  div.append(label, line);
-  return div;
-}
+/** Clase de opacidad por antigüedad: recién = normal; hoy = 70%; antes = 40%. */
+const DOWNLOAD_BUCKET_CLASS = {
+  recien: '',
+  hoy: 'is-today',
+  mas_antiguos: 'is-older',
+};
 
 function renderDownloadsHome() {
   const container = document.getElementById('downloads-home-grid');
   const empty = document.getElementById('downloads-home-empty');
   if (!container) return;
 
-  const items = [...downloadsRegistry.values()].sort((a, b) => b.startedAt - a.startedAt);
+  const items = [...downloadsRegistry.values()].sort(
+    (a, b) => effectiveTsOf(b) - effectiveTsOf(a),
+  );
 
   // El tile del QR (#downloads-phone-cell) es fijo y queda primero; solo se
-  // reemplazan los divisores y tiles generados dinámicamente.
+  // reemplazan los tiles generados dinámicamente.
   for (const el of [...container.children]) {
     if (el.id !== 'downloads-phone-cell') el.remove();
   }
@@ -673,21 +671,15 @@ function renderDownloadsHome() {
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
 
-  // Agrupa preservando el orden (ya vienen de más nuevo a más viejo).
-  const byBucket = new Map(DOWNLOAD_GROUPS.map(([key]) => [key, []]));
+  // Sin divisores: los tiles fluyen continuos y se atenúan según su antigüedad
+  // (recién = opaco, hoy = 70%, ayer o antes = 40%). El orden ya viene de más
+  // nuevo a más viejo, así que los grupos quedan agrupados naturalmente.
   for (const d of items) {
-    byBucket.get(downloadBucketOf(Number(d.startedAt) || 0, now, todayMs)).push(d);
-  }
-
-  // Una sola grilla densa: por cada grupo con items, un divisor violeta a todo
-  // el ancho (fuerza un renglón nuevo) seguido de sus tiles.
-  for (const [key, title] of DOWNLOAD_GROUPS) {
-    const group = byBucket.get(key);
-    if (!group.length) continue;
-    container.appendChild(buildDownloadsDivider(title));
-    for (const d of group) {
-      container.appendChild(buildDownloadTile(d));
-    }
+    const bucket = downloadBucketOf(effectiveTsOf(d), now, todayMs);
+    const tile = buildDownloadTile(d);
+    const cls = DOWNLOAD_BUCKET_CLASS[bucket];
+    if (cls) tile.classList.add(cls);
+    container.appendChild(tile);
   }
 
   if (empty) empty.classList.toggle('hidden', items.length > 0);

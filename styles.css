@@ -3186,8 +3186,8 @@ html[data-loose-nav='on'] #dock-inline-editor {
   display: none;
 }
 
-/* Grilla de iconos: densa y continua; los divisores violeta (grid-column 1/-1)
-   separan los grupos por fecha manteniendo el flujo de los tiles. */
+/* Grilla de iconos: densa y continua. Los tiles se atenúan según su antigüedad
+   (recién = opaco, hoy = 70%, ayer o antes = 40%) en vez de usar divisores. */
 .downloads-home-grid {
   flex: 1 1 auto;
   min-height: 0;
@@ -3201,29 +3201,19 @@ html[data-loose-nav='on'] #dock-inline-editor {
   padding: 12px 12px 80px;
 }
 
-/* Divisor por fecha: ocupa toda la fila y separa los grupos con una línea violeta. */
-.downloads-divider {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 0;
+/* Atenuación por antigüedad. Al pasar el mouse se restaura la opacidad plena
+   para poder leer el nombre y usar los botones cómodamente. */
+.download-tile-cell.is-today {
+  opacity: 0.7;
 }
 
-.downloads-divider-label {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-  white-space: nowrap;
+.download-tile-cell.is-older {
+  opacity: 0.4;
 }
 
-.downloads-divider-line {
-  flex: 1 1 auto;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), rgba(124, 92, 252, 0));
+.download-tile-cell.is-today:hover,
+.download-tile-cell.is-older:hover {
+  opacity: 1;
 }
 
 .downloads-home-empty {
@@ -3239,6 +3229,7 @@ html[data-loose-nav='on'] #dock-inline-editor {
 .download-tile-cell {
   display: flex;
   min-width: 0;
+  transition: opacity 0.15s ease;
 }
 
 .download-tile {
