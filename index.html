@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>jumpto</title>
+  <title>inplaize</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shell-home-menu.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="onboarding.css">
 </head>
@@ -41,17 +42,10 @@
           aria-label="Inicio, pantalla de bienvenida"
           aria-pressed="true"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M4 10.25 12 3.5 20 10.25V20a1 1 0 0 1-1 1h-4v-8H9v8H5a1 1 0 0 1-1-1v-9.75z"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <span class="dock-home-logo-mark" aria-hidden="true"></span>
         </button>
         <div id="shortcuts-container"></div>
-        <div id="header-actions" class="shell-win-btns dock-chrome-win-btns" aria-label="Controles de ventana">
+        <div id="header-actions" class="dock-chrome-menu-wrap" aria-label="Menú de opciones">
           <div id="dock-edit-mode-banner" class="dock-edit-mode-banner" aria-hidden="true">
             <button
               type="button"
@@ -65,9 +59,23 @@
               <span class="dock-edit-mode-chip-label">Cerrar modo edición</span>
             </button>
           </div>
-          <button type="button" id="dock-win-min" class="shell-win-btn" data-tooltip="Minimizar panel" data-tooltip-placement="bottom" aria-label="Minimizar">&#8722;</button>
-          <button type="button" id="dock-win-max" class="shell-win-btn" data-tooltip="Maximizar" data-tooltip-placement="bottom" aria-label="Maximizar">&#9633;</button>
-          <button type="button" id="dock-win-close" class="shell-win-btn is-close" data-tooltip="Ocultar panel" data-tooltip-placement="bottom" aria-label="Ocultar panel">&#215;</button>
+          <button
+            type="button"
+            id="dock-home-menu-btn"
+            class="dock-home-menu-btn"
+            data-tooltip="Menú de opciones"
+            data-tooltip-placement="bottom"
+            aria-label="Menú de opciones"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="dock-home-menu"
+          >
+            <svg class="dock-home-menu-btn-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <line x1="4" y1="7" x2="20" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -111,87 +119,232 @@
 
       <div id="dock-viewport" class="dock-viewport">
         <div id="dock-home-panel" class="dock-home-panel">
-          <div id="dock-home-branding" class="dock-home-branding" aria-hidden="true">
-            <div class="dock-brand-logo">
-              <span class="dock-brand-logo-mark"></span>
-            </div>
-            <p class="dock-brand-wordmark">inplaize</p>
-          </div>
-          <div class="dock-home-actions" data-mouse-hit>
-            <div
-              class="dock-home-icon-row"
-              id="dock-home-icon-row"
-              role="toolbar"
-              aria-label="Acciones de inicio"
-            >
-              <div class="dock-home-action-cell">
-                <button
-                  type="button"
-                  id="dock-home-add-btn"
-                  class="dock-home-icon-tile"
-                  data-tooltip="Añadir acceso directo (web o programa)"
-                  data-tooltip-placement="top"
-                  aria-label="Añadir acceso directo"
+          <!-- Área principal: archivos descargados como iconos -->
+          <div id="downloads-home" class="downloads-home" data-mouse-hit aria-label="Archivos descargados">
+            <div id="downloads-home-grid" class="downloads-home-grid">
+              <!-- Tile fijo: QR para recibir archivos desde el teléfono. Siempre primero. -->
+              <div class="download-tile-cell" id="downloads-phone-cell">
+                <div
+                  id="downloads-phone-tile"
+                  class="download-tile download-tile-phone"
+                  data-tooltip="Recibir archivos desde el teléfono"
                 >
-                  <svg class="dock-home-icon-tile-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  </svg>
-                </button>
-                <span class="dock-home-action-label">Añadir acceso</span>
-              </div>
-              <div class="dock-home-action-cell">
-                <button
-                  type="button"
-                  id="shortcuts-edit-toggle"
-                  class="dock-home-icon-tile"
-                  role="switch"
-                  aria-checked="false"
-                  aria-label="Modo edición"
-                  data-tooltip="Activar o desactivar el modo edición de accesos"
-                  data-tooltip-placement="top"
-                >
-                  <svg class="dock-home-icon-tile-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <line x1="4" y1="7" x2="20" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <circle cx="15" cy="7" r="2.25" fill="currentColor"/>
-                    <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <circle cx="9" cy="12" r="2.25" fill="currentColor"/>
-                    <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <circle cx="14" cy="17" r="2.25" fill="currentColor"/>
-                  </svg>
-                </button>
-                <span class="dock-home-action-label">Modo edición</span>
-              </div>
-              <div class="dock-home-action-cell">
-                <button
-                  type="button"
-                  id="settings-btn"
-                  class="dock-home-icon-tile"
-                  aria-label="Configuración"
-                  data-tooltip="Configuración"
-                  data-tooltip-placement="top"
-                >
-                  <svg class="dock-home-icon-tile-svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.85"/>
-                    <path
-                      d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.3 4.3l1.8 1.8M17.9 17.9l1.8 1.8M19.7 4.3l-1.8 1.8M6.1 17.9l-1.8 1.8"
-                      stroke="currentColor"
-                      stroke-width="1.65"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </button>
-                <span class="dock-home-action-label">Configuración</span>
+                  <img
+                    id="downloads-phone-qr"
+                    class="downloads-phone-qr hidden"
+                    alt="Código QR para conectar el teléfono"
+                  />
+                  <p id="downloads-phone-hint" class="downloads-phone-hint">Generando…</p>
+                </div>
               </div>
             </div>
-            <button type="button" id="quit-app-btn" class="dock-home-quit-link">
-              Cerrar aplicación
-            </button>
+            <p id="downloads-home-empty" class="downloads-home-empty">
+              Acá aparece todo lo que llegue a tu carpeta de Descargas: desde tus
+              ventanas, otros navegadores o tu teléfono.
+            </p>
+            <!-- Cajón mágico: dock flotante en la parte inferior de la grilla. -->
+            <aside id="magic-drawer" class="magic-drawer" data-mouse-hit aria-label="Cajón mágico">
+              <div class="magic-drawer-zones">
+                <div
+                  class="magic-zone"
+                  id="magic-zone-compress-image"
+                  data-action="compress-image"
+                  data-accepts="image"
+                  data-tooltip="Soltá una imagen para comprimirla"
+                  data-tooltip-placement="top"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="9" cy="9" r="1.8" fill="currentColor"/>
+                    <path d="M4 17l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="magic-zone-label">Comprimir imagen</span>
+                </div>
+                <div
+                  class="magic-zone"
+                  id="magic-zone-compress-video"
+                  data-action="compress-video"
+                  data-accepts="video"
+                  data-tooltip="Soltá un video para comprimirlo"
+                  data-tooltip-placement="top"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="2.5" y="5" width="13" height="14" rx="3" stroke="currentColor" stroke-width="2"/>
+                    <path d="M15.5 10l6-3.5v11l-6-3.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="magic-zone-label">Comprimir video</span>
+                </div>
+                <div
+                  class="magic-zone"
+                  id="magic-zone-convert"
+                  data-action="convert"
+                  data-accepts="image video audio"
+                  data-tooltip="Soltá un archivo para convertir su formato"
+                  data-tooltip-placement="top"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 9a8 8 0 0 1 14-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M18 3v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M20 15a8 8 0 0 1-14 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M6 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="magic-zone-label">Convertir</span>
+                </div>
+              </div>
+            </aside>
           </div>
+
+          <!-- Visor fijo (1/3 derecho): vista previa de imágenes (con edición básica) y PDFs.
+               Sin archivo seleccionado muestra un placeholder. -->
+          <aside id="image-drawer" class="image-drawer is-empty" data-mouse-hit aria-label="Vista previa de archivo">
+            <div class="image-drawer-head">
+              <span id="image-drawer-title" class="image-drawer-title"></span>
+              <button type="button" id="image-drawer-close" class="image-drawer-close" aria-label="Cerrar vista previa">&#215;</button>
+            </div>
+            <div class="image-drawer-body">
+              <canvas id="image-drawer-canvas" class="image-drawer-canvas hidden"></canvas>
+              <!-- webview (no iframe): el visor de PDF de Chromium no funciona en iframes dentro de Electron -->
+              <webview id="image-drawer-pdf" class="image-drawer-pdf hidden" src="about:blank" plugins="true"></webview>
+              <p id="image-drawer-error" class="image-drawer-error hidden">No se pudo cargar el archivo.</p>
+              <div id="image-drawer-placeholder" class="image-drawer-placeholder">
+                <p class="image-drawer-placeholder-text">Seleccioná un archivo de Descargas para verlo acá.</p>
+              </div>
+
+              <!-- Cajón mágico: lista de opciones para el archivo soltado. -->
+              <div id="image-drawer-magic-options" class="magic-options hidden">
+                <div class="magic-file-head">
+                  <img id="magic-options-thumb" class="magic-file-thumb hidden" alt="" />
+                  <span id="magic-options-ext" class="magic-file-ext hidden"></span>
+                  <span id="magic-options-name" class="magic-file-name"></span>
+                </div>
+                <p id="magic-options-title" class="magic-options-title"></p>
+                <div id="magic-options-list" class="magic-options-list"></div>
+                <button type="button" id="magic-options-cancel" class="magic-options-cancel">Cancelar</button>
+              </div>
+
+              <!-- Cajón mágico: loader mientras corre ffmpeg. -->
+              <div id="image-drawer-magic-loader" class="magic-loader hidden">
+                <span class="magic-spinner" aria-hidden="true"></span>
+                <span id="magic-loader-name" class="magic-file-name"></span>
+                <div class="magic-loader-bar">
+                  <span id="magic-loader-fill" class="magic-loader-fill"></span>
+                </div>
+                <span id="magic-loader-pct" class="magic-loader-pct"></span>
+              </div>
+
+              <!-- Cajón mágico: resumen del resultado (video/audio, sin preview). -->
+              <div id="image-drawer-magic-result" class="magic-result hidden">
+                <span id="magic-result-ext" class="magic-file-ext"></span>
+                <span id="magic-result-name" class="magic-file-name"></span>
+                <p id="magic-result-sizes" class="magic-result-sizes"></p>
+                <div class="magic-result-actions">
+                  <button type="button" id="magic-result-open" class="magic-result-btn">Abrir</button>
+                  <button type="button" id="magic-result-folder" class="magic-result-btn">Ver en carpeta</button>
+                </div>
+              </div>
+            </div>
+            <div class="image-drawer-toolbar" role="toolbar" aria-label="Herramientas de imagen">
+              <button type="button" id="image-drawer-rotate-left" class="image-drawer-tool" data-tooltip="Rotar a la izquierda" data-tooltip-placement="top" aria-label="Rotar a la izquierda">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 4v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4.5 10a8 8 0 1 1 2 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <button type="button" id="image-drawer-rotate-right" class="image-drawer-tool" data-tooltip="Rotar a la derecha" data-tooltip-placement="top" aria-label="Rotar a la derecha">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M20 4v6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M19.5 10a8 8 0 1 0-2 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+              <button type="button" id="image-drawer-flip" class="image-drawer-tool" data-tooltip="Espejar horizontal" data-tooltip-placement="top" aria-label="Espejar horizontal">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3v18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 3"/>
+                  <path d="M9 7 4 12l5 5V7z" fill="currentColor"/>
+                  <path d="M15 7l5 5-5 5V7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <span class="image-drawer-toolbar-sep" aria-hidden="true"></span>
+              <button type="button" id="image-drawer-open-external" class="image-drawer-tool" data-tooltip="Abrir con la app del sistema" data-tooltip-placement="top" aria-label="Abrir con la app del sistema">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M14 5h5v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M19 5l-8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M19 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button type="button" id="image-drawer-show-folder" class="image-drawer-tool" data-tooltip="Ver en carpeta" data-tooltip-placement="top" aria-label="Ver en carpeta">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button type="button" id="image-drawer-save" class="image-drawer-save" disabled>Guardar</button>
+            </div>
+          </aside>
         </div>
         <div id="dock-inline-editor" class="dock-inline-editor hidden" data-mouse-hit></div>
         <div id="loose-nav-surface" class="loose-nav-surface hidden" aria-hidden="true"></div>
       </div>
+
+      <!-- Drawer de opciones (desliza desde la derecha) -->
+      <div id="dock-home-menu-backdrop" class="dock-home-menu-backdrop" aria-hidden="true" data-mouse-hit></div>
+      <aside
+        id="dock-home-menu"
+        class="dock-home-menu-drawer"
+        aria-hidden="true"
+        data-mouse-hit
+        aria-label="Opciones"
+      >
+        <div class="dock-home-menu-drawer-head">
+          <span class="dock-home-menu-drawer-title">Menú</span>
+          <button type="button" id="dock-home-menu-close" class="dock-home-menu-close" aria-label="Cerrar menú">
+            <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <nav class="dock-home-menu-drawer-body" role="menu" aria-label="Opciones">
+          <button type="button" id="dock-home-add-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Añadir acceso directo (web o programa)" data-tooltip-placement="left">
+            <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="dock-home-menu-item-label">Añadir acceso</span>
+          </button>
+          <button
+            type="button"
+            id="shortcuts-edit-toggle"
+            class="dock-home-menu-item"
+            role="menuitemcheckbox"
+            aria-checked="false"
+            data-tooltip="Activar o desactivar el modo edición de accesos"
+            data-tooltip-placement="left"
+          >
+            <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <line x1="4" y1="7" x2="20" y2="7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="15" cy="7" r="2.25" fill="currentColor"/>
+              <line x1="4" y1="12" x2="20" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="9" cy="12" r="2.25" fill="currentColor"/>
+              <line x1="4" y1="17" x2="20" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="14" cy="17" r="2.25" fill="currentColor"/>
+            </svg>
+            <span class="dock-home-menu-item-label">Modo edición</span>
+          </button>
+          <button type="button" id="settings-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Configuración" data-tooltip-placement="left">
+            <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.85"/>
+              <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.3 4.3l1.8 1.8M17.9 17.9l1.8 1.8M19.7 4.3l-1.8 1.8M6.1 17.9l-1.8 1.8" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
+            </svg>
+            <span class="dock-home-menu-item-label">Configuración</span>
+          </button>
+          <div class="dock-home-menu-sep" role="separator" aria-hidden="true"></div>
+          <button type="button" id="quit-app-btn" class="dock-home-menu-item dock-home-menu-item-danger" role="menuitem" data-tooltip="Cerrar aplicación" data-tooltip-placement="left">
+            <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 4v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M7.5 6.5a7 7 0 1 0 9 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="dock-home-menu-item-label">Cerrar aplicación</span>
+          </button>
+        </nav>
+      </aside>
     </div>
 
     <!-- Configuración -->
@@ -390,7 +543,9 @@
 
   <script src="ui-tooltip.js"></script>
   <script src="strip-gestures.js"></script>
+  <script src="shell-home-menu.js"></script>
   <script src="onboarding.js"></script>
   <script src="renderer.js"></script>
+  <script src="magic-drawer-ui.js"></script>
 </body>
 </html>

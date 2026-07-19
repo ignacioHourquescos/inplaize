@@ -11,9 +11,10 @@ const {
 } = require('./dock-window-bridge');
 const { loadShortcuts } = require('./shortcuts-store');
 const { forceWindowForeground } = require('./window-focus');
+const { lockWindowZoom } = require('./lock-window-zoom');
 
-/** Altura de la franja superior (accesos + botones ventana). */
-const SHELL_CHROME_HEIGHT = 52;
+/** Altura de la franja superior (accesos + botones ventana). Debe coincidir con --ud-chrome-strip-h. */
+const SHELL_CHROME_HEIGHT = 58;
 
 function parseParenCount(title) {
   const m = String(title).match(/\((\d+)\)/);
@@ -31,6 +32,9 @@ const tabs = new Map();
 
 /** @type {string | null} */
 let activeMapKey = null;
+
+/** Menú lateral abierto: oculta BrowserView para que el drawer del shell sea visible. */
+let shellMenuDrawerOpen = false;
 
 function appRoot() {
   try {
@@ -123,17 +127,27 @@ function broadcastChromeToRenderer() {
   shellWin.webContents.send('shell-chrome', buildChromePayload());
 }
 
+/** Ancho del drawer; debe coincidir con shell-home-menu.css (.dock-home-menu-drawer { width }). */
+const MENU_DRAWER_W = 240;
+
 function layoutActiveView() {
   if (!shellWin || shellWin.isDestroyed() || !activeMapKey) return;
   const tab = tabs.get(activeMapKey);
   if (!tab) return;
   const [w, h] = shellWin.getContentSize();
+  const inset = shellMenuDrawerOpen ? MENU_DRAWER_W : 0;
   tab.view.setBounds({
     x: 0,
     y: SHELL_CHROME_HEIGHT,
-    width: w,
+    width: Math.max(0, w - inset),
     height: Math.max(0, h - SHELL_CHROME_HEIGHT),
   });
+}
+
+function setShellMenuDrawerOpen(open) {
+  shellMenuDrawerOpen = open === true;
+  if (!shellWin || shellWin.isDestroyed()) return;
+  attachActiveViewOnly();
 }
 
 function detachAllBrowserViews() {
@@ -198,7 +212,8 @@ function ensureShellWindow() {
     width: wa.width,
     height: wa.height,
     show: false,
-    title: 'UsualDesk — Web',
+    title: 'inplaize — Web',
+    icon: path.join(root, 'assets', 'icon.png'),
     frame: !useFramelessChrome,
     backgroundColor: '#1e1e24',
     webPreferences: {
@@ -249,6 +264,7 @@ function ensureShellWindow() {
   setShellChromeWindow(shellWin);
 
   shellWin.loadFile(path.join(root, 'web-shell.html'));
+  lockWindowZoom(shellWin.webContents);
 
   shellWin.webContents.once('did-finish-load', () => {
     broadcastChromeToRenderer();
@@ -578,6 +594,11 @@ function registerShellIpc(ipcMain) {
 
   ipcMain.handle('shell-window-close', () => {
     if (shellWin && !shellWin.isDestroyed()) shellWin.close();
+    return true;
+  });
+
+  ipcMain.handle('shell-menu-drawer-state', (_event, open) => {
+    setShellMenuDrawerOpen(open === true);
     return true;
   });
 }

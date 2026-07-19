@@ -1,0 +1,316 @@
+/* ==========================================================================
+   Sticky notes clásicas — pantalla de inicio del dock
+   --------------------------------------------------------------------------
+   - Cuadrado amarillo plano (sin gradientes en el cuerpo)
+   - Esquina inferior derecha levemente "levantada" (papel doblado)
+   - Tipografía Inter Medium (la del logo "inplaize" pero menos negra)
+   - Mantener pulsada: vibración 1.5 s → se aplasta en su sitio → cae en
+     línea recta como bollo hasta el piso (puede caer encima de otro)
+   ========================================================================== */
+
+.sticky-notes-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* el panel sigue clickeable; nota/bollo re-habilitan */
+  z-index: 5;
+  overflow: visible;
+}
+
+.sticky-notes-layer > * { pointer-events: auto; }
+
+/* ---------------------------------------------------------------------------
+   Nota (estado base)
+   --------------------------------------------------------------------------- */
+.sticky-note {
+  --sticky-bg: #ffec70;
+  --sticky-fold-back: #e6c84a;
+  --sticky-fold-edge: #c9a92a;
+  --sticky-ink: #2b2811;
+  position: absolute;
+  width: 210px;
+  height: 210px;
+  background: var(--sticky-bg);
+  color: var(--sticky-ink);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-weight: 500;
+  cursor: default;
+  -webkit-app-region: no-drag;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.08),
+    0 6px 14px -4px rgba(0, 0, 0, 0.28),
+    0 14px 22px -10px rgba(0, 0, 0, 0.22);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.sticky-note:hover {
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.08),
+    0 10px 18px -4px rgba(0, 0, 0, 0.32),
+    0 18px 26px -12px rgba(0, 0, 0, 0.28);
+}
+
+/* Esquina inferior derecha "levantada":
+   - se cubre la esquina con un triángulo de tono más oscuro = parte de atrás
+     del papel a la vista
+   - una pequeña sombra debajo del pliegue refuerza el efecto */
+.sticky-note::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(
+    315deg,
+    var(--sticky-fold-edge) 0%,
+    var(--sticky-fold-back) 55%,
+    rgba(0, 0, 0, 0.05) 88%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(-1px -1px 1.5px rgba(0, 0, 0, 0.18));
+}
+
+.sticky-note .sticky-note-curl {
+  /* Línea sutil del pliegue, encima del corte diagonal */
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    transparent 49%,
+    rgba(0, 0, 0, 0.18) 50%,
+    transparent 55%
+  );
+}
+
+/* Texto */
+.sticky-note-text {
+  position: absolute;
+  inset: 18px 18px 24px 18px;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  color: var(--sticky-ink);
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+  -webkit-app-region: no-drag;
+}
+
+.sticky-note-text:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(0, 0, 0, 0.32);
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* Botón X (eliminar) — discreto, solo visible al pasar el mouse */
+.sticky-note-close {
+  position: absolute;
+  top: 4px;
+  right: 26px; /* dejamos espacio para no chocar con el pliegue si rota */
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: rgba(0, 0, 0, 0.0);
+  color: rgba(0, 0, 0, 0.55);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.sticky-note:hover .sticky-note-close,
+.sticky-note.is-editing .sticky-note-close {
+  opacity: 1;
+}
+
+.sticky-note-close:hover {
+  background: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.85);
+}
+
+/* Estados */
+.sticky-note.is-dragging {
+  box-shadow:
+    0 2px 2px rgba(0, 0, 0, 0.1),
+    0 22px 32px -8px rgba(0, 0, 0, 0.42),
+    0 28px 40px -16px rgba(0, 0, 0, 0.32);
+  transform: scale(1.02);
+  transition: none;
+  cursor: grabbing;
+}
+
+.sticky-note.is-editing {
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.08),
+    0 12px 22px -4px rgba(0, 0, 0, 0.35),
+    0 22px 32px -14px rgba(0, 0, 0, 0.32),
+    0 0 0 2px rgba(124, 108, 255, 0.35);
+}
+
+/* ---------------------------------------------------------------------------
+   Aparición / restauración
+   --------------------------------------------------------------------------- */
+@keyframes stickyAppear {
+  0%   { transform: translateY(-10px) scale(0.92); opacity: 0; }
+  60%  { transform: translateY(2px)   scale(1.03); opacity: 1; }
+  100% { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+
+.sticky-note.is-appearing,
+.sticky-note.is-restoring {
+  animation: stickyAppear 0.32s ease-out both;
+}
+
+.sticky-note.is-removing {
+  animation: stickyFadeOut 0.22s ease-in both;
+}
+
+@keyframes stickyFadeOut {
+  to { opacity: 0; transform: scale(0.7); }
+}
+
+/* ---------------------------------------------------------------------------
+   Vibración (1.5 s mientras se mantiene apretada antes del bollo)
+   --------------------------------------------------------------------------- */
+.sticky-note.is-vibrating {
+  animation: stickyVibrate 0.07s linear infinite;
+  /* leve sombra "tensa" mientras vibra */
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.08),
+    0 4px 8px -2px rgba(0, 0, 0, 0.35),
+    0 8px 14px -6px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes stickyVibrate {
+  0%   { transform: translate(-1.2px, 0.6px) rotate(-0.6deg); }
+  20%  { transform: translate( 1.2px,-0.4px) rotate( 0.6deg); }
+  40%  { transform: translate(-0.8px, 1.0px) rotate(-0.4deg); }
+  60%  { transform: translate( 1.0px, 0.8px) rotate( 0.5deg); }
+  80%  { transform: translate(-1.1px,-0.6px) rotate(-0.5deg); }
+  100% { transform: translate( 0.9px, 0.4px) rotate( 0.4deg); }
+}
+
+/* ---------------------------------------------------------------------------
+   Aplastado en el sitio (justo antes de caer)
+   - escala hacia abajo manteniendo el centro
+   - aparece un tono más oscuro como si una mano la hubiese arrugado
+   --------------------------------------------------------------------------- */
+.sticky-note.is-crumpling {
+  animation: stickyCrush 0.4s cubic-bezier(0.55, 0.05, 0.55, 1) forwards;
+  pointer-events: none;
+}
+
+.sticky-note.is-crumpling .sticky-note-text,
+.sticky-note.is-crumpling .sticky-note-close,
+.sticky-note.is-crumpling .sticky-note-curl {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+@keyframes stickyCrush {
+  0% {
+    transform: scale(1) rotate(0deg);
+    border-radius: 0;
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(0.85, 0.6) rotate(-4deg) translateY(6px);
+    border-radius: 28% 22% 20% 30% / 28% 18% 30% 22%;
+    filter: brightness(0.94) contrast(1.05);
+  }
+  100% {
+    transform: scale(0.42, 0.42) rotate(12deg) translateY(14px);
+    border-radius: 46% 52% 48% 54% / 50% 46% 54% 50%;
+    opacity: 0;
+    filter: brightness(0.85) contrast(1.1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Bollo de papel (en el piso o cayendo en línea recta)
+   --------------------------------------------------------------------------- */
+.sticky-crumpled-ball {
+  --crumple-rot: 0deg;
+  position: absolute;
+  width: 68px;
+  height: 68px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  /* Por defecto se ancla al piso usando left + bottom */
+  transform: translate(-50%, 0) rotate(var(--crumple-rot));
+  /* La sombra del bollo en el piso se refuerza con drop-shadow */
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+  /* Sin transición por defecto: el JS arma las transiciones que necesita
+     (caída desde el aire, hover, etc.) para evitar tirones cuando se cambian
+     varias propiedades a la vez. */
+}
+
+.sticky-crumpled-ball.is-resting {
+  transition:
+    transform 0.2s ease,
+    filter 0.18s ease,
+    bottom 0.45s cubic-bezier(0.45, 0.05, 0.65, 1);
+}
+
+.sticky-crumpled-ball .sticky-crumpled-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sticky-crumpled-ball:hover {
+  filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55)) brightness(1.04);
+  transform: translate(-50%, -3px) rotate(var(--crumple-rot)) scale(1.06);
+}
+
+.sticky-crumpled-ball:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 4px;
+  border-radius: 50%;
+}
+
+/* Mientras cae, el bollo se posiciona con top (no bottom) para animar
+   en línea recta. La transición la asigna el JS. */
+.sticky-crumpled-ball.is-falling {
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.45));
+}
+
+@keyframes stickyCrumpledLand {
+  /* Pequeño "squish" al tocar el piso: el bollo se aplasta sobre el eje Y
+     y vuelve. Sin desplazamiento vertical (la caída ya terminó), evitamos
+     que parezca rebotar hacia arriba. */
+  0%   { transform: translate(-50%, 0) rotate(var(--crumple-rot)) scale(1.06, 0.9); }
+  55%  { transform: translate(-50%, 0) rotate(var(--crumple-rot)) scale(0.96, 1.04); }
+  100% { transform: translate(-50%, 0) rotate(var(--crumple-rot)) scale(1, 1); }
+}
+
+.sticky-crumpled-ball.just-landed {
+  animation: stickyCrumpledLand 0.26s ease-out both;
+}
+
+.sticky-crumpled-ball.is-restoring {
+  animation: stickyCrumpledRestore 0.32s ease-in both;
+}
+
+@keyframes stickyCrumpledRestore {
+  to {
+    transform: translate(-50%, -40px) rotate(var(--crumple-rot)) scale(0.5);
+    opacity: 0;
+  }
+}

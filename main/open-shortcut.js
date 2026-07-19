@@ -329,9 +329,22 @@ function attachWebWindowTitleBadge(win, shortcutId) {
 function attachWebShortcutEmbeddedWebContents(webContents, shortcut, mapKey) {
   webContents.__usualDeskWebMapKey = mapKey;
   attachWebNotificationClickFocus(webContents);
-  webContents.setWindowOpenHandler(({ url, disposition }) => {
+  webContents.setWindowOpenHandler((details) => {
+    const { url, disposition } = details;
     if (!url || /^chrome[-:]/i.test(url) || url.startsWith('about:blank')) {
       return { action: 'deny' };
+    }
+    // Popups del servicio → sub-pestaña en su propia ventana (misma partition,
+    // así comparten sesión/autenticación). Respondemos `allow` + `createWindow`
+    // para que la página reciba un WindowProxy válido y no crea que hay un
+    // bloqueador de popups. Fallbacks: loose-nav (modo shell) o navegador externo.
+    const host = webWindowsByUrlKey.get(mapKey);
+    if (host && !host.isDestroyed() && host.__usualDeskDetachedChromeHost) {
+      try {
+        return require('./detached-web-frame').subTabWindowOpenResponse(host, details);
+      } catch {
+        /* cae al fallback de abajo */
+      }
     }
     const background =
       disposition === 'background-tab' ||
@@ -501,6 +514,11 @@ const webPartitionsWithNotificationHandlers = new Set();
  * @param {string} partition
  */
 function installWebNotificationPermissionHandlers(partition) {
+  try {
+    require('./downloads-manager').registerDownloadsForPartition(partition);
+  } catch {
+    /* descargas centralizadas: no crítico */
+  }
   if (webPartitionsWithNotificationHandlers.has(partition)) return;
   webPartitionsWithNotificationHandlers.add(partition);
   const ses = session.fromPartition(partition);

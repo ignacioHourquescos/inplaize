@@ -13,7 +13,7 @@
  *   1  Atajo Ctrl+Alt+D — modal centrado con un teclado dibujado mostrando
  *      las tres teclas. Sin spotlight: la idea es que el usuario pruebe el
  *      atajo (que justamente colapsa el panel) antes de pulsar "Siguiente".
- *   2  "Añadir acceso directo" en inicio (#dock-home-add-btn). Avance automático
+ *   2  Menú (≡) arriba a la derecha → «Añadir acceso». Avance automático
  *      cuando shortcuts pasa de 0 a >=1. Sin botón "Siguiente": queremos
  *      que el usuario realmente agregue una ventana (sugerimos Chrome).
  *   3  Click izquierdo mantenido = cerrar/apagar esa ventana (sobre el card
@@ -85,10 +85,10 @@
     {
       id: 'add-first',
       kind: 'spotlight',
-      targetSelector: '#dock-home-add-btn',
+      targetSelector: '#dock-home-menu-btn',
       placement: 'bottom',
       title: 'Agregá tu primera ventana',
-      body: 'En la pantalla de inicio, pulsá «Añadir acceso directo». Por ejemplo: Chrome.',
+      body: 'Pulsá el menú (≡) arriba a la derecha y elegí «Añadir acceso». Por ejemplo: Chrome.',
       primaryLabel: 'Siguiente',
       // En real onboarding "Siguiente" abre el modal de añadir; en preview
       // simplemente avanza al paso 3 sin tocar la lista del usuario.
@@ -104,6 +104,15 @@
       title: 'Cerrar sin tocar el resto',
       body:
         'Click corto abre la ventana. Si mantenés apretado el click izquierdo aparece la pildora "× Cerrar" y apagás solo esa ventana.',
+      primaryLabel: 'Siguiente',
+      secondaryLabel: null,
+    },
+    {
+      id: 'import-sessions',
+      kind: 'modal',
+      title: 'Traé tus sesiones desde Chrome',
+      body:
+        'Podés copiar tus sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte acá. WhatsApp es la excepción: siempre pide vincular con el QR del teléfono.',
       primaryLabel: 'Terminar',
       secondaryLabel: null,
     },
@@ -111,6 +120,249 @@
 
   function isActive() {
     return state.active;
+  }
+
+  /** ---------------- Paso "import-sessions" ---------------- */
+
+  /** Estado propio del paso de importación de sesiones desde Chrome. */
+  const importState = {
+    loading: false,
+    loaded: false,
+    /** @type {{ platformSupported: boolean, chromeFound: boolean, chromeRunning: boolean } | null} */
+    status: null,
+    profiles: [],
+    selectedProfile: 'Default',
+    /** Accesos web del usuario (excluye apps). */
+    webShortcuts: [],
+    /** @type {Set<string>} ids seleccionados para importar */
+    selectedIds: new Set(),
+    busy: false,
+    /** @type {{ importedByShortcut: Array<{ name: string, imported: number }> } | null} */
+    result: null,
+    error: '',
+  };
+
+  function resetImportState() {
+    importState.loading = false;
+    importState.loaded = false;
+    importState.status = null;
+    importState.profiles = [];
+    importState.selectedProfile = 'Default';
+    importState.webShortcuts = [];
+    importState.selectedIds = new Set();
+    importState.busy = false;
+    importState.result = null;
+    importState.error = '';
+  }
+
+  function isWhatsAppShortcut(s) {
+    try {
+      return new URL(String(s.url || '')).hostname === 'web.whatsapp.com';
+    } catch {
+      return false;
+    }
+  }
+
+  async function initImportStepData() {
+    if (importState.loaded || importState.loading) return;
+    importState.loading = true;
+    renderImportArea();
+    const api = window.usualDesk || {};
+    let status = null;
+    let profiles = [];
+    let shortcuts = [];
+    try {
+      status = typeof api.getChromeImportStatus === 'function'
+        ? await api.getChromeImportStatus()
+        : null;
+    } catch {
+      status = null;
+    }
+    try {
+      profiles = typeof api.listChromeProfiles === 'function'
+        ? await api.listChromeProfiles()
+        : [];
+    } catch {
+      profiles = [];
+    }
+    try {
+      shortcuts = typeof api.getShortcuts === 'function' ? await api.getShortcuts() : [];
+    } catch {
+      shortcuts = [];
+    }
+    importState.loading = false;
+    importState.loaded = true;
+    importState.status = status;
+
+    // Plataformas sin soporte de importación: el paso no aporta nada, cerramos.
+    if (!status || status.platformSupported === false) {
+      finish();
+      return;
+    }
+
+    importState.profiles =
+      Array.isArray(profiles) && profiles.length
+        ? profiles
+        : [{ directory: 'Default', name: 'Default', userName: '' }];
+    importState.selectedProfile = importState.profiles[0].directory;
+    importState.webShortcuts = (Array.isArray(shortcuts) ? shortcuts : []).filter(
+      (s) => s && s.type === 'web' && s.url
+    );
+    importState.selectedIds = new Set(
+      importState.webShortcuts.filter((s) => !isWhatsAppShortcut(s)).map((s) => String(s.id))
+    );
+    renderImportArea();
+  }
+
+  function importErrorText(code) {
+    switch (code) {
+      case 'CHROME_RUNNING':
+        return 'Google Chrome está abierto. Cerralo por completo y volvé a intentar.';
+      case 'CHROME_NOT_FOUND':
+        return 'No se encontró Google Chrome en este equipo.';
+      case 'NO_IMPORTABLE_SHORTCUTS':
+        return 'No hay ventanas compatibles para importar.';
+      default:
+        return 'No se pudo importar. Podés iniciar sesión manualmente en cada ventana.';
+    }
+  }
+
+  async function runImport() {
+    if (importState.busy) return;
+    const ids = [...importState.selectedIds];
+    if (ids.length === 0) return;
+    importState.busy = true;
+    importState.error = '';
+    importState.result = null;
+    renderImportArea();
+    let res = null;
+    try {
+      res = await window.usualDesk.importChromeSessionsForShortcuts(
+        importState.selectedProfile,
+        ids
+      );
+    } catch {
+      res = null;
+    }
+    importState.busy = false;
+    if (res && res.ok) {
+      importState.result = res;
+    } else {
+      importState.error = importErrorText(res && res.error);
+    }
+    renderImportArea();
+  }
+
+  function renderImportArea() {
+    const area = document.getElementById('onboarding-import-area');
+    if (!area) return;
+
+    if (importState.loading || !importState.loaded) {
+      area.innerHTML = '<p class="onboarding-import-hint">Comprobando Google Chrome…</p>';
+      scheduleReflow();
+      return;
+    }
+
+    const status = importState.status || {};
+    if (!status.chromeFound) {
+      area.innerHTML =
+        '<p class="onboarding-import-hint">No detectamos Google Chrome en este equipo. '
+        + 'Podés iniciar sesión manualmente en cada ventana.</p>';
+      scheduleReflow();
+      return;
+    }
+
+    if (importState.webShortcuts.length === 0) {
+      area.innerHTML =
+        '<p class="onboarding-import-hint">Todavía no tenés ventanas web para importar. '
+        + 'Podés hacerlo más adelante desde Configuración.</p>';
+      scheduleReflow();
+      return;
+    }
+
+    if (importState.result) {
+      const lines = (importState.result.importedByShortcut || [])
+        .map((r) => {
+          const okTxt = r.imported > 0
+            ? `${r.imported} cookies importadas`
+            : 'sin cookies para este sitio en Chrome';
+          return `<li><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(okTxt)}</li>`;
+        })
+        .join('');
+      area.innerHTML =
+        '<p class="onboarding-import-hint">Listo. Al abrir cada ventana deberías entrar ya logueado:</p>'
+        + `<ul class="onboarding-import-summary">${lines}</ul>`;
+      scheduleReflow();
+      return;
+    }
+
+    const profileOptions = importState.profiles
+      .map((p) => {
+        const label = p.userName ? `${p.name} (${p.userName})` : p.name;
+        const sel = p.directory === importState.selectedProfile ? ' selected' : '';
+        return `<option value="${escapeHtml(p.directory)}"${sel}>${escapeHtml(label)}</option>`;
+      })
+      .join('');
+    const profileRow = importState.profiles.length > 1
+      ? '<label class="onboarding-import-row">Perfil de Chrome: '
+        + `<select id="onboarding-import-profile">${profileOptions}</select></label>`
+      : '';
+
+    const items = importState.webShortcuts
+      .map((s) => {
+        const id = String(s.id);
+        const name = escapeHtml(s.name || s.url || 'Ventana');
+        const wa = isWhatsAppShortcut(s);
+        if (wa) {
+          return `<li class="onboarding-import-item is-disabled">`
+            + `<input type="checkbox" disabled /> ${name} `
+            + '<span class="onboarding-import-note">requiere QR del teléfono</span></li>';
+        }
+        const checked = importState.selectedIds.has(id) ? ' checked' : '';
+        return `<li class="onboarding-import-item">`
+          + `<label><input type="checkbox" data-import-shortcut="${escapeHtml(id)}"${checked} /> ${name}</label></li>`;
+      })
+      .join('');
+
+    const warning = status.chromeRunning
+      ? '<div class="onboarding-bubble-warning" role="alert">Chrome está abierto ahora: '
+        + 'cerralo por completo antes de importar.</div>'
+      : '';
+    const error = importState.error
+      ? `<div class="onboarding-bubble-warning" role="alert">${escapeHtml(importState.error)}</div>`
+      : '';
+    const btnLabel = importState.busy ? 'Importando… (puede tardar unos segundos)' : 'Importar sesiones';
+    const btnDisabled = importState.busy || importState.selectedIds.size === 0 ? ' disabled' : '';
+
+    area.innerHTML =
+      profileRow
+      + `<ul class="onboarding-import-list">${items}</ul>`
+      + warning
+      + error
+      + `<button type="button" id="onboarding-import-btn" class="onboarding-btn-primary onboarding-import-btn"${btnDisabled}>${escapeHtml(btnLabel)}</button>`;
+
+    const profileSel = area.querySelector('#onboarding-import-profile');
+    if (profileSel) {
+      profileSel.addEventListener('change', () => {
+        importState.selectedProfile = profileSel.value;
+      });
+    }
+    area.querySelectorAll('[data-import-shortcut]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-import-shortcut');
+        if (cb.checked) importState.selectedIds.add(id);
+        else importState.selectedIds.delete(id);
+        const btn = area.querySelector('#onboarding-import-btn');
+        if (btn) btn.disabled = importState.busy || importState.selectedIds.size === 0;
+      });
+    });
+    const importBtn = area.querySelector('#onboarding-import-btn');
+    if (importBtn) {
+      importBtn.addEventListener('click', () => {
+        runImport();
+      });
+    }
+    scheduleReflow();
   }
 
   /** ---------------- DOM helpers ---------------- */
@@ -399,6 +651,17 @@
         else if (action === 'skip') skip();
       });
     });
+
+    if (step.id === 'import-sessions') {
+      const footer = bubble.querySelector('.onboarding-bubble-footer');
+      const area = document.createElement('div');
+      area.className = 'onboarding-import-area';
+      area.id = 'onboarding-import-area';
+      if (footer) bubble.insertBefore(area, footer);
+      else bubble.appendChild(area);
+      renderImportArea();
+      initImportStepData();
+    }
   }
 
   /**
@@ -532,6 +795,9 @@
     // Cuando el usuario guarde, el auto-avance via `shortcuts-non-empty` pasará al
     // paso siguiente. En preview avanzamos directo sin tocar nada.
     if (step && step.primaryAction === 'open-add-shortcut' && !state.preview) {
+      if (window.__dockHomeMenu && typeof window.__dockHomeMenu.open === 'function') {
+        window.__dockHomeMenu.open();
+      }
       const homeAddBtn = document.getElementById('dock-home-add-btn');
       if (homeAddBtn) {
         try {
@@ -577,6 +843,7 @@
     const o = opts || {};
     state.active = true;
     state.preview = !!o.preview;
+    resetImportState();
     const skipWelcome = !!o.skipWelcome;
 
     if (!state.repositionListener) {

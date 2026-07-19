@@ -13,6 +13,8 @@ const dockInlineEditor = document.getElementById('dock-inline-editor');
 const shortcutModalCard = document.getElementById('modal');
 const settingsModalOverlay = document.getElementById('settings-modal-overlay');
 const dockToastStack = document.getElementById('dock-toast-stack');
+/** @type {Map<string, object>} descargas por id (más reciente primero al render) */
+const downloadsRegistry = new Map();
 /** @type {Map<string, { el: HTMLElement, timer: ReturnType<typeof setTimeout> | null }>} */
 const dockToastRegistry = new Map();
 const DOCK_TOAST_MAX = 5;
@@ -334,6 +336,23 @@ function pushDockToast(payload) {
   card.addEventListener('pointerdown', async (e) => {
     if (e.button !== 0) return;
     if (e.target === closeBtn) return;
+    // Toast de descarga: imágenes y PDFs abren el visor interno; el resto se
+    // abre con la app del sistema (si ya terminó).
+    if (payload.downloadId) {
+      const d = downloadsRegistry.get(String(payload.downloadId));
+      if (d && d.state === 'completed' && isPreviewableDownload(d) && d.savePath) {
+        openImageDrawer(d);
+        removeDockToast(id);
+        return;
+      }
+      try {
+        const res = await window.usualDesk.openDownloadFile(payload.downloadId);
+        if (res && res.ok) removeDockToast(id);
+      } catch {
+        /* aún no disponible: se abrirá cuando termine */
+      }
+      return;
+    }
     const key = payload.webMapKey;
     if (!key) return;
     try {
@@ -360,6 +379,511 @@ function initDockInAppToasts() {
   window.usualDesk.onDockInAppNotificationDismiss((nid) => {
     if (nid != null) removeDockToast(String(nid));
   });
+}
+
+/* ---------------- Descargas centralizadas ---------------- */
+
+/** Extensión en mayúsculas para el chip del icono (PDF, PNG, ZIP…). */
+function downloadExtLabel(filename) {
+  const name = String(filename || '');
+  const dot = name.lastIndexOf('.');
+  if (dot < 0 || dot === name.length - 1) return 'FILE';
+  return name.slice(dot + 1).toUpperCase().slice(0, 4);
+}
+
+function downloadInProgress(d) {
+  return d.state === 'progressing' || d.state === 'paused';
+}
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif']);
+
+/** Versión de miniatura por descarga: se incrementa al guardar una edición
+ *  para invalidar la caché del <img> (misma ruta de archivo). */
+const downloadThumbVersions = new Map();
+
+/** ¿El archivo se puede previsualizar como imagen? */
+function isImageDownload(d) {
+  const name = String(d.filename || '');
+  const dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+  return IMAGE_EXTS.has(name.slice(dot + 1).toLowerCase());
+}
+
+/** ¿Es un PDF? Se previsualiza en el drawer con el visor de Chromium. */
+function isPdfDownload(d) {
+  return String(d.filename || '')
+    .toLowerCase()
+    .endsWith('.pdf');
+}
+
+/** ¿La descarga se puede abrir en el drawer de vista previa? */
+function isPreviewableDownload(d) {
+  return isImageDownload(d) || isPdfDownload(d);
+}
+
+/** Convierte una ruta local de Windows en una URL file:// utilizable en <img>. */
+function fileUrlFromPath(p) {
+  if (!p) return '';
+  const norm = String(p).replace(/\\/g, '/');
+  return `file:///${encodeURI(norm).replace(/#/g, '%23').replace(/\?/g, '%3F')}`;
+}
+
+/** Crea el tile (icono) de una descarga en el home. */
+function buildDownloadTile(d) {
+  const cell = document.createElement('div');
+  cell.className = 'download-tile-cell';
+  cell.dataset.state = d.state;
+
+  const tile = document.createElement('button');
+  tile.type = 'button';
+  tile.className = 'download-tile';
+  tile.title = d.filename || '';
+
+  // Recién salida del cajón mágico: pulso destacado hasta que el usuario la toca.
+  if (window.MagicDrawerUI?.isFreshDownload(d.id)) {
+    tile.classList.add('is-fresh');
+    tile.addEventListener(
+      'pointerenter',
+      () => {
+        tile.classList.remove('is-fresh');
+        window.MagicDrawerUI?.clearFreshDownload(d.id);
+      },
+      { once: true },
+    );
+  }
+
+  // Vista previa de imagen si el archivo terminó y es una imagen; si la carga
+  // falla (archivo movido/borrado), caemos al chip de extensión.
+  let showedThumb = false;
+  if (d.state === 'completed' && isImageDownload(d) && d.savePath) {
+    const thumb = document.createElement('img');
+    thumb.className = 'download-tile-thumb';
+    thumb.alt = '';
+    const v = downloadThumbVersions.get(d.id);
+    thumb.src = fileUrlFromPath(d.savePath) + (v ? `?v=${v}` : '');
+    thumb.addEventListener('error', () => {
+      thumb.remove();
+      if (!tile.querySelector('.download-tile-ext')) {
+        const fallback = document.createElement('span');
+        fallback.className = 'download-tile-ext';
+        fallback.textContent = downloadExtLabel(d.filename);
+        tile.prepend(fallback);
+      }
+    });
+    tile.appendChild(thumb);
+    showedThumb = true;
+  }
+
+  if (!showedThumb) {
+    const ext = document.createElement('span');
+    ext.className = 'download-tile-ext';
+    ext.textContent = downloadExtLabel(d.filename);
+    tile.appendChild(ext);
+  }
+
+  // Aro/barra de progreso mientras descarga.
+  if (downloadInProgress(d)) {
+    const bar = document.createElement('span');
+    bar.className = 'download-tile-progress';
+    const fill = document.createElement('span');
+    fill.className = 'download-tile-progress-fill';
+    if (d.totalBytes > 0) {
+      const pct = Math.min(100, (d.receivedBytes / d.totalBytes) * 100);
+      fill.style.width = `${pct}%`;
+    } else {
+      fill.classList.add('is-indeterminate');
+    }
+    bar.appendChild(fill);
+    tile.appendChild(bar);
+  }
+
+  // Botón quitar (esquina).
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'download-tile-remove';
+  removeBtn.setAttribute('aria-label', 'Quitar de la lista');
+  removeBtn.textContent = '×';
+  removeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.usualDesk.removeDownload(d.id).catch(() => {});
+    downloadsRegistry.delete(d.id);
+    renderDownloadsHome();
+  });
+
+  // Botón "ver carpeta" (esquina, solo completadas).
+  if (d.state === 'completed') {
+    const folderBtn = document.createElement('button');
+    folderBtn.type = 'button';
+    folderBtn.className = 'download-tile-folder';
+    folderBtn.setAttribute('aria-label', 'Ver en carpeta');
+    folderBtn.textContent = '⌕';
+    folderBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.usualDesk.showDownloadInFolder(d.id).catch(() => {});
+    });
+    tile.appendChild(folderBtn);
+  }
+
+  tile.appendChild(removeBtn);
+
+  // Arrastrar el tile inicia un drag nativo del archivo (como desde el
+  // Explorador): sirve para soltarlo en una ventana web (WhatsApp, Gmail…)
+  // o en cualquier otra aplicación.
+  if (d.state === 'completed' && d.savePath) {
+    tile.draggable = true;
+    tile.addEventListener('dragstart', (e) => {
+      e.preventDefault();
+      window.usualDesk.startDownloadDrag?.(d.id);
+    });
+  }
+
+  // Click en el tile: imágenes y PDFs abren el drawer de vista previa; el
+  // resto se abre con la app del sistema. Si va en curso, cancela.
+  tile.addEventListener('click', () => {
+    if (d.state === 'completed') {
+      if (isPreviewableDownload(d) && d.savePath) {
+        openImageDrawer(d);
+      } else {
+        window.usualDesk.openDownloadFile(d.id).catch(() => {});
+      }
+    } else if (downloadInProgress(d)) {
+      window.usualDesk.cancelDownload(d.id).catch(() => {});
+    }
+  });
+
+  // Nombre del archivo superpuesto arriba de la imagen (con backdrop-filter).
+  const label = document.createElement('span');
+  label.className = 'download-tile-label';
+  label.textContent = d.filename || 'descarga';
+  tile.appendChild(label);
+
+  cell.append(tile);
+  return cell;
+}
+
+function renderDownloadsHome() {
+  const grid = document.getElementById('downloads-home-grid');
+  const empty = document.getElementById('downloads-home-empty');
+  if (!grid) return;
+  const items = [...downloadsRegistry.values()].sort((a, b) => b.startedAt - a.startedAt);
+  // El tile del teléfono (QR) es fijo y siempre queda primero: solo se
+  // reemplazan las celdas de descargas.
+  for (const el of [...grid.children]) {
+    if (el.id !== 'downloads-phone-cell') el.remove();
+  }
+  for (const d of items) {
+    grid.appendChild(buildDownloadTile(d));
+  }
+  if (empty) empty.classList.toggle('hidden', items.length > 0);
+  schedulePointerPassthroughSync();
+}
+
+function handleDownloadEvent(payload, phase) {
+  if (!payload || payload.id == null) return;
+  const id = String(payload.id);
+  downloadsRegistry.set(id, { ...payload, id });
+  renderDownloadsHome();
+
+  if (phase === 'started') {
+    pushDockToast({
+      id: `dl-start-${id}`,
+      downloadId: id,
+      sourceName: payload.sourceName || 'Web',
+      title: 'Descargando',
+      body: payload.filename || '',
+    });
+  } else if (phase === 'done') {
+    const done = downloadsRegistry.get(id);
+    const ok = done && done.state === 'completed';
+    // Al terminar, reemplazamos el toast de inicio por el de fin (mismo id base).
+    removeDockToast(`dl-start-${id}`);
+    pushDockToast({
+      id: `dl-done-${id}`,
+      downloadId: id,
+      sourceName: payload.sourceName || 'Web',
+      title: ok ? 'Descarga completa · abrir' : 'Descarga no finalizada',
+      body: payload.filename || '',
+    });
+  }
+}
+
+/* Tile del teléfono: QR generado en el main con la IP LAN actual. */
+function initPhoneUploadTile() {
+  const tile = document.getElementById('downloads-phone-tile');
+  const qrImg = document.getElementById('downloads-phone-qr');
+  const hint = document.getElementById('downloads-phone-hint');
+  if (!tile || !qrImg || !hint || !window.usualDesk.getPhoneUploadInfo) return;
+
+  const loadQr = async () => {
+    qrImg.classList.add('hidden');
+    hint.classList.remove('hidden');
+    hint.textContent = 'Generando…';
+    try {
+      const info = await window.usualDesk.getPhoneUploadInfo();
+      if (info && info.ok && info.qrDataUrl) {
+        qrImg.src = info.qrDataUrl;
+        qrImg.classList.remove('hidden');
+        hint.classList.add('hidden');
+      } else if (info && info.error === 'NO_LAN') {
+        hint.textContent = 'Sin Wi-Fi. Conectate a una red e intentá de nuevo.';
+      } else {
+        hint.textContent = 'No se pudo generar el QR. Tocá para reintentar.';
+      }
+    } catch {
+      hint.textContent = 'No se pudo generar el QR. Tocá para reintentar.';
+    }
+  };
+
+  loadQr();
+  tile.addEventListener('click', loadQr);
+}
+
+async function initDownloadsUI() {
+  initPhoneUploadTile();
+
+  if (window.usualDesk.onDownloadStarted) {
+    window.usualDesk.onDownloadStarted((p) => handleDownloadEvent(p, 'started'));
+  }
+  if (window.usualDesk.onDownloadUpdated) {
+    window.usualDesk.onDownloadUpdated((p) => handleDownloadEvent(p, 'updated'));
+  }
+  if (window.usualDesk.onDownloadDone) {
+    window.usualDesk.onDownloadDone((p) => handleDownloadEvent(p, 'done'));
+  }
+
+  try {
+    const hist = await window.usualDesk.getDownloads();
+    if (Array.isArray(hist)) {
+      for (const d of hist) {
+        if (d && d.id != null) downloadsRegistry.set(String(d.id), { ...d, id: String(d.id) });
+      }
+      renderDownloadsHome();
+    }
+  } catch {
+    /* noop */
+  }
+}
+
+/* ---------------- Visor fijo de vista previa / edición de imágenes ---------------- */
+
+/**
+ * Panel fijo (1/3 derecho de la pantalla de inicio) para previsualizar
+ * imágenes y PDFs descargados, con edición mínima de imágenes: rotar 90°,
+ * espejar horizontal y guardar (sobrescribe el archivo). Solo se puede
+ * guardar en formatos re-codificables (png/jpg/webp); el resto (gif, svg,
+ * ico…) se previsualiza en modo solo lectura. Al hacer click en otro archivo
+ * se reemplaza la vista al instante; sin selección muestra un placeholder.
+ */
+const imageDrawerState = {
+  download: null,
+  mode: 'image', // 'image' | 'pdf'
+  img: null,
+  rotation: 0, // 0 | 90 | 180 | 270
+  flipH: false,
+  dirty: false,
+  editable: false,
+};
+
+/** Mime de salida si el formato admite re-codificación desde canvas. */
+function imageEditMime(filename) {
+  const name = String(filename || '').toLowerCase();
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  if (name.endsWith('.webp')) return 'image/webp';
+  return null;
+}
+
+function imageDrawerIsOpen() {
+  return !!imageDrawerState.download;
+}
+
+/** Redibuja el canvas aplicando rotación y espejado sobre el tamaño natural. */
+function drawImageDrawerCanvas() {
+  const canvas = document.getElementById('image-drawer-canvas');
+  const { img, rotation, flipH } = imageDrawerState;
+  if (!canvas || !img) return;
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  const swapped = rotation === 90 || rotation === 270;
+  canvas.width = swapped ? h : w;
+  canvas.height = swapped ? w : h;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((rotation * Math.PI) / 180);
+  if (flipH) ctx.scale(-1, 1);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+function syncImageDrawerControls() {
+  const { dirty, editable } = imageDrawerState;
+  const saveBtn = document.getElementById('image-drawer-save');
+  if (saveBtn) {
+    saveBtn.disabled = !dirty || !editable;
+    saveBtn.textContent = 'Guardar';
+  }
+  for (const id of ['image-drawer-rotate-left', 'image-drawer-rotate-right', 'image-drawer-flip']) {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = !editable || !imageDrawerState.img;
+  }
+}
+
+/** Muestra una descarga completada (imagen o PDF) en el visor fijo. */
+function openImageDrawer(d) {
+  const drawer = document.getElementById('image-drawer');
+  const title = document.getElementById('image-drawer-title');
+  const canvas = document.getElementById('image-drawer-canvas');
+  const pdfFrame = document.getElementById('image-drawer-pdf');
+  const errorEl = document.getElementById('image-drawer-error');
+  const placeholder = document.getElementById('image-drawer-placeholder');
+  if (!drawer || !canvas) return;
+
+  const isPdf = isPdfDownload(d);
+  imageDrawerState.download = d;
+  imageDrawerState.mode = isPdf ? 'pdf' : 'image';
+  imageDrawerState.img = null;
+  imageDrawerState.rotation = 0;
+  imageDrawerState.flipH = false;
+  imageDrawerState.dirty = false;
+  imageDrawerState.editable = !isPdf && !!imageEditMime(d.filename);
+
+  if (title) title.textContent = d.filename || '';
+  errorEl?.classList.add('hidden');
+  placeholder?.classList.add('hidden');
+  window.MagicDrawerUI?.hideViews();
+  syncImageDrawerControls();
+
+  if (isPdf) {
+    // PDF: visor integrado de Chromium en un <webview>; sin herramientas de edición.
+    canvas.classList.add('hidden');
+    if (pdfFrame) {
+      // El webview debe estar visible ANTES de navegar: oculto (display:none)
+      // no tiene webContents adjunto y la carga falla.
+      pdfFrame.classList.remove('hidden');
+      pdfFrame.src = fileUrlFromPath(d.savePath);
+    } else {
+      errorEl?.classList.remove('hidden');
+    }
+  } else {
+    if (pdfFrame) {
+      if (pdfFrame.src && pdfFrame.src !== 'about:blank') pdfFrame.src = 'about:blank';
+      pdfFrame.classList.add('hidden');
+    }
+    canvas.classList.remove('hidden');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const img = new Image();
+    const v = downloadThumbVersions.get(d.id);
+    img.onload = () => {
+      if (imageDrawerState.download !== d) return; // se abrió otra imagen mientras cargaba
+      imageDrawerState.img = img;
+      drawImageDrawerCanvas();
+      syncImageDrawerControls();
+    };
+    img.onerror = () => {
+      if (imageDrawerState.download !== d) return;
+      canvas.classList.add('hidden');
+      errorEl?.classList.remove('hidden');
+    };
+    img.src = fileUrlFromPath(d.savePath) + (v ? `?v=${v}` : '');
+  }
+
+  drawer.classList.remove('is-empty');
+}
+
+/** Vuelve el visor al estado vacío (placeholder), sin archivo seleccionado. */
+function closeImageDrawer() {
+  const drawer = document.getElementById('image-drawer');
+  drawer?.classList.add('is-empty');
+  const title = document.getElementById('image-drawer-title');
+  if (title) title.textContent = '';
+  const canvas = document.getElementById('image-drawer-canvas');
+  canvas?.classList.add('hidden');
+  const pdfFrame = document.getElementById('image-drawer-pdf');
+  if (pdfFrame) {
+    if (pdfFrame.src && pdfFrame.src !== 'about:blank') pdfFrame.src = 'about:blank';
+    pdfFrame.classList.add('hidden');
+  }
+  document.getElementById('image-drawer-error')?.classList.add('hidden');
+  window.MagicDrawerUI?.hideViews();
+  document.getElementById('image-drawer-placeholder')?.classList.remove('hidden');
+  imageDrawerState.download = null;
+  imageDrawerState.img = null;
+  imageDrawerState.dirty = false;
+}
+
+async function saveImageDrawerEdit() {
+  const { download: d, img, editable } = imageDrawerState;
+  const canvas = document.getElementById('image-drawer-canvas');
+  const saveBtn = document.getElementById('image-drawer-save');
+  if (!d || !img || !editable || !canvas) return;
+  const mime = imageEditMime(d.filename);
+  if (!mime) return;
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Guardando…';
+  }
+  try {
+    const dataUrl = canvas.toDataURL(mime, mime === 'image/png' ? undefined : 0.92);
+    const res = await window.usualDesk.saveDownloadImageEdit(d.id, dataUrl);
+    if (res && res.ok) {
+      imageDrawerState.dirty = false;
+      downloadThumbVersions.set(d.id, (downloadThumbVersions.get(d.id) || 0) + 1);
+      renderDownloadsHome();
+      if (saveBtn) saveBtn.textContent = 'Guardado ✓';
+      setTimeout(() => syncImageDrawerControls(), 1200);
+      return;
+    }
+  } catch {
+    /* cae al estado de error de abajo */
+  }
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Reintentar';
+  }
+}
+
+function initImageDrawer() {
+  document.getElementById('image-drawer-close')?.addEventListener('click', closeImageDrawer);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && imageDrawerIsOpen()) closeImageDrawer();
+  });
+
+  const applyEdit = (mutate) => {
+    if (!imageDrawerState.img || !imageDrawerState.editable) return;
+    mutate();
+    imageDrawerState.dirty = true;
+    drawImageDrawerCanvas();
+    syncImageDrawerControls();
+  };
+  document.getElementById('image-drawer-rotate-left')?.addEventListener('click', () => {
+    applyEdit(() => {
+      imageDrawerState.rotation = (imageDrawerState.rotation + 270) % 360;
+    });
+  });
+  document.getElementById('image-drawer-rotate-right')?.addEventListener('click', () => {
+    applyEdit(() => {
+      imageDrawerState.rotation = (imageDrawerState.rotation + 90) % 360;
+    });
+  });
+  document.getElementById('image-drawer-flip')?.addEventListener('click', () => {
+    applyEdit(() => {
+      imageDrawerState.flipH = !imageDrawerState.flipH;
+    });
+  });
+
+  document.getElementById('image-drawer-open-external')?.addEventListener('click', () => {
+    const d = imageDrawerState.download;
+    if (d) window.usualDesk.openDownloadFile(d.id).catch(() => {});
+  });
+  document.getElementById('image-drawer-show-folder')?.addEventListener('click', () => {
+    const d = imageDrawerState.download;
+    if (d) window.usualDesk.showDownloadInFolder(d.id).catch(() => {});
+  });
+  document.getElementById('image-drawer-save')?.addEventListener('click', saveImageDrawerEdit);
 }
 
 async function refreshChromeCookieImportUi() {
@@ -479,9 +1003,26 @@ function friendlyChromeImportError(code) {
   }
 }
 
+async function openSettingsModalFromMenu() {
+  try {
+    const s = await window.usualDesk.getAppSettings();
+    syncDockPositionSegmentedUI(s.dockPosition);
+    syncSidebarDensitySegmentedUI(s.sidebarDensity);
+    applyWebHostModeToDom();
+    syncInAppNotificationCheckboxFromSettings(s);
+  } catch {
+    syncDockPositionSegmentedUI('left');
+    syncSidebarDensitySegmentedUI('normal');
+    applyWebHostModeToDom();
+    syncInAppNotificationCheckboxFromSettings({ inAppWebNotifications: true });
+  }
+  settingsModalOverlay.classList.remove('hidden');
+  refreshChromeCookieImportUi();
+  schedulePointerPassthroughSync();
+}
+
 function initAppSettingsUI() {
   const seg = document.getElementById('dock-position-segmented');
-  const settingsBtn = document.getElementById('settings-btn');
   const closeBtn = document.getElementById('settings-modal-close');
 
   seg?.querySelectorAll('.type-segment').forEach((btn) => {
@@ -513,24 +1054,6 @@ function initAppSettingsUI() {
       syncSidebarDensitySegmentedUI(v);
       schedulePointerPassthroughSync();
     });
-  });
-
-  settingsBtn?.addEventListener('click', async () => {
-    try {
-      const s = await window.usualDesk.getAppSettings();
-      syncDockPositionSegmentedUI(s.dockPosition);
-      syncSidebarDensitySegmentedUI(s.sidebarDensity);
-      applyWebHostModeToDom();
-      syncInAppNotificationCheckboxFromSettings(s);
-    } catch {
-      syncDockPositionSegmentedUI('left');
-      syncSidebarDensitySegmentedUI('normal');
-      applyWebHostModeToDom();
-      syncInAppNotificationCheckboxFromSettings({ inAppWebNotifications: true });
-    }
-    settingsModalOverlay.classList.remove('hidden');
-    refreshChromeCookieImportUi();
-    schedulePointerPassthroughSync();
   });
 
   const inAppNotifyCb = document.getElementById('settings-in-app-notifications');
@@ -930,8 +1453,10 @@ async function init() {
   renderShortcuts();
   initAppSettingsUI();
   initDockInAppToasts();
+  initDownloadsUI();
+  initImageDrawer();
   initFooter();
-  initDockChromeWindowControls();
+  initDockHomeMenu();
   schedulePointerPassthroughSync();
   maybeStartOnboarding();
   if (typeof window.usualDesk.onDockOpenWelcomeHome === 'function') {
@@ -1229,6 +1754,101 @@ async function addShortcutFromDroppedUrl(url) {
   renderShortcuts();
 }
 
+/** ¿El drag en curso lleva archivos locales (p. ej. desde el Explorador)? */
+function isFileDrag(e) {
+  const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
+  // En Windows el Explorador suele incluir Files y text/uri-list (file://…).
+  // Los drags de URL desde el navegador traen text/uri-list pero no Files.
+  return types.includes('Files');
+}
+
+function getDroppedFilePaths(e) {
+  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+  if (!files.length || typeof window.usualDesk.getPathForFile !== 'function') return [];
+  return files.map((f) => window.usualDesk.getPathForFile(f)).filter(Boolean);
+}
+
+async function ingestDroppedFilesFromEvent(e) {
+  const paths = getDroppedFilePaths(e);
+  if (!paths.length || typeof window.usualDesk.ingestDroppedFiles !== 'function') return false;
+  await goToDockWelcomeHome();
+  await window.usualDesk.ingestDroppedFiles(paths);
+  return true;
+}
+
+/**
+ * Spring-loading al arrastrar un archivo sobre el icono de una pestaña: trae
+ * (o abre) la ventana de ese acceso y aparta el dock —colapsa el panel y deja
+ * pasar el mouse— para que el usuario pueda soltar el archivo directamente
+ * dentro de la página (p. ej. adjuntarlo en WhatsApp Web).
+ */
+async function springLoadShortcutForFileDrag(shortcut) {
+  try {
+    window.usualDesk.openShortcut(shortcut);
+  } catch {
+    /* noop */
+  }
+  try {
+    await window.usualDesk.collapseSidebar();
+  } catch {
+    /* noop */
+  }
+  updateSidebarUI(false);
+  closeImageDrawer();
+  // El drag nativo sigue en curso: el dock no recibe mousemove hasta soltar,
+  // así que forzamos passthrough para que el drop llegue a la ventana de abajo.
+  lastPassthroughIgnore = true;
+  window.usualDesk.setIgnoreMouse(true);
+}
+
+const FILE_DRAG_SPRING_DELAY_MS = 300;
+
+/** Engancha el spring-loading de archivos sobre un card de acceso web. */
+function bindFileDragSpringTarget(card, shortcut) {
+  if (shortcut.type !== 'web') return;
+  let springTimer = null;
+
+  const cancel = () => {
+    if (springTimer) {
+      clearTimeout(springTimer);
+      springTimer = null;
+    }
+    card.classList.remove('file-drag-hover');
+  };
+
+  card.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    card.classList.add('file-drag-hover');
+    if (!springTimer) {
+      springTimer = setTimeout(() => {
+        springTimer = null;
+        card.classList.remove('file-drag-hover');
+        springLoadShortcutForFileDrag(shortcut);
+      }, FILE_DRAG_SPRING_DELAY_MS);
+    }
+  });
+  card.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* ignore */
+    }
+  });
+  card.addEventListener('dragleave', cancel);
+  // Soltar sobre el icono: no podemos inyectar el archivo en la página, pero
+  // al menos traemos la ventana al frente para que el próximo intento sea ahí.
+  card.addEventListener('drop', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cancel();
+    ingestDroppedFilesFromEvent(e).catch(() => {});
+  });
+}
+
 function bindUrlDropTargets() {
   const zones = [sidebar, toggleArea];
   const setHighlight = (on) => {
@@ -1237,12 +1857,14 @@ function bindUrlDropTargets() {
   };
 
   function onDragEnter(e) {
+    if (isFileDrag(e)) return; // los archivos se manejan por tile/spring-loading
     e.preventDefault();
     setDragOperationActive(true);
     setHighlight(true);
   }
 
   function onDragOver(e) {
+    if (isFileDrag(e)) return;
     e.preventDefault();
     try {
       e.dataTransfer.dropEffect = 'copy';
@@ -1258,6 +1880,7 @@ function bindUrlDropTargets() {
   }
 
   async function onDrop(e) {
+    if (isFileDrag(e)) return;
     e.preventDefault();
     setHighlight(false);
     const url = extractHttpUrlFromDataTransfer(e.dataTransfer);
@@ -1290,6 +1913,92 @@ function bindUrlDropTargets() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') releaseDrag();
   });
+}
+
+/** ¿El destino del drop debe ignorarse para la ingesta a Descargas? */
+function shouldSkipFileDropTarget(target) {
+  if (!target || typeof target.closest !== 'function') return false;
+  return !!target.closest(
+    '.magic-zone, .magic-drawer, .loose-nav-bar, '
+    + '#dock-inline-editor, .modal, .download-tile[draggable="true"]',
+  );
+}
+
+/**
+ * Soltar archivos en el dock los copia a la carpeta Descargas y los muestra
+ * en el home (excepto sobre cajones mágicos, accesos directos, etc.).
+ */
+function bindFileDropToDownloads() {
+  const downloadsHome = document.getElementById('downloads-home');
+  const dockHomePanel = document.getElementById('dock-home-panel');
+  let fileDragActive = false;
+
+  const setFileDragHighlight = (on) => {
+    fileDragActive = on === true;
+    downloadsHome?.classList.toggle('is-file-drag-over', fileDragActive);
+    dockHomePanel?.classList.toggle('is-file-drag-over', fileDragActive);
+  };
+
+  const releaseFileDrag = () => {
+    if (!fileDragActive) return;
+    setFileDragHighlight(false);
+    setDragOperationActive(false);
+  };
+
+  async function ingestDroppedFiles(e) {
+    await ingestDroppedFilesFromEvent(e);
+  }
+
+  function onDragEnter(e) {
+    if (!isFileDrag(e)) return;
+    if (shouldSkipFileDropTarget(e.target)) return;
+    e.preventDefault();
+    setFileDragHighlight(true);
+    setDragOperationActive(true);
+  }
+
+  function onDragOver(e) {
+    if (!isFileDrag(e)) return;
+    if (shouldSkipFileDropTarget(e.target)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function onDragLeave(e) {
+    if (!isFileDrag(e)) return;
+    if (e.relatedTarget && document.contains(e.relatedTarget)) return;
+    releaseFileDrag();
+  }
+
+  async function onDrop(e) {
+    if (!isFileDrag(e)) return;
+    if (shouldSkipFileDropTarget(e.target)) return;
+    e.preventDefault();
+    releaseFileDrag();
+    await ingestDroppedFiles(e);
+  }
+
+  document.addEventListener('dragenter', onDragEnter);
+  document.addEventListener('dragover', onDragOver);
+  document.addEventListener('dragleave', onDragLeave);
+  document.addEventListener('drop', onDrop);
+  // Evita el cursor prohibido sobre la franja de iconos (webkit-app-region: drag).
+  document.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* ignore */
+    }
+  }, true);
+  window.addEventListener('dragend', releaseFileDrag);
+  window.addEventListener('mouseup', releaseFileDrag);
+  window.addEventListener('blur', releaseFileDrag);
 }
 
 function syncTypeSegments() {
@@ -1396,14 +2105,13 @@ function renderShortcuts() {
 
   if (shortcuts.length === 0) {
     // En topbar dejamos el strip totalmente vacío: durante el onboarding el
-    // spotlight apunta al "+" de la cabecera (el lugar real donde se crean
-    // ventanas), así no agregamos un CTA paralelo que despiste al usuario.
+    // spotlight apunta al menú (≡) de la cabecera, donde se crean ventanas.
     // En sidebar/center mantenemos el CTA chiquito como fallback útil.
     if (!isDockTopbarLayout()) {
       const wrap = document.createElement('div');
       wrap.className = 'shortcuts-empty';
       wrap.innerHTML =
-        '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Ve a Inicio (icono de casa arriba) y pulsa «Añadir acceso directo», o el botón de abajo.</p>'
+        '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Ve a Inicio (logo de inplaize arriba) y pulsa «Añadir acceso directo», o el botón de abajo.</p>'
         + '<button type="button" class="btn-empty-add">+ Añadir acceso directo</button>';
       wrap.querySelector('.btn-empty-add').addEventListener('click', () => openAddModal());
       shortcutsContainer.appendChild(wrap);
@@ -1472,6 +2180,7 @@ function renderShortcuts() {
     });
 
     shortcutsContainer.appendChild(card);
+    bindFileDragSpringTarget(card, shortcut);
     applyWebInactiveClassToCard(card, shortcut);
     applyFocusMemberClassToCard(card, shortcut);
     if (editingId && String(editingId) === String(shortcut.id)) {
@@ -1592,48 +2301,43 @@ if (sidebarBackdrop) {
   });
 }
 
-function initDockChromeWindowControls() {
-  const minBtn = document.getElementById('dock-win-min');
-  const maxBtn = document.getElementById('dock-win-max');
-  const closeDockBtn = document.getElementById('dock-win-close');
-  if (!minBtn || !maxBtn || !closeDockBtn) return;
+function initDockHomeMenu() {
+  if (!window.UsualDeskShellHomeMenu) return;
 
-  function setDockMaxVisual(isMax) {
-    const label = isMax ? 'Restaurar' : 'Maximizar';
-    maxBtn.setAttribute('data-tooltip', label);
-    maxBtn.setAttribute('aria-label', label);
-    if (isMax) {
-      maxBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="4" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="2" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
-    } else {
-      maxBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
-    }
+  window.UsualDeskShellHomeMenu.init({
+    openAddShortcut: () => openAddModal(),
+    enterShortcutsEditMode: async () => {
+      if (shortcutsEditMode) return;
+      let prefId = null;
+      try {
+        if (window.usualDesk.peekSuggestedShortcutEditorTarget) {
+          prefId = await window.usualDesk.peekSuggestedShortcutEditorTarget();
+        }
+      } catch {
+        /* noop */
+      }
+      shortcutsEditMode = true;
+      const s =
+        prefId != null ? shortcuts.find((x) => String(x.id) === String(prefId)) : null;
+      if (s) {
+        openEditModal(s);
+      } else {
+        renderShortcuts();
+      }
+    },
+    exitShortcutsEditMode: () => exitShortcutsEditModeFromUi(),
+    openSettings: () => openSettingsModalFromMenu(),
+    quitApp: () => window.usualDesk.closeApp(),
+  });
+
+  const menu = document.getElementById('dock-home-menu');
+  const menuBtn = document.getElementById('dock-home-menu-btn');
+  if (menu && menuBtn) {
+    const syncDockMenuPassthrough = () => schedulePointerPassthroughSync();
+    const observer = new MutationObserver(syncDockMenuPassthrough);
+    observer.observe(menu, { attributes: true, attributeFilter: ['class'] });
+    observer.observe(menuBtn, { attributes: true, attributeFilter: ['class'] });
   }
-
-  setDockMaxVisual(false);
-
-  minBtn.addEventListener('click', () => {
-    window.usualDesk.dockWindowMinimize?.().catch(() => {});
-  });
-  maxBtn.addEventListener('click', async () => {
-    try {
-      const isMax = await window.usualDesk.dockWindowToggleMaximize?.();
-      setDockMaxVisual(!!isMax);
-    } catch {
-      /* noop */
-    }
-  });
-  closeDockBtn.addEventListener('click', async () => {
-    try {
-      await window.usualDesk.collapseSidebar();
-      updateSidebarUI(false);
-      lastPassthroughIgnore = null;
-      schedulePointerPassthroughSync();
-    } catch (err) {
-      console.error('collapse-sidebar', err);
-    }
-  });
 }
 
 browsePathBtn.addEventListener('click', async () => {
@@ -1645,12 +2349,7 @@ browsePathBtn.addEventListener('click', async () => {
   }
 });
 
-// Add shortcut (solo desde la pantalla de inicio)
-if (dockHomeAddBtn) {
-  dockHomeAddBtn.addEventListener('click', () => {
-    openAddModal();
-  });
-}
+// Add shortcut / modo edición / ajustes: menú hamburguesa (shell-home-menu.js)
 
 if (dockHomeBtn) {
   dockHomeBtn.addEventListener('click', () => {
@@ -1679,31 +2378,6 @@ if (dockExitEditModeBtn) {
   dockExitEditModeBtn.addEventListener('click', () => {
     if (!shortcutsEditMode) return;
     exitShortcutsEditModeFromUi().catch(() => {});
-  });
-}
-
-if (shortcutsEditToggleBtn) {
-  shortcutsEditToggleBtn.addEventListener('click', async () => {
-    if (shortcutsEditMode) {
-      await exitShortcutsEditModeFromUi();
-      return;
-    }
-    let prefId = null;
-    try {
-      if (window.usualDesk.peekSuggestedShortcutEditorTarget) {
-        prefId = await window.usualDesk.peekSuggestedShortcutEditorTarget();
-      }
-    } catch {
-      /* noop */
-    }
-    shortcutsEditMode = true;
-    const s =
-      prefId != null ? shortcuts.find((x) => String(x.id) === String(prefId)) : null;
-    if (s) {
-      openEditModal(s);
-    } else {
-      renderShortcuts();
-    }
   });
 }
 
@@ -1912,6 +2586,10 @@ window.usualDesk.onOpenAddShortcutModal(() => {
   openAddModal();
 });
 
+window.usualDesk.onOpenSettingsModal(() => {
+  openSettingsModalFromMenu();
+});
+
 async function moveShortcutInList(delta) {
   if (!editingId) return;
   const i = shortcuts.findIndex((s) => s.id === editingId);
@@ -1937,6 +2615,7 @@ if (shortcutMoveDownBtn) {
 }
 
 bindUrlDropTargets();
+bindFileDropToDownloads();
 bindTypeSegmented();
 init();
 

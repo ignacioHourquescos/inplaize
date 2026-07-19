@@ -9,7 +9,7 @@ const { log } = require('./logger');
 
 /** Windows: nombre/icono correctos en toasts y mejor correlación ventana ↔ notificación (mismo appId que electron-builder). */
 if (process.platform === 'win32') {
-  app.setAppUserModelId('com.usualdesk.app');
+  app.setAppUserModelId('com.inplaize.app');
 }
 const { createDockWindow } = require('./dock-window');
 const { registerIpcHandlers } = require('./ipc-handlers');
@@ -45,12 +45,12 @@ function enableAutoStart() {
         'Programs',
         'Startup',
       );
-      const shortcutPath = path.join(startupDir, 'UsualDesk.lnk');
+      const shortcutPath = path.join(startupDir, 'inplaize.lnk');
       const exe = process.execPath;
       const options = {
         target: exe,
         cwd: path.dirname(exe),
-        description: 'UsualDesk',
+        description: 'inplaize',
       };
       const op = fs.existsSync(shortcutPath) ? 'update' : 'create';
       const ok = shell.writeShortcutLink(shortcutPath, op, options);
@@ -60,7 +60,7 @@ function enableAutoStart() {
 
     const settings = {
       openAtLogin: true,
-      name: 'UsualDesk',
+      name: 'inplaize',
       path: process.execPath,
       args: app.isPackaged ? [] : [path.resolve(__dirname, '..')],
     };

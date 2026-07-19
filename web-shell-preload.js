@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 /** Windows/Linux: ventana sin marco y controles en la página (coincide con main/web-shell.js). */
 const framelessChrome = process.platform === 'win32' || process.platform === 'linux';
@@ -12,6 +12,12 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   windowToggleMaximize: () => ipcRenderer.invoke('shell-window-toggle-maximize'),
   windowClose: () => ipcRenderer.invoke('shell-window-close'),
   openDockWelcomeHome: () => ipcRenderer.invoke('dock-open-welcome-home'),
+  openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
+  openSettings: () => ipcRenderer.invoke('chrome-open-settings'),
+  enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
+  collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
+  closeApp: () => ipcRenderer.invoke('close-app'),
+  notifyShellMenuDrawer: (open) => ipcRenderer.invoke('shell-menu-drawer-state', open === true),
   requestShortcutEditor: () => ipcRenderer.invoke('shell-request-shortcut-editor'),
   requestExitShortcutEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),
   onShortcutsEditModeSync: (callback) => {
@@ -35,5 +41,13 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   exitFocusMode: () => ipcRenderer.invoke('focus-mode-exit'),
   onFocusModeChanged: (callback) => {
     ipcRenderer.on('focus-mode-changed', (_event, state) => callback(state));
+  },
+  ingestDroppedFiles: (paths) => ipcRenderer.invoke('downloads-ingest-dropped-files', paths),
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
   },
 });

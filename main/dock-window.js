@@ -6,6 +6,7 @@ const { log } = require('./logger');
 const { dockWindowBoundsForWorkArea, applyDockWindowBounds } = require('./window-bounds');
 const { loadAppSettings } = require('./app-settings-store');
 const { setDockWindow } = require('./dock-window-bridge');
+const { lockWindowZoom } = require('./lock-window-zoom');
 
 /**
  * Raíz de la app (donde está package.json): preload e index.html siempre aquí,
@@ -37,6 +38,7 @@ function createDockWindow(display, state) {
     y: initial.y,
     width: initial.width,
     height: initial.height,
+    icon: path.join(root, 'assets', 'icon.png'),
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -49,6 +51,11 @@ function createDockWindow(display, state) {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      // Vista previa de PDFs en el panel de inicio: el visor integrado de
+      // Chromium no funciona en <iframe> dentro de Electron, así que se usa
+      // un <webview> (requiere webviewTag) con plugins habilitados.
+      plugins: true,
+      webviewTag: true,
     },
   });
 
@@ -65,6 +72,7 @@ function createDockWindow(display, state) {
 
   win.loadFile(path.join(root, 'index.html'));
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  lockWindowZoom(win.webContents);
 
   win.webContents.once('did-finish-load', () => {
     if (!win.isDestroyed()) win.setBackgroundColor('#00000000');

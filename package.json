@@ -1,17 +1,17 @@
 {
-  "name": "usual-desk",
-  "version": "1.2.43",
+  "name": "inplaize",
+  "version": "1.3.1",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
     "dev": "electronmon .",
-    "build:win": "set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
-    "build:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
+    "build:win": "node scripts/bump-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
+    "build:mac": "node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
   },
   "build": {
-    "appId": "com.usualdesk.app",
-    "productName": "UsualDesk",
+    "appId": "com.inplaize.app",
+    "productName": "inplaize",
     "forceCodeSigning": false,
     "files": [
       "main/**/*",
@@ -21,9 +21,13 @@
       "*.css",
       "*.html",
       "package.json",
+      "build-info.json",
       "!**/*.map",
       "!**/.DS_Store",
       "!**/Thumbs.db"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
     ],
     "win": {
       "target": "nsis",
@@ -32,7 +36,7 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "assets/icon.icns",
+      "icon": "assets/icon.png",
       "category": "public.app-category.productivity",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
@@ -44,6 +48,14 @@
   "devDependencies": {
     "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
-    "electronmon": "^2.0.3"
+    "electronmon": "^2.0.3",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.3"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "ffmpeg-static": "^5.3.0",
+    "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0"
   }
 }

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>inplaze</title>
+  <link rel="stylesheet" href="shell-home-menu.css" />
   <link rel="stylesheet" href="web-shell.css" />
 </head>
 <body>
@@ -12,18 +13,9 @@
       type="button"
       id="shell-home-btn"
       class="shell-home-strip-btn shell-shortcut-item"
-      data-tooltip="Inicio: bienvenida en el panel"
-      data-tooltip-placement="bottom"
       aria-label="Abrir inicio en el panel"
     >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path
-          d="M4 10.25 12 3.5 20 10.25V20a1 1 0 0 1-1 1h-4v-8H9v8H5a1 1 0 0 1-1-1v-9.75z"
-          stroke="currentColor"
-          stroke-width="1.75"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <span class="dock-home-logo-mark" aria-hidden="true"></span>
     </button>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos"></div>
     <div class="shell-win-btns" aria-label="Controles de ventana">
@@ -32,8 +24,10 @@
       <button type="button" id="shell-win-close" class="shell-win-btn is-close" data-tooltip="Cerrar ventana" data-tooltip-placement="bottom" aria-label="Cerrar ventana">&#215;</button>
     </div>
   </header>
+  <div id="subtab-strip" class="subtab-strip" role="tablist" aria-label="Pestañas" hidden></div>
   <script src="ui-tooltip.js"></script>
   <script src="strip-gestures.js"></script>
+  <script src="shell-home-menu.js"></script>
   <script src="detached-web-frame-renderer.js"></script>
 </body>
 </html>

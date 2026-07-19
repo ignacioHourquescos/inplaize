@@ -68,6 +68,87 @@ function buildShortcutIcon(icon, name) {
 const SUPPRESS_CLICK_MS =
   (window.UsualDeskStripGestures && window.UsualDeskStripGestures.SUPPRESS_CLICK_MS) || 800;
 
+/** ¿El drag en curso lleva archivos? (p. ej. arrastrado desde el Explorador o
+ *  desde el home de descargas del dock). */
+function isFileDrag(e) {
+  const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
+  return types.includes('Files');
+}
+
+function getDroppedFilePaths(e) {
+  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+  if (!files.length || typeof window.usualDeskShell.getPathForFile !== 'function') return [];
+  return files.map((f) => window.usualDeskShell.getPathForFile(f)).filter(Boolean);
+}
+
+async function ingestDroppedFilesFromEvent(e) {
+  const paths = getDroppedFilePaths(e);
+  if (!paths.length || typeof window.usualDeskShell.ingestDroppedFiles !== 'function') return false;
+  await window.usualDeskShell.ingestDroppedFiles(paths);
+  if (typeof window.usualDeskShell.openDockWelcomeHome === 'function') {
+    await window.usualDeskShell.openDockWelcomeHome();
+  }
+  return true;
+}
+
+/** Evita el cursor prohibido en toda la franja al arrastrar archivos. */
+function bindShellFileDragAcceptance() {
+  const onDragOver = (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* noop */
+    }
+  };
+  document.addEventListener('dragover', onDragOver, true);
+}
+
+const FILE_DRAG_SPRING_DELAY_MS = 300;
+
+/** Arrastrar un archivo sobre el icono de una pestaña activa esa ventana
+ *  (spring-loading) para poder soltar el archivo dentro de su página. */
+function bindFileDragSpringTarget(btn, shortcutId) {
+  let springTimer = null;
+  const cancel = () => {
+    if (springTimer) {
+      clearTimeout(springTimer);
+      springTimer = null;
+    }
+    btn.classList.remove('file-drag-hover');
+  };
+  btn.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    btn.classList.add('file-drag-hover');
+    if (!springTimer) {
+      springTimer = setTimeout(() => {
+        springTimer = null;
+        btn.classList.remove('file-drag-hover');
+        window.usualDeskShell.activateShortcut(shortcutId);
+      }, FILE_DRAG_SPRING_DELAY_MS);
+    }
+  });
+  btn.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* ignore */
+    }
+  });
+  btn.addEventListener('dragleave', cancel);
+  btn.addEventListener('drop', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cancel();
+    ingestDroppedFilesFromEvent(e).catch(() => {});
+  });
+}
+
 function renderChrome(payload) {
   if (payload && payload.focusMode) {
     applyFocusModeToDom(payload.focusMode);
@@ -102,20 +183,7 @@ function renderChrome(payload) {
     if (it.isFocusMember) {
       btn.classList.add('shell-focus-member');
     }
-    const hints = [];
-    if (canClose) hints.push('mantén pulsado para cerrar');
-    if (canFocusGesture) hints.push('clic derecho para alternar Modo Foco');
-    let title = hints.length ? `${name} — ${hints.join(' · ')}` : name;
-    let ariaLabel = name;
-    if (canClose) {
-      ariaLabel = `${name}. Mantén pulsado para cerrar. Clic derecho para alternar Modo Foco.`;
-    } else if (webTabClosed) {
-      title = `${name} — pestaña cerrada (clic para abrir · clic derecho para alternar Modo Foco)`;
-      ariaLabel = `${name}. Pestaña cerrada. Pulsa para abrir. Clic derecho para alternar Modo Foco.`;
-    }
-    btn.setAttribute('data-tooltip', title);
-    btn.setAttribute('data-tooltip-placement', 'bottom');
-    btn.setAttribute('aria-label', ariaLabel);
+    btn.setAttribute('aria-label', name);
     btn.dataset.shortcutId = it.id;
     btn.dataset.shortcutType = it.type || '';
 
@@ -160,6 +228,10 @@ function renderChrome(payload) {
           },
         });
       }
+    }
+
+    if (isWeb) {
+      bindFileDragSpringTarget(btn, it.id);
     }
 
     cell.appendChild(btn);
@@ -220,48 +292,26 @@ if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
   });
 }
 
-function initFramelessChrome() {
-  if (!window.usualDeskShell?.framelessChrome) return;
-  document.documentElement.setAttribute('data-shell-frameless', 'true');
-
-  const minBtn = document.getElementById('shell-win-min');
-  const maxBtn = document.getElementById('shell-win-max');
-  const closeBtn = document.getElementById('shell-win-close');
-  if (!minBtn || !maxBtn || !closeBtn) return;
-
-  function setMaxVisual(isMax) {
-    const label = isMax ? 'Restaurar' : 'Maximizar';
-    maxBtn.setAttribute('data-tooltip', label);
-    maxBtn.setAttribute('aria-label', label);
-    if (isMax) {
-      maxBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="4" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="2" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
-    } else {
-      maxBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
-    }
-  }
-
-  setMaxVisual(false);
-
-  minBtn.addEventListener('click', () => {
-    window.usualDeskShell.windowMinimize();
-  });
-  maxBtn.addEventListener('click', async () => {
-    try {
-      const isMax = await window.usualDeskShell.windowToggleMaximize();
-      setMaxVisual(!!isMax);
-    } catch {
-      /* noop */
-    }
-  });
-  closeBtn.addEventListener('click', () => {
-    window.usualDeskShell.windowClose();
-  });
-
-  window.usualDeskShell.onWindowMaximized((isMax) => {
-    setMaxVisual(isMax);
+function initShellHomeMenuChrome(api) {
+  if (!window.UsualDeskShellHomeMenu) return;
+  window.UsualDeskShellHomeMenu.mountChrome();
+  window.UsualDeskShellHomeMenu.init({
+    openAddShortcut: () => api.openAddShortcut?.().catch(() => {}),
+    enterShortcutsEditMode: () => api.enterShortcutsEditMode?.().catch(() => {}),
+    exitShortcutsEditMode: () => api.requestExitShortcutEditMode?.().catch(() => {}),
+    openSettings: () => api.openSettings?.().catch(() => {}),
+    hidePanel: () => api.collapseDockSidebar?.().catch(() => {}),
+    quitApp: () => api.closeApp?.().catch(() => {}),
+    onShortcutsEditModeSync: (cb) => api.onShortcutsEditModeSync?.(cb),
+    onDrawerOpenChange: (open) => api.notifyShellMenuDrawer?.(open === true),
   });
 }
 
+function initFramelessChrome() {
+  if (!window.usualDeskShell?.framelessChrome) return;
+  document.documentElement.setAttribute('data-shell-frameless', 'true');
+  initShellHomeMenuChrome(window.usualDeskShell);
+}
+
 initFramelessChrome();
+bindShellFileDragAcceptance();

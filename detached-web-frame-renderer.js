@@ -1,4 +1,5 @@
 const strip = document.getElementById('shortcut-strip');
+const subtabStrip = document.getElementById('subtab-strip');
 const api = window.usualDeskDetached;
 
 /** @type {Record<string, number>} */
@@ -68,6 +69,85 @@ function buildShortcutIcon(icon, name) {
 const SUPPRESS_CLICK_MS =
   (window.UsualDeskStripGestures && window.UsualDeskStripGestures.SUPPRESS_CLICK_MS) || 800;
 
+/** ¿El drag en curso lleva archivos? (Explorador o home de descargas del dock). */
+function isFileDrag(e) {
+  const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
+  return types.includes('Files');
+}
+
+function getDroppedFilePaths(e) {
+  const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+  if (!files.length || typeof api.getPathForFile !== 'function') return [];
+  return files.map((f) => api.getPathForFile(f)).filter(Boolean);
+}
+
+async function ingestDroppedFilesFromEvent(e) {
+  const paths = getDroppedFilePaths(e);
+  if (!paths.length || typeof api.ingestDroppedFiles !== 'function') return false;
+  await api.ingestDroppedFiles(paths);
+  if (typeof api.openDockWelcomeHome === 'function') {
+    await api.openDockWelcomeHome();
+  }
+  return true;
+}
+
+function bindShellFileDragAcceptance() {
+  const onDragOver = (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* noop */
+    }
+  };
+  document.addEventListener('dragover', onDragOver, true);
+}
+
+const FILE_DRAG_SPRING_DELAY_MS = 300;
+
+/** Arrastrar un archivo sobre el icono de una pestaña activa esa ventana
+ *  (spring-loading) para poder soltar el archivo dentro de su página. */
+function bindFileDragSpringTarget(btn, shortcutId) {
+  let springTimer = null;
+  const cancel = () => {
+    if (springTimer) {
+      clearTimeout(springTimer);
+      springTimer = null;
+    }
+    btn.classList.remove('file-drag-hover');
+  };
+  btn.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    btn.classList.add('file-drag-hover');
+    if (!springTimer) {
+      springTimer = setTimeout(() => {
+        springTimer = null;
+        btn.classList.remove('file-drag-hover');
+        api.frameAction('activate', shortcutId);
+      }, FILE_DRAG_SPRING_DELAY_MS);
+    }
+  });
+  btn.addEventListener('dragover', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    try {
+      e.dataTransfer.dropEffect = 'copy';
+    } catch {
+      /* ignore */
+    }
+  });
+  btn.addEventListener('dragleave', cancel);
+  btn.addEventListener('drop', (e) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cancel();
+    ingestDroppedFilesFromEvent(e).catch(() => {});
+  });
+}
+
 function renderChrome(payload) {
   if (payload && payload.focusMode) {
     applyFocusModeToDom(payload.focusMode);
@@ -102,20 +182,7 @@ function renderChrome(payload) {
     if (it.isFocusMember) {
       btn.classList.add('shell-focus-member');
     }
-    const hints = [];
-    if (canClose) hints.push('mantén pulsado para cerrar');
-    if (canFocusGesture) hints.push('clic derecho para alternar Modo Foco');
-    let title = hints.length ? `${name} — ${hints.join(' · ')}` : name;
-    let ariaLabel = name;
-    if (canClose) {
-      ariaLabel = `${name}. Mantén pulsado para cerrar. Clic derecho para alternar Modo Foco.`;
-    } else if (webTabClosed) {
-      title = `${name} — ventana cerrada (clic para abrir · clic derecho para alternar Modo Foco)`;
-      ariaLabel = `${name}. Ventana cerrada. Pulsa para abrir. Clic derecho para alternar Modo Foco.`;
-    }
-    btn.setAttribute('data-tooltip', title);
-    btn.setAttribute('data-tooltip-placement', 'bottom');
-    btn.setAttribute('aria-label', ariaLabel);
+    btn.setAttribute('aria-label', name);
     btn.dataset.shortcutId = it.id;
     btn.dataset.shortcutType = it.type || '';
 
@@ -162,6 +229,10 @@ function renderChrome(payload) {
       }
     }
 
+    if (isWeb) {
+      bindFileDragSpringTarget(btn, it.id);
+    }
+
     cell.appendChild(btn);
 
     strip.appendChild(cell);
@@ -176,6 +247,88 @@ async function refreshChromeFromMain() {
     /* noop */
   }
 }
+
+/**
+ * Fila de sub-pestañas: solo visible cuando hay más de una pestaña
+ * (la principal del servicio + las abiertas con Ctrl+click / target=_blank).
+ */
+function renderSubTabs(payload) {
+  if (!subtabStrip) return;
+  const tabs = payload && Array.isArray(payload.tabs) ? payload.tabs : [];
+  if (tabs.length <= 1) {
+    subtabStrip.hidden = true;
+    subtabStrip.innerHTML = '';
+    return;
+  }
+  subtabStrip.hidden = false;
+  subtabStrip.innerHTML = '';
+  for (const tab of tabs) {
+    const el = document.createElement('div');
+    el.className = 'subtab';
+    if (tab.isActive) el.classList.add('is-active');
+    el.setAttribute('role', 'tab');
+    el.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
+    el.title = tab.title || '';
+
+    const icon = document.createElement('span');
+    icon.className = 'subtab-icon';
+    if (tab.loading) {
+      icon.classList.add('is-loading');
+    } else if (tab.favicon) {
+      const img = document.createElement('img');
+      img.src = tab.favicon;
+      img.alt = '';
+      img.loading = 'lazy';
+      icon.appendChild(img);
+    }
+    el.appendChild(icon);
+
+    const label = document.createElement('span');
+    label.className = 'subtab-title';
+    label.textContent = tab.title || 'Pestaña';
+    el.appendChild(label);
+
+    el.addEventListener('click', () => {
+      if (!tab.isActive) api.frameAction('select-subtab', tab.id);
+    });
+
+    if (!tab.isMain) {
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.className = 'subtab-close';
+      closeBtn.setAttribute('aria-label', `Cerrar ${tab.title || 'pestaña'}`);
+      closeBtn.textContent = '\u00d7';
+      closeBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        api.frameAction('close-subtab', tab.id);
+      });
+      el.appendChild(closeBtn);
+
+      el.addEventListener('auxclick', (ev) => {
+        if (ev.button === 1) {
+          ev.preventDefault();
+          api.frameAction('close-subtab', tab.id);
+        }
+      });
+    }
+
+    subtabStrip.appendChild(el);
+  }
+}
+
+async function refreshSubTabsFromMain() {
+  try {
+    const payload = await api.frameAction('get-tabs');
+    renderSubTabs(payload);
+  } catch {
+    /* noop */
+  }
+}
+
+if (api.onTabs) {
+  api.onTabs(renderSubTabs);
+}
+refreshSubTabsFromMain();
 
 if (api.onChrome) {
   api.onChrome(renderChrome);
@@ -223,50 +376,26 @@ if (detachedShellHomeBtn && window.usualDeskDetached.openDockWelcomeHome) {
   });
 }
 
+function initShellHomeMenuChrome(api) {
+  if (!window.UsualDeskShellHomeMenu) return;
+  window.UsualDeskShellHomeMenu.mountChrome();
+  window.UsualDeskShellHomeMenu.init({
+    openAddShortcut: () => api.openAddShortcut?.().catch(() => {}),
+    enterShortcutsEditMode: () => api.enterShortcutsEditMode?.().catch(() => {}),
+    exitShortcutsEditMode: () => api.requestExitShortcutEditMode?.().catch(() => {}),
+    openSettings: () => api.openSettings?.().catch(() => {}),
+    hidePanel: () => api.collapseDockSidebar?.().catch(() => {}),
+    quitApp: () => api.closeApp?.().catch(() => {}),
+    onShortcutsEditModeSync: (cb) => api.onShortcutsEditModeSync?.(cb),
+    onDrawerOpenChange: (open) => api.notifyShellMenuDrawer?.(open === true),
+  });
+}
+
 function initFramelessChrome() {
   if (!api?.framelessChrome) return;
   document.documentElement.setAttribute('data-shell-frameless', 'true');
-
-  const minBtn = document.getElementById('shell-win-min');
-  const maxBtn = document.getElementById('shell-win-max');
-  const closeBtn = document.getElementById('shell-win-close');
-  if (!minBtn || !maxBtn || !closeBtn) return;
-
-  function setMaxVisual(isMax) {
-    const label = isMax ? 'Restaurar' : 'Maximizar';
-    maxBtn.setAttribute('data-tooltip', label);
-    maxBtn.setAttribute('aria-label', label);
-    if (isMax) {
-      maxBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="4" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/><rect x="4" y="2" width="6" height="6" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
-    } else {
-      maxBtn.innerHTML =
-        '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
-    }
-  }
-
-  setMaxVisual(false);
-
-  minBtn.addEventListener('click', () => {
-    api.frameAction('minimize');
-  });
-  maxBtn.addEventListener('click', async () => {
-    try {
-      const isMax = await api.frameAction('toggle-maximize');
-      setMaxVisual(!!isMax);
-    } catch {
-      /* noop */
-    }
-  });
-  closeBtn.addEventListener('click', () => {
-    api.frameAction('close-window');
-  });
-
-  if (api.onWindowMaximized) {
-    api.onWindowMaximized((isMax) => {
-      setMaxVisual(isMax);
-    });
-  }
+  initShellHomeMenuChrome(api);
 }
 
 initFramelessChrome();
+bindShellFileDragAcceptance();

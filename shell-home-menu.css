@@ -1,0 +1,259 @@
+/* Menú hamburguesa + drawer de opciones (dock y ventanas web). */
+
+.dock-chrome-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  height: auto;
+  min-height: 0;
+  gap: 0;
+  -webkit-app-region: no-drag;
+}
+
+.dock-home-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ud-chrome-strip-h, 58px);
+  height: 100%;
+  min-height: var(--ud-chrome-strip-h, 58px);
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-left: 1px solid var(--ud-chrome-strip-border);
+  background: transparent;
+  color: #e8e8ef;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dock-home-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dock-home-menu-btn:focus-visible {
+  outline: 2px solid var(--accent, #7c6cff);
+  outline-offset: -2px;
+}
+
+.dock-home-menu-btn.is-open {
+  background: rgba(167, 139, 250, 0.18);
+  color: #fff;
+}
+
+.dock-home-menu-btn-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.dock-home-menu-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 10px;
+  box-sizing: border-box;
+  background: var(--ud-chrome-canvas, #12121a);
+  border-left: 1px solid var(--ud-chrome-strip-border, rgba(255, 255, 255, 0.1));
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.28);
+  transform: translateX(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0.28s step-end;
+  -webkit-app-region: no-drag;
+}
+
+/* Ventanas web: drawer a pantalla completa (no solo el panel del dock). */
+html.shell-menu-host .dock-home-menu-drawer,
+html:not([data-dock-layout]) .dock-home-menu-drawer {
+  position: fixed;
+}
+
+.dock-home-menu-drawer.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s step-start;
+}
+
+.dock-home-menu-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 4px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.dock-home-menu-drawer-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(232, 232, 239, 0.72);
+}
+
+.dock-home-menu-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #e8e8ef;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dock-home-menu-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dock-home-menu-close-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.dock-home-menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(8, 8, 12, 0.42);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.25s ease,
+    visibility 0.25s step-end;
+  -webkit-app-region: no-drag;
+}
+
+html.shell-menu-host .dock-home-menu-backdrop,
+html:not([data-dock-layout]) .dock-home-menu-backdrop {
+  position: fixed;
+}
+
+/* Ventanas web: sin velo; la página sigue visible a la izquierda del drawer. */
+html.shell-menu-host .dock-home-menu-backdrop {
+  display: none;
+}
+
+.dock-home-menu-backdrop.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 0.25s ease,
+    visibility 0s step-start;
+}
+
+.dock-home-menu-drawer-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.dock-home-menu-sep {
+  width: 100%;
+  height: 1px;
+  margin: 8px 0 4px;
+  margin-top: auto;
+  background: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.dock-home-menu-item {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #e8e8ef;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  -webkit-app-region: no-drag;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.dock-home-menu-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dock-home-menu-item:focus-visible {
+  outline: 2px solid var(--accent, #7c6cff);
+  outline-offset: -2px;
+}
+
+.dock-home-menu-item.is-on,
+.dock-home-menu-item[aria-checked='true'] {
+  border-color: rgba(167, 139, 250, 0.75);
+  background: rgba(167, 139, 250, 0.14);
+  color: #fff;
+}
+
+.dock-home-menu-item-danger {
+  color: rgba(248, 113, 113, 0.95);
+}
+
+.dock-home-menu-item-danger:hover {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.dock-home-menu-item-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.dock-home-menu-item-label {
+  flex: 1 1 auto;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+html[data-shell-frameless='true'] .dock-chrome-menu-wrap,
+html[data-shell-frameless='true'] .dock-home-menu-btn,
+html[data-shell-frameless='true'] .dock-home-menu-drawer,
+html[data-shell-frameless='true'] .dock-home-menu-backdrop,
+html[data-shell-frameless='true'] .dock-home-menu-item {
+  -webkit-app-region: no-drag;
+}

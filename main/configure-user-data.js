@@ -2,15 +2,15 @@
 
 /**
  * Debe cargarse antes que cualquier módulo que use app.getPath('userData').
- * Fija una carpeta estable ("UsualDesk") y migra datos desde carpetas anteriores si hace falta.
+ * Fija una carpeta estable ("inplaize") y migra datos desde carpetas anteriores si hace falta.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
-const CANONICAL_DIR = 'UsualDesk';
-const LEGACY_DIRS = ['Dock Station', 'dock-station'];
+const CANONICAL_DIR = 'inplaize';
+const LEGACY_DIRS = ['UsualDesk', 'Dock Station', 'dock-station'];
 
 function applyUserDataPath() {
   const appData = app.getPath('appData');
@@ -27,7 +27,7 @@ function applyUserDataPath() {
       }
     }
   } catch (err) {
-    console.error('[UsualDesk] Migración de datos antiguos falló:', err.message);
+    console.error('[inplaize] Migración de datos antiguos falló:', err.message);
   }
 
   app.setPath('userData', newUserData);

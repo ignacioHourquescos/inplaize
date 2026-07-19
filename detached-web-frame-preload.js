@@ -1,8 +1,15 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('usualDeskDetached', {
   frameAction: (action, arg) => ipcRenderer.invoke('detached-frame-action', action, arg ?? null),
   openDockWelcomeHome: () => ipcRenderer.invoke('dock-open-welcome-home'),
+  openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
+  openSettings: () => ipcRenderer.invoke('chrome-open-settings'),
+  enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
+  collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
+  closeApp: () => ipcRenderer.invoke('close-app'),
+  notifyShellMenuDrawer: (open) =>
+    ipcRenderer.invoke('detached-frame-action', 'menu-drawer', open === true),
   requestShortcutEditor: () => ipcRenderer.invoke('detached-request-shortcut-editor'),
   requestExitShortcutEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),
   onShortcutsEditModeSync: (cb) => {
@@ -10,6 +17,9 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   },
   onChrome: (cb) => {
     ipcRenderer.on('detached-chrome', (_e, payload) => cb(payload));
+  },
+  onTabs: (cb) => {
+    ipcRenderer.on('detached-tabs', (_e, payload) => cb(payload));
   },
   onTitleBadge: (cb) => {
     ipcRenderer.on('detached-title-badge', (_e, payload) => cb(payload));
@@ -28,4 +38,12 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
     ipcRenderer.on('focus-mode-changed', (_event, state) => cb(state));
   },
   framelessChrome: process.platform === 'win32' || process.platform === 'linux',
+  ingestDroppedFiles: (paths) => ipcRenderer.invoke('downloads-ingest-dropped-files', paths),
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
+  },
 });

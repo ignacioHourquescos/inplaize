@@ -343,22 +343,16 @@ function mapCdpSameSite(s) {
 }
 
 /**
- * @param {{ profileDirectory?: string, targetPartition: string }} opts
- * @returns {Promise<{ imported: number, total: number, considered: number }>}
+ * Lanza Chrome headless con el perfil dado y devuelve TODAS las cookies del
+ * browser context. Valida plataforma, binario, perfil y que Chrome esté cerrado.
+ * Asume que el log ya fue reseteado por el caller.
+ * @param {string} profileDirectory
+ * @returns {Promise<Array<object>>}
  */
-async function importGoogleCookiesFromChrome(opts) {
+async function fetchAllCookiesFromChromeProfile(profileDirectory) {
   if (process.platform !== 'win32') {
     throw new Error('NOT_SUPPORTED_PLATFORM');
   }
-  const targetPartition = opts && typeof opts.targetPartition === 'string' ? opts.targetPartition : '';
-  if (!targetPartition) throw new Error('MISSING_PARTITION');
-  const profileDirectory =
-    opts && typeof opts.profileDirectory === 'string' && opts.profileDirectory
-      ? opts.profileDirectory
-      : 'Default';
-
-  logReset();
-  logLine('Inicio importación. profileDirectory=', profileDirectory, 'partition=', targetPartition);
 
   const chromeExe = findChromeExecutable();
   if (!chromeExe) {
@@ -428,15 +422,23 @@ async function importGoogleCookiesFromChrome(opts) {
     }
   };
 
-  let cookies = [];
   try {
     const port = await waitForDevToolsPort(portFile, 12000);
     logLine('Puerto CDP =', String(port));
-    cookies = await fetchCookiesFromChrome(port, 12000);
+    return await fetchCookiesFromChrome(port, 12000);
   } finally {
     killChild();
   }
+}
 
+/**
+ * Inyecta en la partition las cookies que pasen el filtro de hostname.
+ * @param {Array<object>} cookies cookies crudas de CDP
+ * @param {string} targetPartition
+ * @param {(hostname: string) => boolean} domainFilter
+ * @returns {Promise<{ imported: number, considered: number }>}
+ */
+async function setCookiesIntoPartition(cookies, targetPartition, domainFilter) {
   const ses = session.fromPartition(targetPartition);
   let imported = 0;
   let considered = 0;
@@ -447,7 +449,7 @@ async function importGoogleCookiesFromChrome(opts) {
 
   for (const c of cookies) {
     if (!c || typeof c !== 'object') continue;
-    if (!isImportableHostname(c.domain)) continue;
+    if (!domainFilter(c.domain)) continue;
     considered += 1;
 
     const sameSite = mapCdpSameSite(c.sameSite);
@@ -498,13 +500,106 @@ async function importGoogleCookiesFromChrome(opts) {
     /* noop */
   }
 
-  logLine('Resumen:', JSON.stringify({
-    total: cookies.length,
+  logLine('Resumen partition', targetPartition, ':', JSON.stringify({
     considered,
     imported,
     importedByDomain: Object.fromEntries(importedByDomain),
     failuresByReason: Object.fromEntries(failuresByReason),
   }));
+
+  return { imported, considered };
+}
+
+/**
+ * Dominios base cuya sesión vive en las cookies de Google (accounts.google.com,
+ * .google.com, etc.). Un acceso a Gmail suele guardarse como `gmail.com`, pero
+ * el login real está en `google.com`, así que hay que traer la lista amplia.
+ */
+const GOOGLE_FAMILY_DOMAINS = new Set([
+  'google.com',
+  'gmail.com',
+  'googlemail.com',
+  'youtube.com',
+  'google.com.ar',
+  'google.es',
+]);
+
+/**
+ * Filtro de hostname para un dominio base. Los dominios de la familia Google
+ * reciben la lista amplia (accounts.google.com, gstatic, googleusercontent, etc.)
+ * porque el login la necesita; el resto matchea por sufijo del dominio base.
+ * @param {string} domain dominio base (ej. 'linkedin.com')
+ * @returns {(hostname: string) => boolean}
+ */
+function domainFilterFor(domain) {
+  const d = String(domain || '').toLowerCase();
+  if (!d) return () => false;
+  if (GOOGLE_FAMILY_DOMAINS.has(d)) return isImportableHostname;
+  return (hostname) => {
+    if (!hostname || typeof hostname !== 'string') return false;
+    const h = hostname.toLowerCase().replace(/^\./, '');
+    return h === d || h.endsWith(`.${d}`);
+  };
+}
+
+/**
+ * Importa sesiones de Chrome para varios destinos con UNA sola lectura de cookies.
+ * @param {{ profileDirectory?: string, targets: Array<{ partition: string, domains: string[] }> }} opts
+ * @returns {Promise<{ total: number, results: Array<{ partition: string, imported: number, considered: number }>, logPath: string }>}
+ */
+async function importSessionsForTargets(opts) {
+  const targets = Array.isArray(opts && opts.targets) ? opts.targets : [];
+  if (targets.length === 0) throw new Error('MISSING_TARGETS');
+  const profileDirectory =
+    opts && typeof opts.profileDirectory === 'string' && opts.profileDirectory
+      ? opts.profileDirectory
+      : 'Default';
+
+  logReset();
+  logLine(
+    'Inicio importación multi-target. profileDirectory=',
+    profileDirectory,
+    'targets=',
+    targets.map((t) => `${t.partition}←[${(t.domains || []).join(',')}]`).join(' ')
+  );
+
+  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory);
+
+  const results = [];
+  for (const t of targets) {
+    if (!t || typeof t.partition !== 'string' || !t.partition) continue;
+    const domains = Array.isArray(t.domains) ? t.domains.filter(Boolean) : [];
+    const filters = domains.map((d) => domainFilterFor(d));
+    const combined = (hostname) => filters.some((f) => f(hostname));
+    const r = await setCookiesIntoPartition(cookies, t.partition, combined);
+    results.push({ partition: t.partition, imported: r.imported, considered: r.considered });
+  }
+
+  logFlush();
+  return { total: cookies.length, results, logPath: _logPath };
+}
+
+/**
+ * @param {{ profileDirectory?: string, targetPartition: string }} opts
+ * @returns {Promise<{ imported: number, total: number, considered: number }>}
+ */
+async function importGoogleCookiesFromChrome(opts) {
+  const targetPartition = opts && typeof opts.targetPartition === 'string' ? opts.targetPartition : '';
+  if (!targetPartition) throw new Error('MISSING_PARTITION');
+  const profileDirectory =
+    opts && typeof opts.profileDirectory === 'string' && opts.profileDirectory
+      ? opts.profileDirectory
+      : 'Default';
+
+  logReset();
+  logLine('Inicio importación. profileDirectory=', profileDirectory, 'partition=', targetPartition);
+
+  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory);
+  const { imported, considered } = await setCookiesIntoPartition(
+    cookies,
+    targetPartition,
+    isImportableHostname
+  );
   logFlush();
 
   return { imported, total: cookies.length, considered, logPath: _logPath };
@@ -516,4 +611,5 @@ module.exports = {
   findChromeExecutable,
   defaultChromeUserDataDir,
   importGoogleCookiesFromChrome,
+  importSessionsForTargets,
 };

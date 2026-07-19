@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('usualDesk', {
   collapseSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   pickAppOrShortcut: () => ipcRenderer.invoke('pick-app-or-shortcut'),
   closeApp: () => ipcRenderer.invoke('close-app'),
   getUserDataPath: () => ipcRenderer.invoke('get-user-data-path'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   openUserDataFolder: () => ipcRenderer.invoke('open-user-data-folder'),
   listBuiltinIcons: () => ipcRenderer.invoke('list-builtin-icons'),
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
@@ -29,6 +30,9 @@ contextBridge.exposeInMainWorld('usualDesk', {
   },
   onOpenAddShortcutModal: (callback) => {
     ipcRenderer.on('open-add-shortcut-modal', () => callback());
+  },
+  onOpenSettingsModal: (callback) => {
+    ipcRenderer.on('open-settings-modal', () => callback());
   },
   onShortcutTitleBadge: (callback) => {
     ipcRenderer.on('shortcut-title-badge', (_event, payload) => callback(payload));
@@ -96,4 +100,47 @@ contextBridge.exposeInMainWorld('usualDesk', {
   listChromeProfiles: () => ipcRenderer.invoke('chrome-import-list-profiles'),
   importChromeGoogleCookies: (profileDirectory) =>
     ipcRenderer.invoke('chrome-import-google-cookies', { profileDirectory }),
+  importChromeSessionsForShortcuts: (profileDirectory, shortcutIds) =>
+    ipcRenderer.invoke('chrome-import-sessions-for-shortcuts', { profileDirectory, shortcutIds }),
+
+  /* ---- Descargas centralizadas en el dock ---- */
+  getDownloads: () => ipcRenderer.invoke('downloads-get-history'),
+  openDownloadFile: (id) => ipcRenderer.invoke('downloads-open-file', id),
+  showDownloadInFolder: (id) => ipcRenderer.invoke('downloads-show-in-folder', id),
+  removeDownload: (id) => ipcRenderer.invoke('downloads-remove', id),
+  clearDownloads: () => ipcRenderer.invoke('downloads-clear'),
+  cancelDownload: (id) => ipcRenderer.invoke('downloads-cancel', id),
+  saveDownloadImageEdit: (id, dataUrl) => ipcRenderer.invoke('downloads-save-image-edit', id, dataUrl),
+  ingestDroppedFiles: (paths) => ipcRenderer.invoke('downloads-ingest-dropped-files', paths),
+  startDownloadDrag: (id) => ipcRenderer.send('downloads-drag-start', id),
+  onDownloadStarted: (callback) => {
+    ipcRenderer.on('dock-download-started', (_event, payload) => callback(payload));
+  },
+  onDownloadUpdated: (callback) => {
+    ipcRenderer.on('dock-download-updated', (_event, payload) => callback(payload));
+  },
+  onDownloadDone: (callback) => {
+    ipcRenderer.on('dock-download-done', (_event, payload) => callback(payload));
+  },
+  getPhoneUploadInfo: () => ipcRenderer.invoke('phone-upload-get-info'),
+
+  /* ---- Cajón mágico (comprimir/convertir archivos con ffmpeg) ---- */
+  magicTransform: (filePath, action, target) =>
+    ipcRenderer.invoke('magic-transform', { filePath, action, target }),
+  // En Electron moderno `File.path` no existe: la ruta real de un archivo
+  // soltado se resuelve en el preload con webUtils.
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return '';
+    }
+  },
+
+  /* ---- Sticky notes (notas adhesivas en la pantalla de inicio) ---- */
+  getStickyNotes: () => ipcRenderer.invoke('get-sticky-notes'),
+  saveStickyNotes: (payload) => ipcRenderer.invoke('save-sticky-notes', payload),
+  onStickyNotesChanged: (callback) => {
+    ipcRenderer.on('sticky-notes-changed', () => callback());
+  },
 });

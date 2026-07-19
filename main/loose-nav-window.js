@@ -249,6 +249,11 @@ async function openTabFromUrl(url, opts = {}) {
   } catch {
     /* noop */
   }
+  try {
+    require('./downloads-manager').registerDownloadsForPartition(partition);
+  } catch {
+    /* descargas centralizadas: no crítico */
+  }
 
   const view = new BrowserView({
     webPreferences: {

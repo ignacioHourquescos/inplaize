@@ -18,7 +18,15 @@ const {
 
 } = require('./shortcuts-store');
 
+const {
+  loadStickyNotes,
+  saveStickyNotes,
+  broadcastStickyNotesChanged,
+} = require('./sticky-notes-store');
+
 const { loadAppSettings, saveAppSettings } = require('./app-settings-store');
+
+const { getAppVersionPayload } = require('./app-version');
 
 const {
   openShortcut,
@@ -81,6 +89,8 @@ const IPC_CHANNELS = [
 
   'get-user-data-path',
 
+  'get-app-version',
+
   'open-user-data-folder',
 
   'list-builtin-icons',
@@ -113,6 +123,8 @@ const IPC_CHANNELS = [
 
   'shell-window-close',
 
+  'shell-menu-drawer-state',
+
   'shell-request-shortcut-editor',
 
   'detached-request-shortcut-editor',
@@ -122,6 +134,12 @@ const IPC_CHANNELS = [
   'notify-shortcuts-edit-mode',
 
   'chrome-request-exit-shortcut-edit-mode',
+
+  'chrome-open-add-shortcut',
+
+  'chrome-open-settings',
+
+  'chrome-enter-shortcuts-edit-mode',
 
   'dock-window-minimize',
 
@@ -168,6 +186,26 @@ const IPC_CHANNELS = [
   'chrome-import-status',
 
   'chrome-import-google-cookies',
+
+  'get-sticky-notes',
+
+  'save-sticky-notes',
+
+  'downloads-get-history',
+
+  'downloads-open-file',
+
+  'downloads-show-in-folder',
+
+  'downloads-remove',
+
+  'downloads-clear',
+
+  'downloads-cancel',
+
+  'downloads-save-image-edit',
+
+  'magic-transform',
 
 ];
 
@@ -572,6 +610,29 @@ function registerIpcHandlers(state) {
     return true;
   });
 
+  ipcMain.handle('chrome-open-add-shortcut', () => {
+    expandDockSidebar();
+    const dock = state.mainWindow;
+    if (dock && !dock.isDestroyed()) {
+      dock.webContents.send('open-add-shortcut-modal');
+    }
+    return true;
+  });
+
+  ipcMain.handle('chrome-open-settings', () => {
+    expandDockSidebar();
+    const dock = state.mainWindow;
+    if (dock && !dock.isDestroyed()) {
+      dock.webContents.send('open-settings-modal');
+    }
+    return true;
+  });
+
+  ipcMain.handle('chrome-enter-shortcuts-edit-mode', () => {
+    openShortcutEditorOnDock(null);
+    return true;
+  });
+
 
 
   ipcMain.handle('set-ignore-mouse', (event, ignore) => {
@@ -709,6 +770,10 @@ function registerIpcHandlers(state) {
 
 
   ipcMain.handle('get-user-data-path', () => app.getPath('userData'));
+
+
+
+  ipcMain.handle('get-app-version', () => getAppVersionPayload());
 
 
 
@@ -932,6 +997,67 @@ function registerIpcHandlers(state) {
     }
   });
 
+  ipcMain.handle('chrome-import-sessions-for-shortcuts', async (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    const profileDirectory =
+      typeof raw.profileDirectory === 'string' && raw.profileDirectory
+        ? raw.profileDirectory
+        : 'Default';
+    const wantedIds = Array.isArray(raw.shortcutIds)
+      ? new Set(raw.shortcutIds.map((x) => String(x)))
+      : null;
+
+    const { baseDomainOf } = require('./session-router');
+    const shortcuts = loadShortcuts();
+    /** @type {Array<{ shortcut: object, partition: string, domain: string }>} */
+    const entries = [];
+    for (const s of shortcuts) {
+      if (!s || s.type !== 'web' || !s.url) continue;
+      if (wantedIds && !wantedIds.has(String(s.id))) continue;
+      const domain = baseDomainOf(s.url);
+      if (!domain) continue;
+      // WhatsApp Web no se puede importar: su sesión no vive en cookies.
+      if (domain === 'whatsapp.com') continue;
+      entries.push({
+        shortcut: s,
+        partition: partitionFromSessionId(s.sessionId),
+        domain,
+      });
+    }
+    if (entries.length === 0) {
+      return { ok: false, error: 'NO_IMPORTABLE_SHORTCUTS' };
+    }
+
+    // Varios accesos pueden compartir partition (misma sesión): agrupamos dominios.
+    /** @type {Map<string, Set<string>>} */
+    const domainsByPartition = new Map();
+    for (const e of entries) {
+      if (!domainsByPartition.has(e.partition)) domainsByPartition.set(e.partition, new Set());
+      domainsByPartition.get(e.partition).add(e.domain);
+    }
+    const targets = [...domainsByPartition.entries()].map(([partition, domains]) => ({
+      partition,
+      domains: [...domains],
+    }));
+
+    try {
+      const { importSessionsForTargets } = require('./chrome-cookie-import');
+      const result = await importSessionsForTargets({ profileDirectory, targets });
+      const byPartition = new Map(result.results.map((r) => [r.partition, r]));
+      const importedByShortcut = entries.map((e) => ({
+        shortcutId: String(e.shortcut.id),
+        name: (e.shortcut.name && String(e.shortcut.name)) || e.domain,
+        domain: e.domain,
+        imported: byPartition.has(e.partition) ? byPartition.get(e.partition).imported : 0,
+      }));
+      return { ok: true, total: result.total, importedByShortcut };
+    } catch (err) {
+      const code =
+        err && typeof err.message === 'string' ? err.message : 'IMPORT_FAILED';
+      return { ok: false, error: code };
+    }
+  });
+
   ipcMain.handle('dismiss-dock-in-app-notification', (_event, id) => {
 
     const k = id == null ? '' : String(id);
@@ -942,6 +1068,53 @@ function registerIpcHandlers(state) {
 
     return true;
 
+  });
+
+  {
+    const downloads = require('./downloads-manager');
+    // Zona de descargas = espejo de la carpeta Descargas del sistema: el
+    // watcher incorpora también lo que bajen otros programas.
+    downloads.watchDownloadsFolder();
+    ipcMain.handle('downloads-get-history', () => downloads.getHistory());
+    ipcMain.handle('downloads-open-file', (_event, id) => downloads.openFile(String(id)));
+    ipcMain.handle('downloads-show-in-folder', (_event, id) => downloads.showInFolder(String(id)));
+    ipcMain.handle('downloads-remove', (_event, id) => downloads.removeItem(String(id)));
+    ipcMain.handle('downloads-clear', () => downloads.clear());
+    ipcMain.handle('downloads-cancel', (_event, id) => downloads.cancelDownload(String(id)));
+    ipcMain.handle('downloads-save-image-edit', (_event, id, dataUrl) =>
+      downloads.saveImageEdit(String(id), String(dataUrl || ''))
+    );
+    ipcMain.handle('downloads-ingest-dropped-files', (_event, paths) =>
+      downloads.ingestDroppedPaths(paths)
+    );
+    // Drag nativo: se dispara desde el dragstart del tile en el renderer y se
+    // resuelve acá con webContents.startDrag (patrón "on", no invoke, para no
+    // bloquear el gesto).
+    ipcMain.on('downloads-drag-start', (event, id) => {
+      downloads.startNativeDrag(event.sender, String(id)).catch(() => {});
+    });
+
+    // Cajón mágico: comprimir/convertir archivos con ffmpeg. El resultado
+    // entra al mismo historial de descargas (progreso y toasts incluidos).
+    const magicDrawer = require('./magic-drawer');
+    ipcMain.handle('magic-transform', (_event, payload) =>
+      magicDrawer.transformFile(payload || {})
+    );
+  }
+
+  {
+    // Recibir archivos desde el teléfono (QR en el panel de descargas).
+    const phoneUpload = require('./phone-upload-server');
+    phoneUpload.startPhoneUploadServer().catch(() => {});
+    ipcMain.handle('phone-upload-get-info', () => phoneUpload.getConnectInfo());
+  }
+
+  ipcMain.handle('get-sticky-notes', () => loadStickyNotes());
+
+  ipcMain.handle('save-sticky-notes', (event, payload) => {
+    const saved = saveStickyNotes(payload);
+    broadcastStickyNotesChanged(event.sender);
+    return saved;
   });
 
 

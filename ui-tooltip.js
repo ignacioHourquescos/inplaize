@@ -3,7 +3,7 @@
 /**
  * Tooltip custom en DOM — reemplaza los tooltips nativos del SO (`title=""`).
  *
- * Motivo: las ventanas de UsualDesk son `frame: false + transparent + alwaysOnTop`
+ * Motivo: las ventanas de inplaize son `frame: false + transparent + alwaysOnTop`
  * y en varios casos con `setIgnoreMouseEvents` + mouse forwarding. Los tooltips
  * nativos de Chromium en Windows son controles ToolTip de Win32 que en estas
  * ventanas se pintan por encima de todas las aplicaciones y no se ocultan

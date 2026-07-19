@@ -78,12 +78,11 @@
   border-radius: 10px;
 }
 
-html.onboarding-active #dock-home-icon-row .dock-home-icon-tile.is-onboarding-target {
-  border-radius: 14px;
+html.onboarding-active #dock-home-menu-btn.is-onboarding-target {
+  background: rgba(167, 139, 250, 0.22) !important;
+  color: #ffffff !important;
 }
 
-/* Cuando el target es «Añadir acceso directo» en inicio, tintamos el botón
- * para que se vea con nitidez dentro del recuadro violeta del spotlight. */
 html.onboarding-active #dock-home-add-btn.is-onboarding-target {
   background: rgba(167, 139, 250, 0.22) !important;
   color: #ffffff !important;
@@ -92,16 +91,16 @@ html.onboarding-active #dock-home-add-btn.is-onboarding-target {
 /* Cuando el onboarding está activo, atenuamos otros elementos de la UI para
    que el ojo se vaya al target. La franja roja del borde se desactiva
    visualmente porque el spotlight ya marca la zona. */
-html.onboarding-active .dock-home-action-cell,
+html.onboarding-active .dock-home-menu-item,
 html.onboarding-active #quit-app-btn,
-html.onboarding-active #dock-win-close,
+html.onboarding-active #dock-home-menu-btn,
 html.onboarding-active #dock-home-btn {
   opacity: 0.35;
   transition: opacity 200ms ease-out;
 }
 
-html.onboarding-active .dock-home-action-cell:has(.is-onboarding-target),
-html.onboarding-active #dock-win-close.is-onboarding-target,
+html.onboarding-active .dock-home-menu-item:has(.is-onboarding-target),
+html.onboarding-active #dock-home-menu-btn.is-onboarding-target,
 html.onboarding-active #dock-home-btn.is-onboarding-target,
 html.onboarding-active #dock-home-add-btn.is-onboarding-target,
 html.onboarding-active #toggle-btn.is-onboarding-target {
@@ -211,6 +210,113 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ---- Paso "import-sessions": select de perfil + lista de accesos ---- */
+
+.onboarding-import-area {
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.onboarding-import-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(229, 231, 235, 0.85);
+}
+
+.onboarding-import-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(229, 231, 235, 0.92);
+}
+
+.onboarding-import-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f6f8;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.onboarding-import-row select option {
+  background: #14161b;
+  color: #f5f6f8;
+}
+
+.onboarding-import-list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.onboarding-import-item {
+  font-size: 13px;
+  color: rgba(229, 231, 235, 0.92);
+}
+
+.onboarding-import-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.onboarding-import-item input[type='checkbox'] {
+  accent-color: #8b5cf6;
+}
+
+.onboarding-import-item.is-disabled {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(229, 231, 235, 0.45);
+}
+
+.onboarding-import-note {
+  font-size: 11px;
+  color: rgba(167, 139, 250, 0.8);
+}
+
+.onboarding-import-btn {
+  align-self: stretch;
+}
+
+.onboarding-import-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+.onboarding-import-summary {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(124, 108, 255, 0.35);
+  background: rgba(124, 108, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(229, 231, 235, 0.92);
 }
 
 .onboarding-bubble-footer {
