@@ -349,7 +349,8 @@ async function openOrFocusTab(shortcut) {
       sandbox: true,
       partition,
       preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
-      backgroundThrottling: false,
+      /** Acceso en segundo plano: Chromium frena timers y animaciones para no gastar CPU. */
+      backgroundThrottling: true,
     },
   });
   try {

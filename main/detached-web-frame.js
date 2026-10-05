@@ -458,7 +458,8 @@ function createSubTabInHost(host, url, opts = {}) {
             sandbox: true,
             partition: opts.partition || state.partition,
             preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
-            backgroundThrottling: false,
+            /** Sub-pestaña en segundo plano: Chromium frena timers y animaciones para no gastar CPU. */
+            backgroundThrottling: true,
           },
         }
   );
@@ -721,7 +722,8 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
       sandbox: true,
       partition,
       preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
-      backgroundThrottling: false,
+      /** Acceso en segundo plano: Chromium frena timers y animaciones para no gastar CPU. */
+      backgroundThrottling: true,
     },
   });
   try {
