@@ -11,7 +11,8 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   windowMinimize: () => ipcRenderer.invoke('shell-window-minimize'),
   windowToggleMaximize: () => ipcRenderer.invoke('shell-window-toggle-maximize'),
   windowClose: () => ipcRenderer.invoke('shell-window-close'),
-  openDockWelcomeHome: () => ipcRenderer.invoke('dock-open-welcome-home'),
+  openDockWelcomeHome: (view) =>
+    ipcRenderer.invoke('dock-open-welcome-home', view === 'downloads' ? 'downloads' : 'todos'),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
   openSettings: () => ipcRenderer.invoke('chrome-open-settings'),
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),

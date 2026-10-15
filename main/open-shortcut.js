@@ -435,7 +435,7 @@ function wireWebWindowFocusTracking(win, mapKey) {
 }
 
 /**
- * Atajo global: enfoca la última ventana web de inplaze (o cualquiera abierta como respaldo).
+ * Atajo global: enfoca la última ventana web de inplaize (o cualquiera abierta como respaldo).
  * @returns {boolean}
  */
 function focusLastWebWindowFromHotkey() {

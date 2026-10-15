@@ -11,9 +11,9 @@
  *  - Reenviar inicio/progreso/fin al renderer del dock, que muestra toasts y un
  *    panel de historial (mismo patrón que las notificaciones in-app).
  *
- * Además, un watcher de la carpeta Descargas del sistema (`watchDownloadsFolder`)
+ * Además, un watcher de las carpetas Descargas y Escritorio (`watchDownloadsFolder`)
  * incorpora al historial cualquier archivo que aparezca ahí aunque no lo haya
- * bajado inplaize (Chrome, Quick Share, subidas desde el teléfono, etc.).
+ * bajado inplaize (Chrome, Quick Share, programas que guardan en el escritorio, etc.).
  *
  * El historial es en memoria: se pierde al cerrar la app (decisión del plan).
  */
@@ -23,6 +23,8 @@ const fs = require('fs');
 const { app, session, shell, BrowserWindow, nativeImage } = require('electron');
 
 const { getDockWindow } = require('./dock-window-bridge');
+const { appIconFile } = require('./app-identity');
+const { log } = require('./logger');
 
 /** Particiones ya enganchadas (evita registrar `will-download` dos veces). */
 const registeredPartitions = new Set();
@@ -294,7 +296,7 @@ function isPathTracked(fullPath) {
 }
 
 /* ---------------------------------------------------------------------------
- * Watcher de la carpeta Descargas del sistema.
+ * Watcher de Descargas y del Escritorio.
  * ------------------------------------------------------------------------- */
 
 /** Extensiones de archivos temporales de descargas en curso de otros programas. */
@@ -308,11 +310,20 @@ const TEMP_DOWNLOAD_EXTS = new Set([
   '.uploading', // subidas desde el teléfono (este mismo módulo)
 ]);
 
-/** ¿Nombre que debe ignorar el watcher? (temporales, ocultos, lock de Office). */
+/** Nombres de sistema que no son archivos del usuario (Escritorio y Descargas). */
+const IGNORED_WATCHER_NAMES = new Set(['desktop.ini', 'thumbs.db']);
+
+/** Accesos directos: en el Escritorio son íconos de programas, no archivos. */
+const IGNORED_WATCHER_EXTS = new Set(['.lnk', '.url']);
+
+/** ¿Nombre que debe ignorar el watcher? (temporales, ocultos, lock de Office, accesos). */
 function isIgnoredWatcherName(name) {
   const n = String(name || '');
   if (!n || n.startsWith('.') || n.startsWith('~$')) return true;
-  return TEMP_DOWNLOAD_EXTS.has(path.extname(n).toLowerCase());
+  if (IGNORED_WATCHER_NAMES.has(n.toLowerCase())) return true;
+  const ext = path.extname(n).toLowerCase();
+  if (IGNORED_WATCHER_EXTS.has(ext)) return true;
+  return TEMP_DOWNLOAD_EXTS.has(ext);
 }
 
 /** @type {Map<string, { timer: NodeJS.Timeout, lastSize: number, stableTicks: number }>} */
@@ -322,8 +333,9 @@ const pendingWatched = new Map();
  * Espera a que el archivo deje de crecer (otros navegadores lo escriben de a
  * pedazos) y recién ahí lo registra en el historial como completado.
  * @param {string} fullPath
+ * @param {string} [sourceName]
  */
-function trackWatchedFileWhenStable(fullPath) {
+function trackWatchedFileWhenStable(fullPath, sourceName) {
   if (pendingWatched.has(fullPath)) return;
   const entry = { timer: null, lastSize: -1, stableTicks: 0 };
   pendingWatched.set(fullPath, entry);
@@ -353,7 +365,7 @@ function trackWatchedFileWhenStable(fullPath) {
       addExternalDownload({
         filename: path.basename(fullPath),
         savePath: fullPath,
-        sourceName: 'Sistema',
+        sourceName: sourceName || 'Sistema',
         totalBytes: stat.size,
         state: 'completed',
       });
@@ -367,32 +379,24 @@ function trackWatchedFileWhenStable(fullPath) {
 let watcherStarted = false;
 
 /**
- * Observa la carpeta Descargas del sistema e incorpora al historial cualquier
- * archivo nuevo, venga de donde venga. Idempotente. Además siembra el
- * historial con los archivos más recientes ya presentes en la carpeta.
- * @param {{ seedCount?: number }} [opts]
+ * Siembra y observa una carpeta de usuario (solo el primer nivel).
+ * Los archivos nuevos quedan en el mismo historial que las descargas.
+ * @param {string} dir
+ * @param {{ seedCount: number, sourceName: string }} opts
  */
-function watchDownloadsFolder(opts = {}) {
-  if (watcherStarted) return;
-  watcherStarted = true;
-
-  let downloadsDir;
-  try {
-    downloadsDir = app.getPath('downloads');
-  } catch {
-    return;
-  }
+function watchUserFolder(dir, opts) {
+  const sourceName = opts.sourceName || 'Sistema';
+  const seedCount = opts.seedCount;
 
   // Siembra inicial: los N archivos más recientes, para que el panel no
   // arranque vacío (el historial vive en memoria y se pierde al cerrar).
-  const seedCount = Number.isFinite(opts.seedCount) ? opts.seedCount : 20;
   if (seedCount > 0) {
     try {
       const seeded = fs
-        .readdirSync(downloadsDir)
+        .readdirSync(dir)
         .filter((name) => !isIgnoredWatcherName(name))
         .map((name) => {
-          const full = path.join(downloadsDir, name);
+          const full = path.join(dir, name);
           try {
             const st = fs.statSync(full);
             return st.isFile() ? { full, name, mtime: st.mtimeMs, size: st.size } : null;
@@ -412,7 +416,7 @@ function watchDownloadsFolder(opts = {}) {
           filename: f.name,
           savePath: f.full,
           url: '',
-          sourceName: 'Sistema',
+          sourceName,
           state: 'completed',
           receivedBytes: f.size,
           totalBytes: f.size,
@@ -427,17 +431,52 @@ function watchDownloadsFolder(opts = {}) {
   }
 
   try {
-    fs.watch(downloadsDir, (eventType, filename) => {
+    fs.watch(dir, (_eventType, filename) => {
       if (!filename) return;
       const name = filename.toString();
       if (isIgnoredWatcherName(name)) return;
-      const fullPath = path.join(downloadsDir, name);
+      const fullPath = path.join(dir, name);
       if (isPathTracked(fullPath)) return;
       if (!fs.existsSync(fullPath)) return; // 'rename' también dispara al borrar
-      trackWatchedFileWhenStable(fullPath);
+      trackWatchedFileWhenStable(fullPath, sourceName);
     });
   } catch {
     /* fs.watch no disponible: el resto de la app sigue funcionando */
+  }
+}
+
+/**
+ * Observa Descargas y Escritorio e incorpora al historial cualquier archivo
+ * nuevo. Idempotente. Cada carpeta siembra sus propios N archivos más recientes,
+ * así un archivo del escritorio no queda tapado por descargas más nuevas.
+ * Lo que guarda la app (descargas, teléfono, cajón, soltar) sigue yendo a Descargas.
+ * @param {{ seedCount?: number }} [opts]
+ */
+function watchDownloadsFolder(opts = {}) {
+  if (watcherStarted) return;
+  watcherStarted = true;
+
+  const seedCount = Number.isFinite(opts.seedCount) ? opts.seedCount : 20;
+  /** @type {{ dir: string, sourceName: string }[]} */
+  const roots = [];
+  const seen = new Set();
+  const addRoot = (kind, sourceName) => {
+    let dir;
+    try {
+      dir = app.getPath(kind);
+    } catch {
+      return;
+    }
+    const norm = path.resolve(String(dir || '')).toLowerCase();
+    if (!norm || seen.has(norm)) return;
+    seen.add(norm);
+    roots.push({ dir, sourceName });
+  };
+  addRoot('downloads', 'Sistema');
+  addRoot('desktop', 'Escritorio');
+
+  for (const root of roots) {
+    watchUserFolder(root.dir, { seedCount, sourceName: root.sourceName });
   }
 }
 
@@ -560,40 +599,143 @@ function saveImageEdit(id, dataUrl) {
   }
 }
 
+/** True mientras DoDragDrop está en curso (el blur del dock no debe cerrar el panel). */
+let nativeDragActive = false;
+
+/**
+ * Tras el drag, el renderer manda setIgnoreMouse encolados durante DoDragDrop.
+ * Si los aplicamos, el dock fullscreen vuelve a tapar a WhatsApp.
+ */
+let passthroughFrozenUntil = 0;
+
+/** @type {((win: Electron.BrowserWindow | null) => void) | null} */
+let nativeDragEndHandler = null;
+
+function isNativeDragActive() {
+  return nativeDragActive;
+}
+
+function isPassthroughFrozen() {
+  return nativeDragActive || Date.now() < passthroughFrozenUntil;
+}
+
+/** @param {(win: Electron.BrowserWindow | null) => void} fn */
+function setNativeDragEndHandler(fn) {
+  nativeDragEndHandler = typeof fn === 'function' ? fn : null;
+}
+
+/** Icono chico y síncrono. startDrag no puede esperar una miniatura. */
+let cachedDragIcon = null;
+function dragIconSync() {
+  if (cachedDragIcon && !cachedDragIcon.isEmpty()) return cachedDragIcon;
+  try {
+    const img = nativeImage.createFromPath(appIconFile());
+    if (img && !img.isEmpty()) {
+      cachedDragIcon = img.resize({ width: 48, height: 48 });
+      return cachedDragIcon;
+    }
+  } catch {
+    /* sin ícono de app */
+  }
+  const size = 32;
+  const buf = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i += 1) {
+    buf[i * 4] = 0x6c;
+    buf[i * 4 + 1] = 0x5c;
+    buf[i * 4 + 2] = 0xfc;
+    buf[i * 4 + 3] = 0xff;
+  }
+  cachedDragIcon = nativeImage.createFromBitmap(buf, { width: size, height: size });
+  return cachedDragIcon;
+}
+
+/**
+ * Rectángulo del tile en coordenadas de la ventana. Fuera de esa región el
+ * HWND fullscreen del dock no existe para el mouse, así el drop cae en
+ * WhatsApp, el mail o el escritorio que se ven detrás.
+ * @param {Electron.BrowserWindow} win
+ * @param {{ x?: number, y?: number, width?: number, height?: number } | null} anchor
+ * @returns {{ x: number, y: number, width: number, height: number }}
+ */
+function dragHoleShape(win, anchor) {
+  const bounds = win.getBounds();
+  const maxW = Math.max(1, bounds.width);
+  const maxH = Math.max(1, bounds.height);
+  let x = Math.round(Number(anchor && anchor.x) || 0);
+  let y = Math.round(Number(anchor && anchor.y) || 0);
+  let width = Math.round(Number(anchor && anchor.width) || 0);
+  let height = Math.round(Number(anchor && anchor.height) || 0);
+  if (width < 8 || height < 8) return { x: 0, y: 0, width: 1, height: 1 };
+  x = Math.max(0, Math.min(x, maxW - 1));
+  y = Math.max(0, Math.min(y, maxH - 1));
+  width = Math.max(1, Math.min(width, maxW - x));
+  height = Math.max(1, Math.min(height, maxH - y));
+  return { x, y, width, height };
+}
+
 /**
  * Inicia un drag & drop nativo del archivo descargado (arrastrar desde el home
  * de descargas hacia una ventana web —WhatsApp, Gmail…— o cualquier app del
  * sistema, como si viniera del Explorador).
+ *
+ * Tiene que ser síncrono: en Windows `startDrag` llama a DoDragDrop y, si se
+ * espera una miniatura antes, el botón ya no cuenta como apretado y el drop
+ * llega vacío.
  * @param {Electron.WebContents} sender webContents que origina el drag
  * @param {string} id
- * @returns {Promise<{ ok: boolean, error?: string }>}
+ * @param {{ x?: number, y?: number, width?: number, height?: number } | null} [anchor]
+ * @returns {{ ok: boolean, error?: string }}
  */
-async function startNativeDrag(sender, id) {
+function startNativeDrag(sender, id, anchor) {
   const rec = findRecord(id);
   if (!rec || rec.state !== 'completed') return { ok: false, error: 'NOT_AVAILABLE' };
   if (!fs.existsSync(rec.savePath)) return { ok: false, error: 'FILE_MISSING' };
 
-  // Icono que acompaña al cursor: miniatura real del archivo (Windows/macOS la
-  // resuelve el shell para cualquier tipo); si falla, un placeholder mínimo.
-  let icon = null;
-  try {
-    icon = await nativeImage.createThumbnailFromPath(rec.savePath, { width: 64, height: 64 });
-  } catch {
-    /* sin miniatura disponible */
-  }
-  if (!icon || icon.isEmpty()) {
+  const win = BrowserWindow.fromWebContents(sender);
+  const icon = dragIconSync();
+  if (!icon || icon.isEmpty()) return { ok: false, error: 'NO_ICON' };
+
+  let shaped = false;
+  nativeDragActive = true;
+  if (
+    win &&
+    !win.isDestroyed() &&
+    process.platform === 'win32' &&
+    typeof win.setShape === 'function'
+  ) {
     try {
-      icon = await app.getFileIcon(rec.savePath, { size: 'normal' });
-    } catch {
-      icon = nativeImage.createEmpty();
+      win.setShape([dragHoleShape(win, anchor)]);
+      shaped = true;
+    } catch (err) {
+      log(`downloads: setShape falló: ${err && err.message ? err.message : err}`);
     }
   }
-
   try {
-    sender.startDrag({ file: rec.savePath, icon });
+    sender.startDrag({
+      file: rec.savePath,
+      files: [rec.savePath],
+      icon,
+    });
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: String((err && err.message) || err) };
+    const error = String((err && err.message) || err);
+    log(`downloads: startDrag falló: ${error}`);
+    return { ok: false, error };
+  } finally {
+    passthroughFrozenUntil = Date.now() + 200;
+    if (shaped && win && !win.isDestroyed()) {
+      try {
+        win.setShape([]);
+      } catch {
+        /* noop */
+      }
+    }
+    nativeDragActive = false;
+    try {
+      if (nativeDragEndHandler) nativeDragEndHandler(win || null);
+    } catch {
+      /* noop */
+    }
   }
 }
 
@@ -696,5 +838,8 @@ module.exports = {
   clear,
   saveImageEdit,
   startNativeDrag,
+  isNativeDragActive,
+  isPassthroughFrozen,
+  setNativeDragEndHandler,
   ingestDroppedPaths,
 };

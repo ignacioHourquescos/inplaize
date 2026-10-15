@@ -6,10 +6,13 @@ const fs = require('fs');
 const path = require('path');
 const { app, screen, BrowserWindow, shell, powerMonitor } = require('electron');
 const { log } = require('./logger');
+const { APP_ID, appIconIco, installWindowsTaskbarShortcut } = require('./app-identity');
 
+/** Nombre fijo antes de ready: si no, Windows muestra el del ejecutable (Electron) o uno viejo. */
+app.setName('inplaize');
 /** Windows: nombre/icono correctos en toasts y mejor correlación ventana ↔ notificación (mismo appId que electron-builder). */
 if (process.platform === 'win32') {
-  app.setAppUserModelId('com.inplaize.app');
+  app.setAppUserModelId(APP_ID);
 }
 const { createDockWindow } = require('./dock-window');
 const { registerIpcHandlers } = require('./ipc-handlers');
@@ -51,6 +54,9 @@ function enableAutoStart() {
         target: exe,
         cwd: path.dirname(exe),
         description: 'inplaize',
+        icon: appIconIco(),
+        iconIndex: 0,
+        appUserModelId: APP_ID,
       };
       const op = fs.existsSync(shortcutPath) ? 'update' : 'create';
       const ok = shell.writeShortcutLink(shortcutPath, op, options);
@@ -75,6 +81,10 @@ function enableAutoStart() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === 'win32' && !app.isPackaged) {
+    const ok = installWindowsTaskbarShortcut();
+    log(`Acceso de barra de tareas (inplaize): ok=${ok}`);
+  }
   const { raiseAppFromGlobalHotkey } = registerIpcHandlers(state);
   log(`App started — userData: ${app.getPath('userData')}`);
   enableAutoStart();

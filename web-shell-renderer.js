@@ -86,7 +86,7 @@ async function ingestDroppedFilesFromEvent(e) {
   if (!paths.length || typeof window.usualDeskShell.ingestDroppedFiles !== 'function') return false;
   await window.usualDeskShell.ingestDroppedFiles(paths);
   if (typeof window.usualDeskShell.openDockWelcomeHome === 'function') {
-    await window.usualDeskShell.openDockWelcomeHome();
+    await window.usualDeskShell.openDockWelcomeHome('downloads');
   }
   return true;
 }
@@ -288,7 +288,14 @@ refreshChromeFromMain();
 const shellHomeBtn = document.getElementById('shell-home-btn');
 if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
   shellHomeBtn.addEventListener('click', () => {
-    window.usualDeskShell.openDockWelcomeHome().catch(() => {});
+    window.usualDeskShell.openDockWelcomeHome('todos').catch(() => {});
+  });
+}
+
+const shellDownloadsBtn = document.getElementById('shell-downloads-btn');
+if (shellDownloadsBtn && window.usualDeskShell.openDockWelcomeHome) {
+  shellDownloadsBtn.addEventListener('click', () => {
+    window.usualDeskShell.openDockWelcomeHome('downloads').catch(() => {});
   });
 }
 

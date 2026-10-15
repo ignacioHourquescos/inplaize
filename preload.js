@@ -53,7 +53,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   },
   notifyShortcutsEditMode: (on) => ipcRenderer.invoke('notify-shortcuts-edit-mode', on === true),
   onDockOpenWelcomeHome: (callback) => {
-    ipcRenderer.on('dock-open-welcome-home', () => callback());
+    ipcRenderer.on('dock-open-welcome-home', (_event, view) => callback(view));
   },
   onExitShortcutEditMode: (callback) => {
     ipcRenderer.on('exit-shortcut-edit-mode', () => callback());
@@ -114,7 +114,10 @@ contextBridge.exposeInMainWorld('usualDesk', {
   saveDownloadImageEdit: (id, dataUrl) => ipcRenderer.invoke('downloads-save-image-edit', id, dataUrl),
   ingestDroppedFiles: (paths) => ipcRenderer.invoke('downloads-ingest-dropped-files', paths),
   getDownloadThumbnail: (id) => ipcRenderer.invoke('downloads-get-thumbnail', id),
-  startDownloadDrag: (id) => ipcRenderer.send('downloads-drag-start', id),
+  startDownloadDrag: (id, anchor) => ipcRenderer.send('downloads-drag-start', {
+    id,
+    anchor: anchor || null,
+  }),
   onDownloadStarted: (callback) => {
     ipcRenderer.on('dock-download-started', (_event, payload) => callback(payload));
   },
@@ -144,5 +147,12 @@ contextBridge.exposeInMainWorld('usualDesk', {
   saveStickyNotes: (payload) => ipcRenderer.invoke('save-sticky-notes', payload),
   onStickyNotesChanged: (callback) => {
     ipcRenderer.on('sticky-notes-changed', () => callback());
+  },
+
+  /* ---- Tareas (pantalla del icono de inplaize) ---- */
+  getTodos: () => ipcRenderer.invoke('get-todos'),
+  saveTodos: (payload) => ipcRenderer.invoke('save-todos', payload),
+  onTodosChanged: (callback) => {
+    ipcRenderer.on('todos-changed', () => callback());
   },
 });

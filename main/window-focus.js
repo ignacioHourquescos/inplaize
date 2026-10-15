@@ -85,4 +85,43 @@ function forceWindowForeground(win) {
   }
 }
 
-module.exports = { forceWindowForeground };
+/**
+ * Trae al frente el dock sin apagar always-on-top. `forceWindowForeground`
+ * lo deja detrás de la ventana web.
+ * @param {Electron.BrowserWindow} win
+ */
+function raiseAlwaysOnTopWindow(win) {
+  if (!win || win.isDestroyed()) return;
+  try {
+    if (win.isMinimized()) win.restore();
+  } catch {
+    /* noop */
+  }
+  try {
+    win.show();
+  } catch {
+    /* noop */
+  }
+  try {
+    if (process.platform === 'win32') win.setAlwaysOnTop(true, 'screen-saver');
+    else win.setAlwaysOnTop(true);
+  } catch {
+    try {
+      win.setAlwaysOnTop(true);
+    } catch {
+      /* noop */
+    }
+  }
+  try {
+    win.moveTop();
+  } catch {
+    /* noop */
+  }
+  try {
+    win.focus();
+  } catch {
+    /* noop */
+  }
+}
+
+module.exports = { forceWindowForeground, raiseAlwaysOnTopWindow };

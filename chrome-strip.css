@@ -160,6 +160,12 @@
   background: #8b5cf6;
 }
 
+.dock-downloads-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
 .shell-strip-badge {
   position: absolute;
   top: 1px;

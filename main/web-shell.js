@@ -12,6 +12,7 @@ const {
 const { loadShortcuts } = require('./shortcuts-store');
 const { forceWindowForeground } = require('./window-focus');
 const { lockWindowZoom } = require('./lock-window-zoom');
+const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 
 /** Altura de la franja superior (accesos + botones ventana). Debe coincidir con --ud-chrome-strip-h. */
 const SHELL_CHROME_HEIGHT = 58;
@@ -212,8 +213,8 @@ function ensureShellWindow() {
     width: wa.width,
     height: wa.height,
     show: false,
-    title: 'inplaize — Web',
-    icon: path.join(root, 'assets', 'icon.png'),
+    title: APP_NAME,
+    icon: appIconFile(),
     frame: !useFramelessChrome,
     backgroundColor: '#1e1e24',
     webPreferences: {
@@ -232,6 +233,8 @@ function ensureShellWindow() {
       /* noop */
     }
   }
+
+  brandWindow(shellWin);
 
   shellWin.on('maximize', sendShellMaximizedState);
   shellWin.on('unmaximize', sendShellMaximizedState);

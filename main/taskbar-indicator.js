@@ -5,6 +5,7 @@ const { BrowserWindow, app, screen } = require('electron');
 const { log } = require('./logger');
 const { dockWindowBoundsForWorkArea } = require('./window-bounds');
 const { loadAppSettings } = require('./app-settings-store');
+const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 
 const WIN_SIZE = 36;
 
@@ -156,6 +157,8 @@ function createTaskbarIndicator() {
     y: 0,
     width: WIN_SIZE,
     height: WIN_SIZE,
+    title: APP_NAME,
+    icon: appIconFile(),
     show: false,
     frame: false,
     transparent: true,
@@ -173,6 +176,8 @@ function createTaskbarIndicator() {
       backgroundThrottling: false,
     },
   });
+
+  brandWindow(win);
 
   try {
     win.setAlwaysOnTop(true, 'pop-up-menu');

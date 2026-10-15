@@ -1,8 +1,8 @@
 'use strict';
 
-const fs = require('fs');
 const path = require('path');
 const { BrowserWindow, BrowserView, WebContentsView, session, app, ipcMain } = require('electron');
+const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 const { webMapKey } = require('./web-map-key');
 const { loadShortcuts } = require('./shortcuts-store');
 const { lockWindowZoom } = require('./lock-window-zoom');
@@ -25,30 +25,6 @@ function iconFromShortcut(shortcut) {
   if (!shortcut || typeof shortcut !== 'object') return '';
   const icon = shortcut.icon;
   return typeof icon === 'string' ? icon.trim() : '';
-}
-
-/**
- * @param {import('./shortcuts-store').Shortcut | Record<string, unknown>} shortcut
- * @returns {string | null}
- */
-function resolveShortcutIconPathForHost(shortcut) {
-  if (!shortcut || typeof shortcut !== 'object') return null;
-  const icon = typeof shortcut.icon === 'string' ? shortcut.icon.trim() : '';
-  if (!icon || /^https?:\/\//i.test(icon) || icon.startsWith('data:')) return null;
-  let root;
-  try {
-    root = app.getAppPath();
-  } catch {
-    root = path.join(__dirname, '..');
-  }
-  const normalized = icon.replace(/\\/g, '/');
-  const abs = path.isAbsolute(icon) ? icon : path.join(root, normalized.replace(/^\//, ''));
-  try {
-    if (fs.existsSync(abs) && /\.(png|ico|jpe?g|gif|webp)$/i.test(abs)) return abs;
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 function buildDetachedChromePayload(activeMapKey) {
@@ -679,8 +655,8 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
     fullscreen: false,
     fullscreenable: false,
     frame: !useFramelessChrome,
-    title: shortcut.name || 'inplaze',
-    icon: path.join(root, 'assets', 'icon.png'),
+    title: APP_NAME,
+    icon: appIconFile(),
     backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(root, 'detached-web-frame-preload.js'),
@@ -693,17 +669,9 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
 
   host.__usualDeskDetachedChromeHost = true;
   host.__usualDeskDetachedOwnMapKey = mapKey;
+  brandWindow(host);
 
   setWebWindowForMapKey(mapKey, host);
-
-  const iconAbs = resolveShortcutIconPathForHost(shortcut);
-  if (iconAbs) {
-    try {
-      host.setIcon(iconAbs);
-    } catch {
-      /* noop */
-    }
-  }
 
   try {
     host.removeMenu();

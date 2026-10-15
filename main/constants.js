@@ -2,9 +2,8 @@
 
 const DOCK_WINDOW_WIDTH = 320;
 /**
- * Izq./der. con panel cerrado: franja superior del BrowserWindow del dock.
- * El panel se muestra/oculta con el atajo global (Ctrl+Alt+D / Ctrl+Mayús+D).
- * Esta franja puede ser mínima (1 px).
+ * Ya no define el alto de la ventana. Izquierda/derecha ocupa siempre el área
+ * de trabajo; encogerla a 1 px y estirarla al abrir el panel era lento en Windows.
  */
 const DOCK_COLLAPSED_TOP_HEIGHT = 1;
 /**

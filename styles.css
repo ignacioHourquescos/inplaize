@@ -1,4 +1,5 @@
 @import url('chrome-strip.css');
+@import url('notion-page.css');
 
 * {
   margin: 0;
@@ -406,39 +407,45 @@ html[data-dock-position='center'] #sidebar.drop-target-active {
   -webkit-app-region: no-drag;
 }
 
-/* Primer control de la franja: volver a la bienvenida (logo + acciones). */
-#dock-home-btn.dock-home-strip-btn {
+/* Logo de inplaize (tareas) + flecha (descargas), a la izquierda de los accesos. */
+.dock-strip-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--ud-chrome-strip-gap);
   -webkit-app-region: no-drag;
 }
 
-html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn {
+.dock-home-strip-btn {
+  -webkit-app-region: no-drag;
+}
+
+html[data-dock-layout='modal'] .dock-strip-lead {
   grid-column: 1;
   grid-row: 1;
   align-self: center;
   justify-self: start;
 }
 
-html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn.shell-shortcut-item {
+html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item {
   border-color: var(--border);
   background: var(--bg-card);
   color: var(--text-primary);
 }
 
-html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn.shell-shortcut-item:hover {
+html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item:hover {
   background: var(--bg-card-hover);
 }
 
-html[data-dock-layout='modal'] #dock-home-btn.dock-home-strip-btn.shell-shortcut-item.is-active {
+html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item.is-active {
   border-color: var(--accent);
   background: rgba(79, 70, 229, 0.08);
   box-shadow: none;
 }
 
-html[data-dock-layout='topbar'] #dock-home-btn.dock-home-strip-btn {
+html[data-dock-layout='topbar'] .dock-strip-lead {
   flex-shrink: 0;
   align-self: center;
   margin-left: var(--ud-chrome-strip-pad-x);
-  border-radius: 10px;
 }
 
 /* ---- Shortcuts Container ---- */
@@ -1656,8 +1663,8 @@ html[data-dock-layout='topbar'] #app {
 }
 
 /*
- * En topbar la ventana del dock es una franja mínima (ver DOCK_COLLAPSED_TOP_HEIGHT).
- * Para abrir el panel usá Ctrl+Alt+D (o Ctrl+Mayús+D).
+ * El indicador de borde no se usa en topbar. El panel se abre con Descargas/Tareas
+ * o con Ctrl+Alt+D (o Ctrl+Mayús+D).
  */
 html[data-dock-layout='topbar'] #toggle-area {
   left: 0;
@@ -2112,7 +2119,7 @@ html[data-dock-layout='topbar'] .dock-viewport {
     radial-gradient(circle at 78% 88%, rgba(99, 102, 241, 0.06), transparent 48%);
 }
 
-/* Pantalla principal: grilla de descargas + visor de archivos (derecha) */
+/* Pantalla principal: tareas (logo) o descargas + visor (flecha). */
 #dock-home-panel {
   flex: 1 1 auto;
   min-height: 0;
@@ -2127,6 +2134,15 @@ html[data-dock-layout='topbar'] .dock-viewport {
   position: relative;
   z-index: 0;
   -webkit-app-region: no-drag;
+}
+
+#dock-home-panel[data-home-view='todos'] > #downloads-home,
+#dock-home-panel[data-home-view='todos'] > #image-drawer {
+  display: none;
+}
+
+#dock-home-panel[data-home-view='downloads'] > #todo-home {
+  display: none;
 }
 
 /* Barra vertical con acciones + cerrar, pegada a la izquierda.
@@ -3256,6 +3272,21 @@ html[data-loose-nav='on'] #dock-inline-editor {
   z-index: 1;
 }
 
+.download-tile.is-draggable {
+  cursor: grab;
+}
+
+.download-tile.is-draggable:active {
+  cursor: grabbing;
+}
+
+.download-tile-thumb,
+.download-tile-ext,
+.download-tile-label {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 /* Vista previa (imágenes): cubre todo el tile. */
 .download-tile-thumb {
   position: absolute;
@@ -3890,4 +3921,3 @@ html[data-loose-nav='on'] #dock-inline-editor {
   0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.6); }
   50% { box-shadow: 0 0 0 7px rgba(79, 70, 229, 0); }
 }
-

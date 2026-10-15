@@ -3,23 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>inplaize — Descargar</title>
-  <meta name="description" content="inplaize: tu dock flotante de accesos directos para el escritorio. Descarga para Windows." />
-
-  <!-- Open Graph / link previews -->
+  <title>inplaize</title>
+  <meta
+    name="description"
+    content="Tenés demasiadas ventanas, suena una notificación y no sabés de dónde viene. inplaize deja cada cosa en su lugar."
+  />
+  <meta name="theme-color" content="#0b0c0f" />
   <meta property="og:title" content="inplaize" />
-  <meta property="og:description" content="Dock flotante de accesos directos para tu escritorio." />
+  <meta
+    property="og:description"
+    content="Tenés demasiadas ventanas, suena una notificación y no sabés de dónde viene."
+  />
   <meta property="og:type" content="website" />
-
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%236d28d9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='56' fill='url(%23g)'/%3E%3Crect x='74' y='74' width='108' height='108' rx='30' fill='rgba(255,255,255,0.95)'/%3E%3Ccircle cx='128' cy='128' r='20' fill='%238b5cf6'/%3E%3C/svg%3E" />
-
+  <link rel="preload" as="image" href="windows_caos.webp" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-    rel="stylesheet"
-  />
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *,
     *::before,
@@ -29,14 +29,14 @@
 
     :root {
       --bg: #0b0c0f;
-      --bg-elev: #14161b;
-      --border: #23262d;
-      --text: #f5f6f8;
-      --text-dim: #9aa0aa;
+      --text: #f4f5f7;
+      --text-dim: #9aa1ab;
+      --text-mid: #c5cad3;
+      --line: #2a2e37;
       --accent: #8b5cf6;
-      --accent-hover: #a78bfa;
-      --radius: 14px;
-      --max-width: 560px;
+      --accent-soft: #a78bfa;
+      --max: 680px;
+      --interval: 7s;
     }
 
     html,
@@ -47,46 +47,68 @@
 
     body {
       min-height: 100vh;
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      font-size: 16px;
-      line-height: 1.55;
-      -webkit-font-smoothing: antialiased;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 48px 20px;
-      background-image:
-        radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.10), transparent 50%),
-        radial-gradient(circle at 80% 100%, rgba(99, 102, 241, 0.08), transparent 50%);
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
     }
 
-    main {
-      width: 100%;
-      max-width: var(--max-width);
-      text-align: center;
+    .scene-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-color: var(--bg);
+      background-image:
+        linear-gradient(180deg, rgba(11, 12, 15, 0.45), transparent 12%, transparent 76%, rgba(11, 12, 15, 0.55)),
+        radial-gradient(ellipse 42% 56% at 50% 46%, rgba(11, 12, 15, 0.78), rgba(11, 12, 15, 0.22) 58%, rgba(11, 12, 15, 0.04)),
+        url("windows_caos.webp");
+      background-repeat: no-repeat;
+      background-position: center, center, center center;
+      background-size: cover, cover, cover;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--accent-soft);
+      outline-offset: 3px;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      width: min(var(--max), calc(100% - 40px));
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 28px 0 32px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .logo {
-      width: 72px;
-      height: 72px;
-      margin: 0 auto 28px;
-      border-radius: 18px;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
       background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow:
-        0 10px 30px rgba(139, 92, 246, 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.28);
     }
 
     .logo-mark {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
       background: rgba(255, 255, 255, 0.95);
       position: relative;
     }
@@ -96,135 +118,257 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      transform: translate(-50%, -50%);
-      width: 6px;
-      height: 6px;
+      width: 4px;
+      height: 4px;
       border-radius: 50%;
       background: var(--accent);
+      transform: translate(-50%, -50%);
+    }
+
+    .brand {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--text-mid);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 36px 0 12px;
+    }
+
+    .slides {
+      display: grid;
+    }
+
+    .slide {
+      grid-area: 1 / 1;
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .slide.is-active {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .slide.is-active {
+        transition: none;
+      }
+    }
+
+    .kicker {
+      margin: 0 0 18px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-soft);
     }
 
     h1 {
-      font-size: 42px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin: 0 0 12px;
-    }
-
-    .tagline {
-      font-size: 18px;
-      color: var(--text-dim);
-      margin: 0 0 36px;
-      max-width: 440px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    .download-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px 28px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 17px;
-      font-weight: 600;
-      text-decoration: none;
-      border-radius: var(--radius);
-      border: none;
-      cursor: pointer;
-      transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
-    }
-
-    .download-btn:hover {
-      background: var(--accent-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 12px 28px rgba(139, 92, 246, 0.45);
-    }
-
-    .download-btn:active {
-      transform: translateY(0);
-    }
-
-    .download-btn svg {
-      width: 20px;
-      height: 20px;
-    }
-
-    .meta {
-      margin-top: 18px;
-      font-size: 14px;
-      color: var(--text-dim);
-    }
-
-    .meta strong {
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    .meta-sep {
-      margin: 0 8px;
-      opacity: 0.5;
-    }
-
-    .info-card {
-      margin-top: 48px;
-      padding: 20px 24px;
-      background: var(--bg-elev);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      text-align: left;
-      font-size: 14px;
-      color: var(--text-dim);
-    }
-
-    .info-card h2 {
-      margin: 0 0 10px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .info-card ol {
       margin: 0;
-      padding-left: 20px;
+      max-width: 16em;
+      font-size: clamp(34px, 5.4vw, 56px);
+      font-weight: 600;
+      letter-spacing: -0.035em;
+      line-height: 1.08;
+      text-shadow: 0 2px 24px rgba(0, 0, 0, 0.55);
     }
 
-    .info-card li + li {
-      margin-top: 6px;
+    .scene {
+      margin: 18px 0 0;
+      max-width: 34em;
+      font-size: clamp(18px, 2.1vw, 22px);
+      line-height: 1.45;
+      color: var(--text-mid);
+    }
+
+    .answer {
+      margin: 28px 0 0;
+      padding-left: 16px;
+      border-left: 2px solid rgba(139, 92, 246, 0.75);
+      max-width: 36em;
+      font-size: 16px;
+      line-height: 1.55;
+      color: var(--text-dim);
+    }
+
+    kbd {
+      font-family: inherit;
+      font-size: 0.92em;
+      font-weight: 600;
+      color: var(--text-mid);
+      padding: 0.05em 0.4em;
+      border: 1px solid #3a3f4a;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: #16181d;
+    }
+
+    .keys {
+      white-space: nowrap;
+    }
+
+    .keys kbd + kbd {
+      margin-left: 0.28em;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 32px;
+    }
+
+    .progress {
+      width: 88px;
+      height: 2px;
+      border-radius: 99px;
+      background: #2c313b;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+
+    .progress > span {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: var(--accent-soft);
+      transform-origin: left center;
+    }
+
+    .progress > span.is-running {
+      animation: fill var(--interval) linear forwards;
+    }
+
+    .progress > span.is-paused {
+      animation-play-state: paused;
+    }
+
+    @keyframes fill {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .progress {
+        display: none;
+      }
+    }
+
+    .dots {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      padding: 0;
+      border: 0;
+      border-radius: 99px;
+      background: #3a404b;
+      cursor: pointer;
+    }
+
+    .dot[aria-current="true"] {
+      width: 22px;
+      background: var(--accent-soft);
+    }
+
+    .nav,
+    .pause {
+      appearance: none;
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .nav {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+    }
+
+    .nav svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .nav:hover,
+    .pause:hover {
+      color: var(--text);
+      border-color: #454b57;
+    }
+
+    .pause {
+      margin-left: 8px;
+      padding: 7px 12px;
+      font-size: 13px;
     }
 
     footer {
-      margin-top: 48px;
+      margin-top: 40px;
+    }
+
+    .download {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(139, 92, 246, 0.32);
+    }
+
+    .download:hover {
+      background: #7c3aed;
+    }
+
+    .download svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .meta,
+    .note {
+      margin: 10px 0 0;
       font-size: 13px;
       color: var(--text-dim);
-      text-align: center;
+      max-width: 42em;
     }
 
-    footer a {
-      color: var(--text-dim);
-      text-decoration: none;
-      border-bottom: 1px solid transparent;
-      transition: border-color 0.15s ease, color 0.15s ease;
+    .note strong {
+      color: var(--text-mid);
+      font-weight: 600;
     }
 
-    footer a:hover {
-      color: var(--text);
-      border-bottom-color: var(--text-dim);
-    }
-
-    @media (max-width: 480px) {
-      h1 {
-        font-size: 32px;
+    @media (max-width: 640px) {
+      .wrap {
+        width: min(100% - 32px, var(--max));
       }
 
-      .tagline {
-        font-size: 16px;
+      .controls {
+        flex-wrap: wrap;
       }
 
-      .download-btn {
+      .download {
         width: 100%;
         justify-content: center;
       }
@@ -232,59 +376,184 @@
   </style>
 </head>
 <body>
-  <main>
-    <div class="logo" aria-hidden="true">
-      <div class="logo-mark"></div>
-    </div>
+  <div class="scene-bg" aria-hidden="true"></div>
+  <div class="wrap">
+    <header>
+      <div class="logo" aria-hidden="true"><div class="logo-mark"></div></div>
+      <div class="brand">inplaize</div>
+    </header>
 
-    <h1>inplaize</h1>
-    <p class="tagline">
-      Tu dock flotante de accesos directos para el escritorio. Abrí webs y programas
-      sin desordenar la pantalla.
-    </p>
+    <main>
+      <div
+        class="deck"
+        aria-roledescription="carrusel"
+        aria-label="Situaciones en el escritorio"
+      >
+        <div class="slides">
+          <section class="slide is-active" data-slide="0" aria-hidden="false">
+            <p class="kicker">Las ventanas</p>
+            <h1>Tenés Gmail, WhatsApp, el doc y Chrome.</h1>
+            <p class="scene">Pasás con Alt+Tab y no sabés cuál es cuál. Cerrás una y se te van todas.</p>
+            <p class="answer">Cada cosa queda en su propia ventana, con su icono. La cerrás sola. Con <span class="keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></span> volvés a la última.</p>
+          </section>
 
-    <a
-      class="download-btn"
-      href="https://github.com/ignacioHourquescos/inplaize/releases/latest/download/inplaize.Setup.1.3.1.exe"
-      download
-    >
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path
-          d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      Descargar para Windows
-    </a>
+          <section class="slide" data-slide="1" aria-hidden="true" inert>
+            <p class="kicker">El sonido</p>
+            <h1>Suena una notificación.</h1>
+            <p class="scene">Puede ser el mail, el grupo, o una pestaña que ni recordabas que estaba abierta.</p>
+            <p class="answer">El aviso aparece en el panel y dice de qué ventana viene. Si una te hincha, la silenciás a ella. El resto sigue sonando.</p>
+          </section>
 
-    <div class="meta">
-      <strong>v1.3.1</strong>
-      <span class="meta-sep">·</span>
-      <span>Windows 10/11</span>
-      <span class="meta-sep">·</span>
-      <span>~198&nbsp;MB</span>
-    </div>
+          <section class="slide" data-slide="2" aria-hidden="true" inert>
+            <p class="kicker">Anotar</p>
+            <h1>Se te ocurre algo.</h1>
+            <p class="scene">Abrís el bloc, o una pestaña, o no lo anotás.</p>
+            <p class="answer">En el inicio hay un renglón: escribís y queda ahí. Si hace falta, una nota en la pantalla.</p>
+          </section>
+        </div>
 
-    <section class="info-card">
-      <h2>¿Cómo instalar?</h2>
-      <ol>
-        <li>Hacé clic en <em>Descargar para Windows</em>.</li>
-        <li>
-          Abrí el archivo <code>inplaize Setup 1.3.1.exe</code>. Si Windows
-          muestra una advertencia de SmartScreen, hacé clic en
-          <strong>Más información</strong> → <strong>Ejecutar de todas formas</strong>
-          (la app no está firmada con certificado de pago).
-        </li>
-        <li>Seguí los pasos del instalador. Listo.</li>
-      </ol>
-    </section>
+        <div class="controls">
+          <button type="button" class="nav" data-dir="-1" aria-label="Anterior">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div class="progress" aria-hidden="true"><span id="progress"></span></div>
+          <div class="dots">
+            <button type="button" class="dot" data-go="0" aria-current="true" aria-label="Las ventanas"></button>
+            <button type="button" class="dot" data-go="1" aria-label="El sonido"></button>
+            <button type="button" class="dot" data-go="2" aria-label="Anotar"></button>
+          </div>
+          <button type="button" class="nav" data-dir="1" aria-label="Siguiente">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button type="button" class="pause" id="pause" aria-pressed="false">Pausar</button>
+        </div>
+      </div>
 
-    <footer>
-      Hecho con cariño · <a href="mailto:tu@email.com">Contacto</a>
+      <footer>
+      <a
+        class="download"
+        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.3.1/inplaize.Setup.1.3.1.exe"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Descargar para Windows
+      </a>
+      <p class="meta">v1.3.1 · Windows 10/11 · ~124 MB</p>
+      <p class="note">
+        Se descarga como <strong>inplaize.Setup.1.3.1.exe</strong>.
+        Si Windows avisa, elegí <strong>Más información</strong> y después <strong>Ejecutar de todas formas</strong>.
+      </p>
     </footer>
-  </main>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var INTERVAL = 7000;
+      var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+      var dots = Array.prototype.slice.call(document.querySelectorAll('.dot'));
+      var bar = document.getElementById('progress');
+      var pauseBtn = document.getElementById('pause');
+      var slidesEl = document.querySelector('.slides');
+      var index = 0;
+      var pausedByUser = false;
+      var pausedByHover = false;
+      var pausedByHidden = false;
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function show(next) {
+        index = (next + slides.length) % slides.length;
+        slides.forEach(function (slide, i) {
+          var on = i === index;
+          slide.classList.toggle('is-active', on);
+          slide.setAttribute('aria-hidden', on ? 'false' : 'true');
+          if (on) slide.removeAttribute('inert');
+          else slide.setAttribute('inert', '');
+        });
+        dots.forEach(function (dot, i) {
+          if (i === index) dot.setAttribute('aria-current', 'true');
+          else dot.removeAttribute('aria-current');
+        });
+        restartBar();
+      }
+
+      function autoplayOn() {
+        return !reduce && !pausedByUser && !pausedByHover && !pausedByHidden;
+      }
+
+      function restartBar() {
+        bar.classList.remove('is-running', 'is-paused');
+        void bar.offsetWidth;
+        if (!autoplayOn() && (reduce || pausedByUser)) return;
+        bar.classList.add('is-running');
+        if (!autoplayOn()) bar.classList.add('is-paused');
+      }
+
+      function syncPause() {
+        if (autoplayOn()) bar.classList.remove('is-paused');
+        else bar.classList.add('is-paused');
+        pauseBtn.setAttribute('aria-pressed', pausedByUser ? 'true' : 'false');
+        pauseBtn.textContent = pausedByUser ? 'Seguir' : 'Pausar';
+      }
+
+      bar.addEventListener('animationend', function (event) {
+        if (event.animationName !== 'fill') return;
+        if (!autoplayOn()) return;
+        show(index + 1);
+      });
+
+      dots.forEach(function (dot) {
+        dot.addEventListener('click', function () {
+          show(Number(dot.getAttribute('data-go')));
+        });
+      });
+
+      Array.prototype.forEach.call(document.querySelectorAll('.nav'), function (btn) {
+        btn.addEventListener('click', function () {
+          show(index + Number(btn.getAttribute('data-dir')));
+        });
+      });
+
+      pauseBtn.addEventListener('click', function () {
+        pausedByUser = !pausedByUser;
+        if (!pausedByUser && !bar.classList.contains('is-running')) restartBar();
+        syncPause();
+      });
+
+      slidesEl.addEventListener('mouseenter', function () {
+        pausedByHover = true;
+        syncPause();
+      });
+      slidesEl.addEventListener('mouseleave', function () {
+        pausedByHover = false;
+        syncPause();
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        var tag = (event.target && event.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        event.preventDefault();
+        show(index + (event.key === 'ArrowRight' ? 1 : -1));
+      });
+
+      document.addEventListener('visibilitychange', function () {
+        pausedByHidden = document.hidden;
+        syncPause();
+      });
+
+      if (reduce) {
+        pauseBtn.hidden = true;
+        bar.classList.remove('is-running');
+      } else {
+        restartBar();
+      }
+    })();
+  </script>
 </body>
 </html>

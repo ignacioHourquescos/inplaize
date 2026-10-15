@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>inplaze</title>
+  <title>inplaize</title>
   <link rel="stylesheet" href="shell-home-menu.css" />
   <link rel="stylesheet" href="web-shell.css" />
 </head>
@@ -13,9 +13,24 @@
       type="button"
       id="shell-home-btn"
       class="shell-home-strip-btn shell-shortcut-item"
-      aria-label="Abrir inicio en el panel"
+      data-tooltip="Tareas"
+      data-tooltip-placement="bottom"
+      aria-label="Abrir tareas"
     >
       <span class="dock-home-logo-mark" aria-hidden="true"></span>
+    </button>
+    <button
+      type="button"
+      id="shell-downloads-btn"
+      class="shell-downloads-strip-btn shell-shortcut-item"
+      data-tooltip="Descargas"
+      data-tooltip-placement="bottom"
+      aria-label="Abrir descargas"
+    >
+      <svg class="dock-downloads-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
     </button>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos"></div>
     <div class="shell-win-btns" aria-label="Controles de ventana">

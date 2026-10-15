@@ -98,7 +98,7 @@ const SHELL_HOME_MENU_DRAWER_HTML = `
     <span class="dock-home-menu-drawer-title">Menú</span>
     <button type="button" id="dock-home-menu-close" class="dock-home-menu-close" aria-label="Cerrar menú">
       <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </button>
   </div>

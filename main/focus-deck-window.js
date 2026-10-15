@@ -11,6 +11,7 @@ const {
   FOCUS_DECK_COMPACT_H,
 } = require('./constants');
 const { setFocusDeckWindow } = require('./dock-window-bridge');
+const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 
 /** Píxeles entre el borde inferior de la ventana y el borde inferior del área de trabajo (justo encima de la tarea). */
 const FOCUS_DECK_DOCK_GAP = 2;
@@ -151,6 +152,8 @@ function createFocusDeckWindow(state) {
     y: b.y,
     width: b.width,
     height: b.height,
+    title: APP_NAME,
+    icon: appIconFile(),
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -168,6 +171,7 @@ function createFocusDeckWindow(state) {
   });
 
   setFocusDeckWindow(win);
+  brandWindow(win);
 
   win.setSkipTaskbar(true);
   applyFocusDeckAlwaysOnTop(win);

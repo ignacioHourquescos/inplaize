@@ -1,7 +1,7 @@
 'use strict';
 
 const { screen } = require('electron');
-const { DOCK_WINDOW_WIDTH, DOCK_COLLAPSED_TOP_HEIGHT } = require('./constants');
+const { DOCK_WINDOW_WIDTH } = require('./constants');
 const { loadAppSettings } = require('./app-settings-store');
 
 /**
@@ -11,32 +11,27 @@ const { loadAppSettings } = require('./app-settings-store');
  */
 function dockWindowBoundsForWorkArea(wa, expanded, dockPosition) {
   const pos = dockPosition || loadAppSettings().dockPosition || 'left';
-  if (expanded) {
+  // Izquierda/derecha: la ventana ocupa siempre el área de trabajo. Encogerla
+  // a 1px y volver a estirarla al abrir el panel es lento en Windows. Cerrado,
+  // el panel queda fuera de pantalla y la ventana es click-through.
+  if (expanded || pos !== 'center') {
     return { x: wa.x, y: wa.y, width: wa.width, height: wa.height };
   }
-  if (pos === 'center') {
-    const w = DOCK_WINDOW_WIDTH;
-    const x = wa.x + Math.floor((wa.width - w) / 2);
-    return { x, y: wa.y, width: w, height: wa.height };
-  }
-  /* Izquierda / derecha: barra horizontal negra arriba — ventana dock ancha y baja */
-  return {
-    x: wa.x,
-    y: wa.y,
-    width: wa.width,
-    height: DOCK_COLLAPSED_TOP_HEIGHT,
-  };
+  const w = DOCK_WINDOW_WIDTH;
+  const x = wa.x + Math.floor((wa.width - w) / 2);
+  return { x, y: wa.y, width: w, height: wa.height };
 }
 
 /**
- * Con el sidebar abierto la ventana cubre el área de trabajo para poder
- * detectar clics “fuera” del panel; cerrado vuelve a la franja del dock.
+ * Ajusta la ventana del dock. Si ya tiene ese tamaño, no llama a setBounds.
  */
 function applyDockWindowBounds(win, expanded) {
   if (!win || win.isDestroyed()) return;
   const display = screen.getDisplayMatching(win.getBounds());
   const wa = display.workArea;
   const b = dockWindowBoundsForWorkArea(wa, expanded);
+  const cur = win.getBounds();
+  if (cur.x === b.x && cur.y === b.y && cur.width === b.width && cur.height === b.height) return;
   win.setBounds(b);
 }
 

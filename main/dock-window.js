@@ -7,6 +7,7 @@ const { dockWindowBoundsForWorkArea, applyDockWindowBounds } = require('./window
 const { loadAppSettings } = require('./app-settings-store');
 const { setDockWindow } = require('./dock-window-bridge');
 const { lockWindowZoom } = require('./lock-window-zoom');
+const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 
 /**
  * Raíz de la app (donde está package.json): preload e index.html siempre aquí,
@@ -38,7 +39,8 @@ function createDockWindow(display, state) {
     y: initial.y,
     width: initial.width,
     height: initial.height,
-    icon: path.join(root, 'assets', 'icon.png'),
+    title: APP_NAME,
+    icon: appIconFile(),
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -59,6 +61,7 @@ function createDockWindow(display, state) {
     },
   });
 
+  brandWindow(win);
   win.setSkipTaskbar(true);
 
   if (process.platform === 'win32') {
@@ -81,6 +84,15 @@ function createDockWindow(display, state) {
   win.setIgnoreMouseEvents(true, { forward: true });
 
   win.on('blur', () => {
+    // Durante el drag nativo de un archivo, soltar sobre WhatsApp/mail enfoca
+    // esa ventana. Si cerramos el panel acá, el HWND fullscreen se reacomoda
+    // en medio de DoDragDrop y el drop se pierde.
+    try {
+      if (require('./downloads-manager').isNativeDragActive()) return;
+    } catch {
+      /* noop */
+    }
+    if (state.dockBlurIgnoreUntil && Date.now() < state.dockBlurIgnoreUntil) return;
     if (state.isExpanded) {
       state.isExpanded = false;
       applyDockWindowBounds(win, false);

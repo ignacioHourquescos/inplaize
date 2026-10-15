@@ -31,7 +31,8 @@ html[data-shell-frameless='true'] .shell-top {
 html[data-shell-frameless='true'] .dock-chrome-menu-wrap,
 html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
-html[data-shell-frameless='true'] .shell-home-strip-btn {
+html[data-shell-frameless='true'] .shell-home-strip-btn,
+html[data-shell-frameless='true'] .shell-downloads-strip-btn {
   -webkit-app-region: no-drag;
 }
 
@@ -39,6 +40,11 @@ html[data-shell-frameless='true'] .shell-home-strip-btn {
   flex-shrink: 0;
   align-self: center;
   margin-left: var(--ud-chrome-strip-pad-x);
+}
+
+.shell-downloads-strip-btn {
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .shortcut-strip {

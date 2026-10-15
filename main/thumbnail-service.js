@@ -16,8 +16,9 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage } = require('electron');
 const { log } = require('./logger');
+const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 
 /** Extensiones soportadas → tipo de render. */
 const KIND_BY_EXT = new Map([
@@ -27,6 +28,10 @@ const KIND_BY_EXT = new Map([
   ['xls', 'xls'],
   ['csv', 'csv'],
 ]);
+
+/** Fotos: miniatura chica del sistema, no el archivo original. */
+const IMAGE_THUMB_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'avif']);
+const IMAGE_THUMB_PX = 256;
 
 const JOB_TIMEOUT_MS = 20000;
 /** Cierra la ventana oculta tras un rato sin trabajos (libera memoria y evita
@@ -70,7 +75,25 @@ function extOf(filePath) {
 
 /** @returns {boolean} ¿la app puede generar miniatura de este archivo? */
 function isSupported(filePath) {
-  return KIND_BY_EXT.has(extOf(filePath));
+  const ext = extOf(filePath);
+  return KIND_BY_EXT.has(ext) || IMAGE_THUMB_EXTS.has(ext);
+}
+
+/** Miniatura de imagen cacheada. No decodifica el archivo entero en el dock. */
+async function makeImageThumb(filePath, cacheKey, cachePath) {
+  try {
+    const image = await nativeImage.createThumbnailFromPath(filePath, {
+      width: IMAGE_THUMB_PX,
+      height: IMAGE_THUMB_PX,
+    });
+    if (!image || image.isEmpty()) return null;
+    fs.writeFileSync(cachePath, image.toPNG());
+    memCache.set(cacheKey, cachePath);
+    return fileUrl(cachePath);
+  } catch (err) {
+    log(`thumbnail-service: imagen ${path.basename(filePath)}: ${err?.message || err}`);
+    return null;
+  }
 }
 
 function cacheKeyFor(filePath, stat) {
@@ -130,6 +153,9 @@ function ensureWindow() {
 
   win = new BrowserWindow({
     show: false,
+    title: APP_NAME,
+    icon: appIconFile(),
+    skipTaskbar: true,
     width: 320,
     height: 320,
     webPreferences: {
@@ -140,6 +166,8 @@ function ensureWindow() {
       backgroundThrottling: false,
     },
   });
+
+  brandWindow(win);
 
   win.on('closed', () => {
     win = null;
@@ -240,11 +268,16 @@ async function getThumbnail(filePath) {
   // lugar de encolar duplicados que saturarían la cola serial.
   if (inFlight.has(cacheKey)) return inFlight.get(cacheKey);
 
-  const kind = KIND_BY_EXT.get(extOf(p));
-  const promise = new Promise((resolve) => {
-    queue.push({ filePath: p, kind, cacheKey, cachePath, resolve });
-    processQueue();
-  }).finally(() => {
+  const ext = extOf(p);
+  const kind = KIND_BY_EXT.get(ext);
+  const promise = (
+    IMAGE_THUMB_EXTS.has(ext)
+      ? makeImageThumb(p, cacheKey, cachePath)
+      : new Promise((resolve) => {
+          queue.push({ filePath: p, kind, cacheKey, cachePath, resolve });
+          processQueue();
+        })
+  ).finally(() => {
     inFlight.delete(cacheKey);
   });
   inFlight.set(cacheKey, promise);

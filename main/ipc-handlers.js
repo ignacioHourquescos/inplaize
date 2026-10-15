@@ -24,6 +24,12 @@ const {
   broadcastStickyNotesChanged,
 } = require('./sticky-notes-store');
 
+const {
+  loadTodos,
+  saveTodos,
+  broadcastTodosChanged,
+} = require('./todos-store');
+
 const { loadAppSettings, saveAppSettings } = require('./app-settings-store');
 
 const { getAppVersionPayload } = require('./app-version');
@@ -45,7 +51,7 @@ const {
 const { webMapKey } = require('./web-map-key');
 const focusMode = require('./focus-mode');
 const { applyDockWindowBounds } = require('./window-bounds');
-const { forceWindowForeground } = require('./window-focus');
+const { raiseAlwaysOnTopWindow } = require('./window-focus');
 const { registerShellIpc, closeAndClearAll: closeWebShell } = require('./web-shell');
 const { registerDetachedFrameIpc } = require('./detached-web-frame');
 const {
@@ -191,6 +197,10 @@ const IPC_CHANNELS = [
 
   'save-sticky-notes',
 
+  'get-todos',
+
+  'save-todos',
+
   'downloads-get-history',
 
   'downloads-open-file',
@@ -256,9 +266,11 @@ function registerIpcHandlers(state) {
   function expandDockSidebar() {
     const dock = state.mainWindow;
     if (!dock || dock.isDestroyed()) return;
+    // El foco viene de la ventana web: un blur espurio cerraría el panel al toque.
+    state.dockBlurIgnoreUntil = Date.now() + 500;
     if (state.isExpanded) {
       dock.webContents.send('sidebar-state', true);
-      forceWindowForeground(dock);
+      raiseAlwaysOnTopWindow(dock);
       return;
     }
     state.isExpanded = true;
@@ -269,7 +281,7 @@ function registerIpcHandlers(state) {
       /* noop */
     }
     dock.webContents.send('sidebar-state', true);
-    forceWindowForeground(dock);
+    raiseAlwaysOnTopWindow(dock);
   }
 
   function collapseDockSidebar() {
@@ -501,15 +513,8 @@ function registerIpcHandlers(state) {
       }
       dockWin.webContents.send('sidebar-state', state.isExpanded);
       if (state.isExpanded) {
-        forceWindowForeground(dockWin);
-        if (process.platform === 'win32') {
-          setTimeout(() => {
-            if (!dockWin.isDestroyed()) forceWindowForeground(dockWin);
-          }, 90);
-          setTimeout(() => {
-            if (!dockWin.isDestroyed()) forceWindowForeground(dockWin);
-          }, 260);
-        }
+        state.dockBlurIgnoreUntil = Date.now() + 500;
+        raiseAlwaysOnTopWindow(dockWin);
       }
   }
 
@@ -540,11 +545,12 @@ function registerIpcHandlers(state) {
     return true;
   });
 
-  ipcMain.handle('dock-open-welcome-home', () => {
+  ipcMain.handle('dock-open-welcome-home', (_event, view) => {
     expandDockSidebar();
     const dock = state.mainWindow;
+    const next = view === 'downloads' ? 'downloads' : 'todos';
     if (dock && !dock.isDestroyed()) {
-      dock.webContents.send('dock-open-welcome-home');
+      dock.webContents.send('dock-open-welcome-home', next);
     }
     return true;
   });
@@ -638,6 +644,12 @@ function registerIpcHandlers(state) {
 
 
   ipcMain.handle('set-ignore-mouse', (event, ignore) => {
+
+    try {
+      if (require('./downloads-manager').isPassthroughFrozen()) return;
+    } catch {
+      /* noop */
+    }
 
     const win = BrowserWindow.fromWebContents(event.sender);
 
@@ -1074,8 +1086,8 @@ function registerIpcHandlers(state) {
 
   {
     const downloads = require('./downloads-manager');
-    // Zona de descargas = espejo de la carpeta Descargas del sistema: el
-    // watcher incorpora también lo que bajen otros programas.
+    // Zona de archivos = espejo de Descargas y del Escritorio: el watcher
+    // incorpora también lo que dejen otros programas.
     downloads.watchDownloadsFolder();
     ipcMain.handle('downloads-get-history', () => downloads.getHistory());
     ipcMain.handle('downloads-open-file', (_event, id) => downloads.openFile(String(id)));
@@ -1103,11 +1115,19 @@ function registerIpcHandlers(state) {
         return { ok: false };
       }
     });
-    // Drag nativo: se dispara desde el dragstart del tile en el renderer y se
-    // resuelve acá con webContents.startDrag (patrón "on", no invoke, para no
-    // bloquear el gesto).
-    ipcMain.on('downloads-drag-start', (event, id) => {
-      downloads.startNativeDrag(event.sender, String(id)).catch(() => {});
+    // Drag nativo: el renderer avisa con send (no invoke) y startDrag tiene que
+    // correr en ese mismo turno, con el botón del mouse todavía abajo.
+    ipcMain.on('downloads-drag-start', (event, payload) => {
+      const body = payload && typeof payload === 'object' ? payload : { id: payload };
+      try {
+        downloads.startNativeDrag(event.sender, String(body.id || ''), body.anchor);
+      } catch {
+        /* noop */
+      }
+    });
+    downloads.setNativeDragEndHandler((win) => {
+      if (!win || win.isDestroyed() || win.isFocused()) return;
+      collapseDockSidebar();
     });
 
     // Cajón mágico: comprimir/convertir archivos con ffmpeg. El resultado
@@ -1130,6 +1150,14 @@ function registerIpcHandlers(state) {
   ipcMain.handle('save-sticky-notes', (event, payload) => {
     const saved = saveStickyNotes(payload);
     broadcastStickyNotesChanged(event.sender);
+    return saved;
+  });
+
+  ipcMain.handle('get-todos', () => loadTodos());
+
+  ipcMain.handle('save-todos', (event, payload) => {
+    const saved = saveTodos(payload);
+    broadcastTodosChanged(event.sender);
     return saved;
   });
 
