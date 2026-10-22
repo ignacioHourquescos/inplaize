@@ -114,6 +114,7 @@ function syncPointerPassthrough(clientX, clientY) {
   const modalOpen =
     !modalOverlay.classList.contains('hidden') ||
     inlineShortcutFormOpen ||
+    document.documentElement.classList.contains('doc-modal-open') ||
     !!(settingsModalOverlay && !settingsModalOverlay.classList.contains('hidden'));
   let overUi = modalOpen;
   if (!overUi) {
@@ -1824,6 +1825,11 @@ document.addEventListener(
   { passive: true },
 );
 
+document.addEventListener('inplaize-doc-modal', () => {
+  lastPassthroughIgnore = null;
+  syncPointerPassthrough(lastPointer.x, lastPointer.y);
+});
+
 function suggestNameFromPath(filePath) {
   const normalized = filePath.replace(/\//g, '\\');
   const parts = normalized.split('\\');
@@ -2182,7 +2188,7 @@ function bindUrlDropTargets() {
 function shouldSkipFileDropTarget(target) {
   if (!target || typeof target.closest !== 'function') return false;
   return !!target.closest(
-    '.magic-zone, .magic-drawer, .loose-nav-bar, '
+    '.magic-zone, .magic-drawer, .loose-nav-bar, .doc-modal-overlay, '
     + '#dock-inline-editor, .modal, .download-tile',
   );
 }
@@ -2651,8 +2657,24 @@ if (dockExitEditModeBtn) {
   });
 }
 
+function clearShortcutNameError() {
+  const el = document.getElementById('shortcut-name-error');
+  if (!el) return;
+  el.textContent = '';
+  el.classList.add('hidden');
+}
+
+function showShortcutNameError(message) {
+  const el = document.getElementById('shortcut-name-error');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove('hidden');
+  if (inputName) inputName.focus();
+}
+
 function openAddModal() {
   editingId = null;
+  clearShortcutNameError();
   modalTitle.textContent = 'Añadir acceso directo';
   modalDelete.classList.add('hidden');
   if (shortcutOrderGroup) shortcutOrderGroup.classList.add('hidden');
@@ -2670,6 +2692,7 @@ function openAddModal() {
 
 function openEditModal(shortcut) {
   editingId = shortcut.id;
+  clearShortcutNameError();
   modalTitle.textContent = 'Editar acceso directo';
   modalDelete.classList.remove('hidden');
   if (shortcutOrderGroup) shortcutOrderGroup.classList.remove('hidden');
@@ -2711,6 +2734,7 @@ function applyLooseEditUiLock(locked) {
 }
 
 function closeModal() {
+  clearShortcutNameError();
   modalOverlay.classList.add('hidden');
   if (dockInlineEditor && shortcutModalCard && dockInlineEditor.contains(shortcutModalCard)) {
     shortcutModalCard.classList.remove('shortcut-modal-embed');
@@ -2765,6 +2789,10 @@ function showShortcutFormShell() {
 }
 
 // Save shortcut
+if (inputName) {
+  inputName.addEventListener('input', () => clearShortcutNameError());
+}
+
 shortcutForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -2789,8 +2817,8 @@ shortcutForm.addEventListener('submit', async (e) => {
   if (!isLoose && !data.url) return;
 
   if (isNameTaken(data.name, editingId)) {
-    window.alert(
-      'Ya existe un acceso con ese nombre. Usa otro nombre para separar sesiones (p. ej. distintas cuentas de WhatsApp).',
+    showShortcutNameError(
+      'Ya existe un acceso con ese nombre. Usá otro para separar sesiones (por ejemplo, distintas cuentas de WhatsApp).',
     );
     return;
   }

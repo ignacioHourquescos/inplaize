@@ -10,9 +10,12 @@
  *     columns: Array<{ id, width?, x?, y?, blocks: Array<{ id, type, text, done, indent }> }>
  *   }
  *
- * `type` es "text" | "todo" | "bullet".
+ * `type` es "text" | "todo" | "bullet" | "document".
+ * Un documento guarda título, descripción y contenido del editor en `doc`.
  * La versión 1 (lista plana de items) se migra a una columna de checkboxes.
  */
+
+const { sanitizeDocument } = require('./document-content');
 
 const fs = require('fs');
 const path = require('path');
@@ -25,7 +28,7 @@ const MAX_COL_WIDTH = 4000;
 const MAX_COL_POS = 12000;
 const MAX_BLOCKS = 400;
 const MAX_INDENT = 6;
-const TYPES = new Set(['text', 'todo', 'bullet']);
+const TYPES = new Set(['text', 'todo', 'bullet', 'document']);
 
 function todosFilePath() {
   return path.join(app.getPath('userData'), 'todos.json');
@@ -53,19 +56,27 @@ function sanitizeText(value, maxLen) {
   return str.slice(0, maxLen);
 }
 
-function sanitizeBlock(raw, seen) {
+function sanitizeBlock(raw, seen, columnId) {
   if (!raw || typeof raw !== 'object') return null;
   const id = sanitizeId(raw.id);
   if (!id || seen.has(id)) return null;
   seen.add(id);
   const type = TYPES.has(raw.type) ? raw.type : 'text';
-  return {
+  const block = {
     id,
     type,
     text: sanitizeText(raw.text, 4000),
     done: type === 'todo' && raw.done === true,
     indent: clampNumber(raw.indent, 0, MAX_INDENT, 0),
   };
+  if (type === 'document') {
+    const source = raw.doc && typeof raw.doc === 'object' ? { ...raw.doc } : {};
+    if (source.title == null) source.title = block.text;
+    block.doc = sanitizeDocument(source, id, columnId || '');
+    block.text = block.doc.title;
+    block.done = false;
+  }
+  return block;
 }
 
 function sanitizeColumn(raw, seen) {
@@ -77,7 +88,7 @@ function sanitizeColumn(raw, seen) {
   const list = Array.isArray(raw.blocks) ? raw.blocks : [];
   for (const entry of list) {
     if (blocks.length >= MAX_BLOCKS) break;
-    const block = sanitizeBlock(entry, seen);
+    const block = sanitizeBlock(entry, seen, id);
     if (block) blocks.push(block);
   }
   const column = { id, blocks };
@@ -163,8 +174,10 @@ function saveTodos(payload) {
   const safe = normalize(payload);
   try {
     fs.writeFileSync(todosFilePath(), JSON.stringify(safe, null, 2), 'utf-8');
-  } catch {
-    /* sin permisos: el renderer conserva el estado en memoria */
+  } catch (err) {
+    const error = new Error('No se pudo guardar las tareas');
+    error.cause = err;
+    throw error;
   }
   return safe;
 }

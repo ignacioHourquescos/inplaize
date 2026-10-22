@@ -285,6 +285,16 @@ async function openTabFromUrl(url, opts = {}) {
   };
   tabs.set(id, tab);
   attachTabEvents(tab);
+  try {
+    require('./session-router').attachLoginSessionOffer(
+      view.webContents,
+      partition,
+      () => getDockWindow(),
+      url
+    );
+  } catch {
+    /* el login sigue mostrándose si el aviso de usuario no se pudo enganchar */
+  }
 
   const shouldActivateMode = opts.activateMode !== false;
   if (shouldActivateMode && !modeActive) {

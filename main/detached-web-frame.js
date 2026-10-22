@@ -6,6 +6,14 @@ const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 const { webMapKey } = require('./web-map-key');
 const { loadShortcuts } = require('./shortcuts-store');
 const { lockWindowZoom } = require('./lock-window-zoom');
+const {
+  navSnapshot,
+  goBack,
+  goForward,
+  attachWindowHistoryNav,
+  attachViewHistoryNav,
+  attachPageHistoryNav,
+} = require('./page-history-nav');
 /** Debe coincidir con --ud-chrome-strip-h en chrome-strip.css. */
 const DETACHED_CHROME_H = 58;
 /** Debe coincidir con la altura de .subtab-strip en web-shell.css. */
@@ -127,6 +135,55 @@ function tabStateOf(host) {
   if (!host || host.isDestroyed()) return null;
   const state = host.__usualDeskTabState;
   return state && typeof state === 'object' ? state : null;
+}
+
+function activeHostWebContents(host) {
+  const state = tabStateOf(host);
+  if (!state) return null;
+  const tab = state.tabs.get(state.activeId);
+  if (!tab || !tab.view) return null;
+  const wc = tab.view.webContents;
+  return wc && !wc.isDestroyed() ? wc : null;
+}
+
+function sendHostNav(host) {
+  if (!host || host.isDestroyed()) return;
+  try {
+    host.webContents.send('detached-nav', navSnapshot(activeHostWebContents(host)));
+  } catch {
+    /* noop */
+  }
+}
+
+function navigateHost(host, dir) {
+  const wc = activeHostWebContents(host);
+  const ok = dir === 'back' ? goBack(wc) : goForward(wc);
+  if (ok && wc && !wc.isDestroyed()) {
+    try {
+      wc.focus();
+    } catch {
+      /* noop */
+    }
+  }
+  return ok;
+}
+
+/** Historial propio de cada pestaña (principal o sub-pestaña). */
+function bindHostPageNav(host, tab) {
+  if (!host || !tab || !tab.view) return;
+  const wc = tab.view.webContents;
+  attachViewHistoryNav(tab.view, host);
+  attachPageHistoryNav(wc, host, {
+    isActive: () => {
+      const state = tabStateOf(host);
+      return !!state && state.activeId === tab.id;
+    },
+    onChange: () => {
+      const state = tabStateOf(host);
+      if (!state || state.activeId !== tab.id) return;
+      sendHostNav(host);
+    },
+  });
 }
 
 function chromeHeightFor(host) {
@@ -256,6 +313,7 @@ function broadcastTabsToHost(host) {
 function refreshHostTabsUi(host) {
   attachActiveTabViewOnly(host);
   broadcastTabsToHost(host);
+  sendHostNav(host);
 }
 
 /**
@@ -264,6 +322,7 @@ function refreshHostTabsUi(host) {
  */
 function attachSubTabEvents(host, tab) {
   const wc = tab.view.webContents;
+  bindHostPageNav(host, tab);
 
   wc.on('page-title-updated', (_e, title) => {
     tab.title = String(title || '');
@@ -383,19 +442,6 @@ function subTabWindowOpenResponse(host, details) {
       if (!guest) {
         tab.view.webContents.loadURL(url).catch(() => {});
       }
-      if (isAuth) {
-        // Popup de login sin sesión en esta partition: ofrecer copiar la sesión
-        // de otro acceso (Google, etc.) y recargar, manteniendo el opener vivo.
-        setImmediate(() => {
-          try {
-            require('./session-router')
-              .maybeOfferSessionCopyForAuthTab(host, tab.view.webContents, url, openerPartition)
-              .catch(() => {});
-          } catch {
-            /* noop */
-          }
-        });
-      }
       return tab.view.webContents;
     },
   };
@@ -445,6 +491,20 @@ function createSubTabInHost(host, url, opts = {}) {
     }
   } catch {
     /* noop */
+  }
+
+  const tabPartition = opts.existingWebContents
+    ? state.partition
+    : opts.partition || state.partition;
+  try {
+    require('./session-router').attachLoginSessionOffer(
+      view.webContents,
+      tabPartition,
+      () => (host && !host.isDestroyed() ? host : null),
+      url
+    );
+  } catch {
+    /* el login sigue mostrándose si el aviso de usuario no se pudo enganchar */
   }
 
   const id = nextSubTabId();
@@ -595,6 +655,12 @@ function registerDetachedFrameIpc() {
         return selectHostTab(win, String(arg || ''));
       case 'close-subtab':
         return closeHostTab(win, String(arg || ''));
+      case 'nav-back':
+        return navigateHost(win, 'back');
+      case 'nav-forward':
+        return navigateHost(win, 'forward');
+      case 'nav-state':
+        return navSnapshot(activeHostWebContents(win));
       case 'minimize':
         if (!win.isDestroyed()) win.minimize();
         return true;
@@ -670,6 +736,7 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
   host.__usualDeskDetachedChromeHost = true;
   host.__usualDeskDetachedOwnMapKey = mapKey;
   brandWindow(host);
+  attachWindowHistoryNav(host, () => activeHostWebContents(host));
 
   setWebWindowForMapKey(mapKey, host);
 
@@ -723,8 +790,16 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
     isMain: true,
   });
   host.__usualDeskTabState = tabState;
+  bindHostPageNav(host, tabState.tabs.get('main'));
 
   attachWebShortcutEmbeddedWebContents(wc, shortcut, mapKey);
+  try {
+    require('./session-router').attachLoginSessionOffer(wc, partition, () =>
+      host && !host.isDestroyed() ? host : null
+    );
+  } catch {
+    /* el login sigue mostrándose si el aviso de usuario no se pudo enganchar */
+  }
 
   wc.setAudioMuted(!!shortcut.audioMuted);
 

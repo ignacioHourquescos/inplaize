@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('usualDeskDetached', {
   frameAction: (action, arg) => ipcRenderer.invoke('detached-frame-action', action, arg ?? null),
+  goBack: () => ipcRenderer.invoke('detached-frame-action', 'nav-back'),
+  goForward: () => ipcRenderer.invoke('detached-frame-action', 'nav-forward'),
+  getNavState: () => ipcRenderer.invoke('detached-frame-action', 'nav-state'),
+  onNavState: (cb) => {
+    ipcRenderer.on('detached-nav', (_e, state) => cb(state));
+  },
   openDockWelcomeHome: (view) =>
     ipcRenderer.invoke('dock-open-welcome-home', view === 'downloads' ? 'downloads' : 'todos'),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
@@ -9,6 +15,8 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
   closeApp: () => ipcRenderer.invoke('close-app'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getVersionHistory: () => ipcRenderer.invoke('get-version-history'),
   notifyShellMenuDrawer: (open) =>
     ipcRenderer.invoke('detached-frame-action', 'menu-drawer', open === true),
   requestShortcutEditor: () => ipcRenderer.invoke('detached-request-shortcut-editor'),

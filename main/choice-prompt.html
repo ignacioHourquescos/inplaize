@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>inplaize</title>
+    <link rel="stylesheet" href="choice-prompt.css" />
+  </head>
+  <body>
+    <div class="card" id="card">
+      <button type="button" class="close" id="close" aria-label="Cerrar">×</button>
+      <h1 class="message" id="message"></h1>
+      <p class="detail" id="detail"></p>
+      <div class="choices" id="choices"></div>
+      <label class="remember" id="remember-wrap">
+        <input type="checkbox" id="remember" />
+        <span id="remember-label"></span>
+      </label>
+      <button type="button" class="cancel" id="cancel"></button>
+    </div>
+    <script src="choice-prompt-renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,558 @@
+/* Editor de documentos. Solo este modal: no altera el resto del lienzo. */
+
+.doc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3vh 3vw;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+  -webkit-app-region: no-drag;
+}
+
+.doc-modal-overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.doc-modal-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(1160px, 80vw);
+  height: 88dvh;
+  max-height: 88dvh;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: #16161c;
+  color: #ececf1;
+  color-scheme: dark;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  transform: translateY(10px);
+  transition: transform 0.18s ease;
+}
+
+.doc-modal-overlay.is-open .doc-modal-card {
+  transform: none;
+}
+
+.doc-modal-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px 8px 8px;
+  background: #16161c;
+}
+
+.doc-modal-close,
+.doc-modal-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  margin: 0;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #c8c8d4;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.doc-modal-close svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.doc-modal-close:hover,
+.doc-modal-close:focus-visible,
+.doc-modal-retry:hover,
+.doc-modal-retry:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f4f8;
+  outline: none;
+}
+
+.doc-modal-status-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.doc-modal-status,
+.doc-modal-note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.doc-modal-status.is-saving,
+.doc-modal-status.is-saved {
+  color: #a1a1aa;
+}
+
+.doc-modal-status.is-error,
+.doc-modal-note {
+  color: #f0a8a8;
+}
+
+.doc-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.doc-modal-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.doc-modal-scroll::-webkit-scrollbar-thumb {
+  background: #3a3a46;
+  border-radius: 8px;
+}
+
+.doc-modal-page {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  padding: 28px 28px 18vh;
+  box-sizing: border-box;
+}
+
+.doc-modal-title,
+.doc-modal-description,
+.doc-editor,
+.doc-editor .ProseMirror {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.doc-modal-title,
+.doc-modal-description {
+  outline: none;
+  background: transparent;
+  border: none;
+  overflow-wrap: anywhere;
+}
+
+.doc-modal-title {
+  min-height: 1.2em;
+  margin: 0 0 8px;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #f4f4f8;
+}
+
+.doc-modal-description {
+  min-height: 1.4em;
+  margin: 0 0 22px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #b9b9c6;
+}
+
+.doc-modal-title.is-empty::before,
+.doc-modal-description.is-empty::before {
+  content: attr(data-placeholder);
+  color: #6a6a78;
+  pointer-events: none;
+}
+
+.doc-editor .ProseMirror {
+  outline: none;
+  min-height: 42vh;
+  font-size: 17px;
+  line-height: 1.65;
+  caret-color: #c4b5fd;
+  overflow-wrap: anywhere;
+}
+
+.doc-editor .ProseMirror p.is-editor-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #6a6a78;
+  pointer-events: none;
+}
+
+.doc-editor .ProseMirror p {
+  margin: 0.4em 0;
+}
+
+.doc-editor .ProseMirror h1,
+.doc-editor .ProseMirror h2,
+.doc-editor .ProseMirror h3 {
+  margin: 1em 0 0.35em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: #f7f7fb;
+}
+
+.doc-editor .ProseMirror h1 { font-size: 1.7em; }
+.doc-editor .ProseMirror h2 { font-size: 1.38em; }
+.doc-editor .ProseMirror h3 { font-size: 1.16em; }
+
+.doc-editor .ProseMirror ul,
+.doc-editor .ProseMirror ol {
+  margin: 0.4em 0;
+  padding-left: 1.35em;
+}
+
+.doc-editor .ProseMirror li {
+  margin: 0.15em 0;
+}
+
+.doc-editor .ProseMirror blockquote {
+  margin: 0.7em 0;
+  padding-left: 0.95em;
+  border-left: 3px solid #7c3aed;
+  color: #d0d0dc;
+}
+
+.doc-editor .ProseMirror hr {
+  margin: 1.4em 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.doc-editor .ProseMirror a {
+  color: #c4b5fd;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: text;
+}
+
+.doc-editor .ProseMirror img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.8em 0;
+  border-radius: 10px;
+}
+
+.doc-editor .ProseMirror .ProseMirror-selectednode {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+
+.doc-editor .ProseMirror ::selection {
+  background: rgba(124, 58, 237, 0.35);
+}
+
+.doc-editor .ProseMirror ul[data-type='taskList'] {
+  list-style: none;
+  margin: 0.35em 0;
+  padding-left: 0.1em;
+}
+
+.doc-editor .ProseMirror ul[data-type='taskList'] > li,
+.doc-editor li[data-type='taskItem'] {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0.12em 0;
+}
+
+.doc-editor .ProseMirror ul[data-type='taskList'] > li > label,
+.doc-editor li[data-type='taskItem'] > label {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 1.65em;
+  margin: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.doc-editor .ProseMirror ul[data-type='taskList'] > li > label input,
+.doc-editor li[data-type='taskItem'] > label input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #7c3aed;
+  cursor: pointer;
+}
+
+.doc-editor .ProseMirror ul[data-type='taskList'] > li > div,
+.doc-editor li[data-type='taskItem'] > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.doc-editor .ProseMirror ul[data-type='taskList'] > li > div > p,
+.doc-editor li[data-type='taskItem'] > div > p {
+  margin: 0;
+}
+
+.doc-editor li[data-checked='true'] > div {
+  color: #8d8d9a;
+  text-decoration: line-through;
+}
+
+.doc-slash-menu {
+  z-index: 6;
+  max-height: min(360px, 48vh);
+  max-width: calc(100vw - 16px);
+  overflow: auto;
+}
+
+.doc-slash-empty {
+  padding: 8px 10px;
+  color: #8d8d9c;
+  font-size: 13px;
+}
+
+.doc-format-bar,
+.doc-link-popover {
+  position: fixed;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #33333d;
+  border-radius: 12px;
+  background: #1b1b24;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.doc-format-bar[hidden],
+.doc-link-popover[hidden],
+.doc-modal-note[hidden],
+.doc-modal-retry[hidden],
+.doc-file-input {
+  display: none;
+}
+
+.doc-format-btn,
+.doc-link-apply,
+.doc-link-remove {
+  min-width: 32px;
+  min-height: 32px;
+  margin: 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #ececf1;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.doc-format-bold { font-weight: 700; }
+.doc-format-italic { font-style: italic; }
+.doc-format-underline { text-decoration: underline; text-underline-offset: 2px; }
+
+.doc-format-btn:hover,
+.doc-format-btn:focus-visible,
+.doc-format-btn.is-on,
+.doc-link-apply:hover,
+.doc-link-apply:focus-visible,
+.doc-link-remove:hover,
+.doc-link-remove:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.doc-format-btn.is-on {
+  background: rgba(124, 58, 237, 0.28);
+}
+
+.doc-link-popover {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: min(360px, calc(100vw - 24px));
+  padding: 8px;
+}
+
+.doc-link-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.doc-link-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f4f8;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.doc-link-input:focus {
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.7);
+}
+
+.doc-link-error {
+  margin: 0;
+  color: #f0a8a8;
+  font-size: 12px;
+}
+
+html.doc-modal-open .todo-home {
+  overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .doc-modal-overlay {
+    padding: 6px;
+  }
+
+  .doc-modal-card {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+    max-height: none;
+    border-radius: 12px;
+  }
+
+  .doc-modal-close span {
+    display: none;
+  }
+
+  .doc-modal-page {
+    padding: 18px 16px 28vh;
+  }
+
+  .doc-modal-bar {
+    min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .doc-modal-overlay,
+  .doc-modal-card {
+    transition: none;
+  }
+}
+
+html[data-canvas-theme='light'] .doc-modal-card {
+  background: #ffffff;
+  color: #111111;
+  color-scheme: light;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 80px rgba(15, 15, 25, 0.16);
+}
+
+html[data-canvas-theme='light'] .doc-modal-bar {
+  background: #ffffff;
+}
+
+html[data-canvas-theme='light'] .doc-modal-close,
+html[data-canvas-theme='light'] .doc-modal-retry {
+  color: #3f3f46;
+}
+
+html[data-canvas-theme='light'] .doc-modal-close:hover,
+html[data-canvas-theme='light'] .doc-modal-close:focus-visible,
+html[data-canvas-theme='light'] .doc-modal-retry:hover,
+html[data-canvas-theme='light'] .doc-modal-retry:focus-visible {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-modal-title {
+  color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-modal-description {
+  color: #3f3f46;
+}
+
+html[data-canvas-theme='light'] .doc-modal-title.is-empty::before,
+html[data-canvas-theme='light'] .doc-modal-description.is-empty::before,
+html[data-canvas-theme='light'] .doc-editor .ProseMirror p.is-editor-empty::before {
+  color: #a1a1aa;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror {
+  caret-color: #7c3aed;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror h1,
+html[data-canvas-theme='light'] .doc-editor .ProseMirror h2,
+html[data-canvas-theme='light'] .doc-editor .ProseMirror h3 {
+  color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror blockquote {
+  color: #27272a;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror hr {
+  border-top-color: rgba(0, 0, 0, 0.12);
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror a {
+  color: #6d28d9;
+}
+
+html[data-canvas-theme='light'] .doc-editor li[data-checked='true'] > div {
+  color: #71717a;
+}
+
+html[data-canvas-theme='light'] .doc-modal-scroll::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}
+
+html[data-canvas-theme='light'] .doc-format-bar,
+html[data-canvas-theme='light'] .doc-link-popover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 16px 40px rgba(15, 15, 25, 0.12);
+}
+
+html[data-canvas-theme='light'] .doc-format-btn,
+html[data-canvas-theme='light'] .doc-link-apply,
+html[data-canvas-theme='light'] .doc-link-remove,
+html[data-canvas-theme='light'] .doc-link-input {
+  color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-link-input {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+html[data-canvas-theme='light'] .doc-format-btn:hover,
+html[data-canvas-theme='light'] .doc-format-btn:focus-visible,
+html[data-canvas-theme='light'] .doc-format-btn.is-on {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+html[data-canvas-theme='light'] .doc-slash-empty {
+  color: #71717a;
+}

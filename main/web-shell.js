@@ -13,6 +13,14 @@ const { loadShortcuts } = require('./shortcuts-store');
 const { forceWindowForeground } = require('./window-focus');
 const { lockWindowZoom } = require('./lock-window-zoom');
 const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
+const {
+  navSnapshot,
+  goBack,
+  goForward,
+  attachWindowHistoryNav,
+  attachViewHistoryNav,
+  attachPageHistoryNav,
+} = require('./page-history-nav');
 
 /** Altura de la franja superior (accesos + botones ventana). Debe coincidir con --ud-chrome-strip-h. */
 const SHELL_CHROME_HEIGHT = 58;
@@ -123,9 +131,40 @@ function broadcastChromeIfOpen() {
   }
 }
 
+function activeShellWebContents() {
+  if (!activeMapKey) return null;
+  const tab = tabs.get(activeMapKey);
+  if (!tab || !tab.view) return null;
+  const wc = tab.view.webContents;
+  return wc && !wc.isDestroyed() ? wc : null;
+}
+
+function sendShellNav() {
+  if (!shellWin || shellWin.isDestroyed()) return;
+  try {
+    shellWin.webContents.send('shell-nav', navSnapshot(activeShellWebContents()));
+  } catch {
+    /* noop */
+  }
+}
+
+function navigateShell(dir) {
+  const wc = activeShellWebContents();
+  const ok = dir === 'back' ? goBack(wc) : goForward(wc);
+  if (ok && wc && !wc.isDestroyed()) {
+    try {
+      wc.focus();
+    } catch {
+      /* noop */
+    }
+  }
+  return ok;
+}
+
 function broadcastChromeToRenderer() {
   if (!shellWin || shellWin.isDestroyed()) return;
   shellWin.webContents.send('shell-chrome', buildChromePayload());
+  sendShellNav();
 }
 
 /** Ancho del drawer; debe coincidir con shell-home-menu.css (.dock-home-menu-drawer { width }). */
@@ -197,6 +236,14 @@ function destroyTabView(mapKey) {
   tabs.delete(mapKey);
 }
 
+function noteShellSurface() {
+  try {
+    require('./open-shortcut').markShellAsLastFocusedSurface();
+  } catch {
+    /* noop */
+  }
+}
+
 function ensureShellWindow() {
   if (typeof BrowserView !== 'function') {
     throw new Error('BrowserView no está disponible en esta versión de Electron');
@@ -235,6 +282,7 @@ function ensureShellWindow() {
   }
 
   brandWindow(shellWin);
+  attachWindowHistoryNav(shellWin, activeShellWebContents);
 
   shellWin.on('maximize', sendShellMaximizedState);
   shellWin.on('unmaximize', sendShellMaximizedState);
@@ -247,6 +295,13 @@ function ensureShellWindow() {
     } catch {
       /* noop */
     }
+  }
+
+  shellWin.on('focus', noteShellSurface);
+  try {
+    shellWin.webContents.on('focus', noteShellSurface);
+  } catch {
+    /* noop */
   }
 
   shellWin.on('resize', () => {
@@ -339,6 +394,7 @@ async function openOrFocusTab(shortcut) {
     broadcastChromeToRenderer();
     syncKeysToDock();
     forceWindowForeground(w);
+    noteShellSurface();
     return;
   }
 
@@ -367,8 +423,22 @@ async function openOrFocusTab(shortcut) {
   const wc = view.webContents;
   wc.__usualDeskWebMapKey = mapKey;
   wc.__usualDeskNotificationsMuted = desiredNotificationsMuted;
+  wc.on('focus', noteShellSurface);
+
+  attachViewHistoryNav(view, win);
+  attachPageHistoryNav(wc, win, {
+    isActive: () => activeMapKey === mapKey,
+    onChange: () => {
+      if (activeMapKey === mapKey) sendShellNav();
+    },
+  });
 
   attachWebShortcutEmbeddedWebContents(wc, shortcut, mapKey);
+  try {
+    require('./session-router').attachLoginSessionOffer(wc, partition, () => shellWin);
+  } catch {
+    /* el login sigue mostrándose si el aviso de usuario no se pudo enganchar */
+  }
 
   wc.setAudioMuted(desiredAudioMuted);
 
@@ -393,6 +463,7 @@ async function openOrFocusTab(shortcut) {
   if (win && !win.isDestroyed()) {
     forceWindowForeground(win);
   }
+  noteShellSurface();
 }
 
 function selectTabByMapKey(mapKey) {
@@ -403,6 +474,7 @@ function selectTabByMapKey(mapKey) {
   if (shellWin && !shellWin.isDestroyed()) {
     forceWindowForeground(shellWin);
   }
+  noteShellSurface();
   return true;
 }
 
@@ -440,6 +512,7 @@ function focusTabByMapKey(mapKey) {
   if (w && !w.isDestroyed()) {
     forceWindowForeground(w);
   }
+  noteShellSurface();
   return true;
 }
 
@@ -521,6 +594,16 @@ function raiseShellFromGlobalHotkey() {
   broadcastChromeToRenderer();
 }
 
+/** Oculta el contenedor sin traerlo al frente (la home está al frente y el atajo esconde todo). */
+function minimizeShellFromHotkey() {
+  if (!shellWin || shellWin.isDestroyed()) return;
+  try {
+    if (!shellWin.isMinimized()) shellWin.minimize();
+  } catch {
+    /* noop */
+  }
+}
+
 /** Panel lateral / botón: minimiza el shell si ya tiene el foco (pestaña o barra). */
 function showOrToggleShellFromHotkey() {
   if (!shellWin || shellWin.isDestroyed()) {
@@ -562,6 +645,9 @@ function registerShellIpc(ipcMain) {
     'shell-window-minimize',
     'shell-window-toggle-maximize',
     'shell-window-close',
+    'shell-nav-back',
+    'shell-nav-forward',
+    'shell-nav-state',
   ]) {
     try {
       ipcMain.removeHandler(ch);
@@ -605,6 +691,10 @@ function registerShellIpc(ipcMain) {
     setShellMenuDrawerOpen(open === true);
     return true;
   });
+
+  ipcMain.handle('shell-nav-back', () => navigateShell('back'));
+  ipcMain.handle('shell-nav-forward', () => navigateShell('forward'));
+  ipcMain.handle('shell-nav-state', () => navSnapshot(activeShellWebContents()));
 }
 
 /** Id del acceso web de la pestaña activa en el contenedor shell (para abrir el editor en el dock). */
@@ -629,6 +719,8 @@ module.exports = {
   closeAndClearAll,
   registerShellIpc,
   showOrToggleShellFromHotkey,
+  minimizeShellFromHotkey,
+  shellWindowOrContentsHasFocus,
   raiseShellFromGlobalHotkey,
   broadcastChromeIfOpen,
   closeTabByMapKey,

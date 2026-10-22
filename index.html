@@ -23,7 +23,7 @@
         type="button"
         class="toggle-edge"
         data-mouse-hit
-        data-tooltip="Abrir o cerrar el panel del dock (clic). Atajo global: con ventanas web abiertas trae la última al frente; si no hay ninguna, abre o cierra esta barra (Ctrl+Alt+D o Ctrl+Mayús+D)"
+        data-tooltip="Abrir o cerrar el panel del dock (clic). Atajo global: si la home o una ventana está al frente, oculta inplaize; si no, trae la última (home o ventana) al frente (Ctrl+Alt+D o Ctrl+Mayús+D)"
         data-tooltip-placement="right"
         aria-label="Abrir o cerrar panel"
       ></button>
@@ -76,6 +76,7 @@
               <span class="dock-edit-mode-chip-label">Cerrar modo edición</span>
             </button>
           </div>
+          <span id="dock-app-version" class="dock-app-version" hidden></span>
           <button
             type="button"
             id="dock-home-menu-btn"
@@ -141,7 +142,38 @@
           </section>
 
           <div id="canvas-rail" class="canvas-rail" data-mouse-hit>
-            <div id="canvas-add-slot"></div>
+            <button
+              type="button"
+              id="canvas-undo-btn"
+              class="canvas-history-btn"
+              data-mouse-hit
+              aria-label="Deshacer"
+              aria-keyshortcuts="Control+Z"
+              aria-disabled="true"
+              data-tooltip="Deshacer (Ctrl+Z)"
+              data-tooltip-placement="right"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 14 4 9l5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 0 0 1-5.5 5.5H11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button
+              type="button"
+              id="canvas-redo-btn"
+              class="canvas-history-btn"
+              data-mouse-hit
+              aria-label="Rehacer"
+              aria-keyshortcuts="Control+Shift+Z Control+Y"
+              aria-disabled="true"
+              data-tooltip="Rehacer (Ctrl+Mayús+Z)"
+              data-tooltip-placement="right"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="m15 14 5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
             <button
               type="button"
               id="canvas-options-btn"
@@ -158,19 +190,6 @@
                 <circle cx="19" cy="12" r="1.8" fill="currentColor"/>
               </svg>
             </button>
-          </div>
-
-          <div id="quick-capture" class="quick-capture" data-mouse-hit>
-            <div
-              id="quick-capture-text"
-              class="quick-capture-text is-empty"
-              contenteditable="true"
-              spellcheck="true"
-              role="textbox"
-              aria-label="Anotación rápida"
-              data-placeholder="Escribí para anotar"
-            ></div>
-            <div id="quick-capture-status" class="quick-capture-status" aria-live="polite"></div>
           </div>
 
           <!-- Archivos descargados: se abre con la flecha de la franja. -->
@@ -349,6 +368,11 @@
         aria-label="Opciones"
       >
         <div class="dock-home-menu-drawer-head">
+          <button type="button" id="dock-version-history-back" class="dock-home-menu-back" hidden aria-label="Volver al menú">
+            <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M14.5 6.5L8.5 12l6 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <span class="dock-home-menu-drawer-title">Menú</span>
           <button type="button" id="dock-home-menu-close" class="dock-home-menu-close" aria-label="Cerrar menú">
             <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -356,7 +380,7 @@
             </svg>
           </button>
         </div>
-        <nav class="dock-home-menu-drawer-body" role="menu" aria-label="Opciones">
+        <nav id="dock-home-menu-main" class="dock-home-menu-drawer-body" role="menu" aria-label="Opciones">
           <button type="button" id="dock-home-add-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Añadir acceso directo (web o programa)" data-tooltip-placement="left">
             <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -390,6 +414,13 @@
             </svg>
             <span class="dock-home-menu-item-label">Configuración</span>
           </button>
+          <button type="button" id="dock-version-history-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Historial de versiones" data-tooltip-placement="left">
+            <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.85"/>
+              <path d="M12 8v4.5l2.5 1.5" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="dock-home-menu-item-label">Historial de versiones</span>
+          </button>
           <div class="dock-home-menu-sep" role="separator" aria-hidden="true"></div>
           <button type="button" id="quit-app-btn" class="dock-home-menu-item dock-home-menu-item-danger" role="menuitem" data-tooltip="Cerrar aplicación" data-tooltip-placement="left">
             <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -399,6 +430,9 @@
             <span class="dock-home-menu-item-label">Cerrar aplicación</span>
           </button>
         </nav>
+        <div id="dock-version-history" class="dock-version-history" hidden>
+          <div id="dock-version-history-list" class="dock-version-history-list" role="list" aria-label="Historial de versiones"></div>
+        </div>
       </aside>
     </div>
 
@@ -556,6 +590,7 @@
             <div class="form-group form-group-name">
               <label for="input-name">Nombre</label>
               <input type="text" id="input-name" placeholder="Ej. Gmail trabajo" required autocomplete="off">
+              <p id="shortcut-name-error" class="form-error hidden" role="alert"></p>
             </div>
           </div>
           <div class="form-group hidden" id="browse-group">
@@ -601,6 +636,8 @@
   <script src="shell-home-menu.js"></script>
   <script src="onboarding.js"></script>
   <script src="renderer.js"></script>
+  <script src="document-editor.bundle.js"></script>
+  <script src="document-modal.js"></script>
   <script src="todos.js"></script>
   <script src="magic-drawer-ui.js"></script>
 </body>

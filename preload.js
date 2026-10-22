@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   closeApp: () => ipcRenderer.invoke('close-app'),
   getUserDataPath: () => ipcRenderer.invoke('get-user-data-path'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getVersionHistory: () => ipcRenderer.invoke('get-version-history'),
   openUserDataFolder: () => ipcRenderer.invoke('open-user-data-folder'),
   listBuiltinIcons: () => ipcRenderer.invoke('list-builtin-icons'),
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
@@ -152,6 +153,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   /* ---- Tareas (pantalla del icono de inplaize) ---- */
   getTodos: () => ipcRenderer.invoke('get-todos'),
   saveTodos: (payload) => ipcRenderer.invoke('save-todos', payload),
+  holdDockBlur: (ms) => ipcRenderer.invoke('hold-dock-blur', ms),
   onTodosChanged: (callback) => {
     ipcRenderer.on('todos-changed', () => callback());
   },

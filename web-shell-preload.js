@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   windowMinimize: () => ipcRenderer.invoke('shell-window-minimize'),
   windowToggleMaximize: () => ipcRenderer.invoke('shell-window-toggle-maximize'),
   windowClose: () => ipcRenderer.invoke('shell-window-close'),
+  goBack: () => ipcRenderer.invoke('shell-nav-back'),
+  goForward: () => ipcRenderer.invoke('shell-nav-forward'),
+  getNavState: () => ipcRenderer.invoke('shell-nav-state'),
+  onNavState: (callback) => {
+    ipcRenderer.on('shell-nav', (_event, state) => callback(state));
+  },
   openDockWelcomeHome: (view) =>
     ipcRenderer.invoke('dock-open-welcome-home', view === 'downloads' ? 'downloads' : 'todos'),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
@@ -18,6 +24,8 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
   closeApp: () => ipcRenderer.invoke('close-app'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getVersionHistory: () => ipcRenderer.invoke('get-version-history'),
   notifyShellMenuDrawer: (open) => ipcRenderer.invoke('shell-menu-drawer-state', open === true),
   requestShortcutEditor: () => ipcRenderer.invoke('shell-request-shortcut-editor'),
   requestExitShortcutEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),

@@ -83,6 +83,21 @@ function createDockWindow(display, state) {
 
   win.setIgnoreMouseEvents(true, { forward: true });
 
+  function rememberHomeIfShowing() {
+    if (!state.isExpanded) return;
+    try {
+      require('./open-shortcut').markHomeAsLastFocusedSurface();
+    } catch {
+      /* noop */
+    }
+  }
+  win.on('focus', rememberHomeIfShowing);
+  try {
+    win.webContents.on('focus', rememberHomeIfShowing);
+  } catch {
+    /* noop */
+  }
+
   win.on('blur', () => {
     // Durante el drag nativo de un archivo, soltar sobre WhatsApp/mail enfoca
     // esa ventana. Si cerramos el panel acá, el HWND fullscreen se reacomoda

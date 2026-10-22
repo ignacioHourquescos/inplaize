@@ -404,9 +404,39 @@ const webWindowsByUrlKey = new Map();
 /** @type {string | null} */
 let lastFocusedWebMapKey = null;
 
+/**
+ * La home (panel del dock) cuenta como una ventana más.
+ * `web` = última superficie fue una ventana web; `shell` = el contenedor; `home` = la home.
+ * @type {'home' | 'web' | 'shell' | null}
+ */
+let lastFocusedSurfaceKind = null;
+
+/** Hasta esta marca, un focus espurio (minimizar el mail, etc.) no pisa la home. */
+let ignoreSurfaceUntil = 0;
+
 function setLastFocusedWebMapKey(mapKey) {
   if (!mapKey || typeof mapKey !== 'string') return;
+  if (Date.now() < ignoreSurfaceUntil) return;
   lastFocusedWebMapKey = mapKey;
+  lastFocusedSurfaceKind = 'web';
+}
+
+/**
+ * @param {{ holdMs?: number }} [opts] holdMs bloquea que otra ventana pise la home al ocultar.
+ */
+function markHomeAsLastFocusedSurface(opts) {
+  lastFocusedSurfaceKind = 'home';
+  const holdMs = opts && typeof opts.holdMs === 'number' ? opts.holdMs : 0;
+  if (holdMs > 0) ignoreSurfaceUntil = Date.now() + holdMs;
+}
+
+function markShellAsLastFocusedSurface() {
+  if (Date.now() < ignoreSurfaceUntil) return;
+  lastFocusedSurfaceKind = 'shell';
+}
+
+function lastFocusedSurfaceIsHome() {
+  return lastFocusedSurfaceKind === 'home';
 }
 
 /**
@@ -963,6 +993,7 @@ function closeAllDetachedWebWindows() {
   }
   webWindowsByUrlKey.clear();
   lastFocusedWebMapKey = null;
+  if (lastFocusedSurfaceKind === 'web') lastFocusedSurfaceKind = null;
   broadcastOpenWebWindowKeys([]);
 }
 
@@ -983,4 +1014,7 @@ module.exports = {
   focusLastWebWindowFromHotkey,
   anyWebWindowFocused,
   minimizeAllWebWindows,
+  markHomeAsLastFocusedSurface,
+  markShellAsLastFocusedSurface,
+  lastFocusedSurfaceIsHome,
 };

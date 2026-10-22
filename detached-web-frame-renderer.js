@@ -248,6 +248,67 @@ async function refreshChromeFromMain() {
   }
 }
 
+/** Historial de la pestaña activa. Las flechas solo se dibujan en esa solapa. */
+let pageNav = { canGoBack: false, canGoForward: false };
+
+const SUBTAB_NAV_BACK_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+const SUBTAB_NAV_FORWARD_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+
+function applyPageNav(state) {
+  pageNav = state && typeof state === 'object'
+    ? { canGoBack: !!state.canGoBack, canGoForward: !!state.canGoForward }
+    : { canGoBack: false, canGoForward: false };
+  if (!subtabStrip) return;
+  const back = subtabStrip.querySelector('.subtab-nav-back');
+  const forward = subtabStrip.querySelector('.subtab-nav-forward');
+  if (back) back.disabled = !pageNav.canGoBack;
+  if (forward) forward.disabled = !pageNav.canGoForward;
+}
+
+function makeSubtabNavButton(className, label, svg, enabled, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `subtab-nav-btn ${className}`;
+  btn.setAttribute('aria-label', label);
+  btn.dataset.tooltip = label;
+  btn.dataset.tooltipPlacement = 'bottom';
+  btn.disabled = !enabled;
+  btn.innerHTML = svg;
+  btn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    onClick();
+  });
+  return btn;
+}
+
+/** Flechas de historial, únicamente en la solapa activa. */
+function appendActiveTabNav(el) {
+  const nav = document.createElement('span');
+  nav.className = 'subtab-nav';
+  nav.addEventListener('click', (ev) => ev.stopPropagation());
+  nav.appendChild(makeSubtabNavButton(
+    'subtab-nav-back',
+    'Atrás',
+    SUBTAB_NAV_BACK_SVG,
+    pageNav.canGoBack,
+    () => api.goBack?.().catch(() => {})
+  ));
+  nav.appendChild(makeSubtabNavButton(
+    'subtab-nav-forward',
+    'Adelante',
+    SUBTAB_NAV_FORWARD_SVG,
+    pageNav.canGoForward,
+    () => api.goForward?.().catch(() => {})
+  ));
+  el.appendChild(nav);
+}
+
 /**
  * Fila de sub-pestañas: solo visible cuando hay más de una pestaña
  * (la principal del servicio + las abiertas con Ctrl+click / target=_blank).
@@ -269,6 +330,8 @@ function renderSubTabs(payload) {
     el.setAttribute('role', 'tab');
     el.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
     el.title = tab.title || '';
+
+    if (tab.isActive) appendActiveTabNav(el);
 
     const icon = document.createElement('span');
     icon.className = 'subtab-icon';
@@ -328,6 +391,8 @@ async function refreshSubTabsFromMain() {
 if (api.onTabs) {
   api.onTabs(renderSubTabs);
 }
+if (api.onNavState) api.onNavState(applyPageNav);
+if (api.getNavState) api.getNavState().then(applyPageNav).catch(() => {});
 refreshSubTabsFromMain();
 
 if (api.onChrome) {

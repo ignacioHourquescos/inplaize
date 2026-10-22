@@ -1,13 +1,15 @@
 {
   "name": "inplaize",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
     "start": "electron .",
     "dev": "electronmon .",
-    "build:win": "node scripts/bump-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
-    "build:mac": "node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
+    "build:editor": "node scripts/bundle-document-editor.js",
+    "test:docs": "node scripts/test-document-content.js",
+    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
+    "build:mac": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
   },
   "build": {
     "appId": "com.inplaize.app",
@@ -22,6 +24,7 @@
       "*.html",
       "package.json",
       "build-info.json",
+      "version-history.json",
       "!**/*.map",
       "!**/.DS_Store",
       "!**/Thumbs.db"
@@ -32,7 +35,8 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "artifactName": "inplaize.Setup.${version}.${ext}"
     },
     "mac": {
       "target": "dmg",
@@ -46,9 +50,20 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@tiptap/core": "^3.32.0",
+    "@tiptap/extension-image": "^3.32.0",
+    "@tiptap/extension-link": "^3.32.0",
+    "@tiptap/extension-placeholder": "^3.32.0",
+    "@tiptap/extension-task-item": "^3.32.0",
+    "@tiptap/extension-task-list": "^3.32.0",
+    "@tiptap/extension-underline": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "@tiptap/suggestion": "^3.32.0",
     "electron": "^41.1.1",
     "electron-builder": "^26.8.1",
     "electronmon": "^2.0.3",
+    "esbuild": "^0.28.2",
     "png-to-ico": "^3.0.2",
     "sharp": "^0.35.3"
   },

@@ -32,7 +32,7 @@ const {
 
 const { loadAppSettings, saveAppSettings } = require('./app-settings-store');
 
-const { getAppVersionPayload } = require('./app-version');
+const { getAppVersionPayload, readVersionHistory } = require('./app-version');
 
 const {
   openShortcut,
@@ -47,6 +47,8 @@ const {
   anyWebWindowFocused,
   minimizeAllWebWindows,
   closeWebWindowByMapKey,
+  markHomeAsLastFocusedSurface,
+  lastFocusedSurfaceIsHome,
 } = require('./open-shortcut');
 const { webMapKey } = require('./web-map-key');
 const focusMode = require('./focus-mode');
@@ -97,6 +99,8 @@ const IPC_CHANNELS = [
 
   'get-app-version',
 
+  'get-version-history',
+
   'open-user-data-folder',
 
   'list-builtin-icons',
@@ -128,6 +132,12 @@ const IPC_CHANNELS = [
   'shell-window-toggle-maximize',
 
   'shell-window-close',
+
+  'shell-nav-back',
+
+  'shell-nav-forward',
+
+  'shell-nav-state',
 
   'shell-menu-drawer-state',
 
@@ -200,6 +210,8 @@ const IPC_CHANNELS = [
   'get-todos',
 
   'save-todos',
+
+  'hold-dock-blur',
 
   'downloads-get-history',
 
@@ -438,65 +450,83 @@ function registerIpcHandlers(state) {
 
 
 
+  function dockSurfaceIsFocused() {
+    const dockWin = state.mainWindow;
+    if (!dockWin || dockWin.isDestroyed()) return false;
+    try {
+      if (dockWin.isFocused()) return true;
+    } catch {
+      /* noop */
+    }
+    try {
+      const top = dockWin.webContents;
+      if (top && !top.isDestroyed() && top.isFocused()) return true;
+    } catch {
+      /* noop */
+    }
+    return false;
+  }
+
   /**
-   * Atajo global (Ctrl+Alt+D y Ctrl+Mayús+D), modo ventanas separadas:
-   * - Hay ventana web → última ventana al frente y se cierra el panel del dock si estaba abierto.
-   * - No hay ninguna → abre o cierra el panel (barra negra con accesos), para poder iniciar sin ventanas.
-   * Modo shell → sigue levantando el contenedor web.
+   * Atajo global (Ctrl+Alt+D y Ctrl+Mayús+D).
+   * La home cuenta como una ventana: si está al frente, se oculta igual que el mail.
+   * Si no hay nada de inplaize al frente, vuelve la última superficie (home o ventana web).
+   * Sin ventanas, abre o cierra el panel.
    */
   function raiseAppFromGlobalHotkey() {
     if (loadAppSettings().webHostMode === 'shell') {
+        let shellInUse = false;
+        let ws = null;
         try {
-          require('./web-shell').showOrToggleShellFromHotkey();
+          ws = require('./web-shell');
+          shellInUse = ws.shellWindowOrContentsHasFocus();
         } catch {
           /* noop */
         }
-        if (state.isExpanded) {
-          state.isExpanded = false;
-          const win = state.mainWindow;
-          if (win && !win.isDestroyed()) {
-            applyDockWindowBounds(win, false);
-            try {
-              win.setIgnoreMouseEvents(true, { forward: true });
-            } catch {
-              /* noop */
-            }
-            win.webContents.send('sidebar-state', false);
+        const homeIsFront = state.isExpanded && (dockSurfaceIsFocused() || !shellInUse);
+        if (homeIsFront) {
+          markHomeAsLastFocusedSurface({ holdMs: 500 });
+          try {
+            if (ws) ws.minimizeShellFromHotkey();
+          } catch {
+            /* noop */
           }
+          collapseDockSidebar();
+          return;
         }
+        if (!shellInUse && lastFocusedSurfaceIsHome()) {
+          expandDockSidebar();
+          return;
+        }
+        try {
+          if (ws) ws.showOrToggleShellFromHotkey();
+        } catch {
+          /* noop */
+        }
+        if (state.isExpanded) collapseDockSidebar();
         return;
       }
 
       const dockWin = state.mainWindow;
       if (!dockWin || dockWin.isDestroyed()) return;
 
-      if (anyWebWindowFocused()) {
+      const webFocused = anyWebWindowFocused();
+      const homeShowing = state.isExpanded === true;
+      if (webFocused || homeShowing) {
         minimizeAllWebWindows();
-        if (state.isExpanded) {
-          state.isExpanded = false;
-          applyDockWindowBounds(dockWin, false);
-          try {
-            dockWin.setIgnoreMouseEvents(true, { forward: true });
-          } catch {
-            /* noop */
-          }
-          dockWin.webContents.send('sidebar-state', false);
-        }
+        if (homeShowing) collapseDockSidebar();
+        if (homeShowing && !webFocused) markHomeAsLastFocusedSurface({ holdMs: 500 });
+        return;
+      }
+
+      if (lastFocusedSurfaceIsHome()) {
+        expandDockSidebar();
         return;
       }
 
       const focusedWeb = focusLastWebWindowFromHotkey();
       if (focusedWeb) {
-        if (state.isExpanded) {
-          state.isExpanded = false;
-          applyDockWindowBounds(dockWin, false);
-          try {
-            dockWin.setIgnoreMouseEvents(true, { forward: true });
-          } catch {
-            /* noop */
-          }
-          dockWin.webContents.send('sidebar-state', false);
-        }
+        if (state.isExpanded) collapseDockSidebar();
         return;
       }
 
@@ -788,6 +818,8 @@ function registerIpcHandlers(state) {
 
 
   ipcMain.handle('get-app-version', () => getAppVersionPayload());
+
+  ipcMain.handle('get-version-history', () => readVersionHistory());
 
 
 
@@ -1159,6 +1191,12 @@ function registerIpcHandlers(state) {
     const saved = saveTodos(payload);
     broadcastTodosChanged(event.sender);
     return saved;
+  });
+
+  ipcMain.handle('hold-dock-blur', (_event, ms) => {
+    const n = Math.max(0, Math.min(60000, Math.round(Number(ms) || 0)));
+    state.dockBlurIgnoreUntil = Date.now() + n;
+    return true;
   });
 
 

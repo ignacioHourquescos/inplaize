@@ -29,6 +29,7 @@ html[data-shell-frameless='true'] .shell-top {
 }
 
 html[data-shell-frameless='true'] .dock-chrome-menu-wrap,
+html[data-shell-frameless='true'] .dock-app-version,
 html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
 html[data-shell-frameless='true'] .shell-home-strip-btn,
@@ -222,4 +223,42 @@ html[data-usualdesk-detached-host='true'] .shell-top {
 .subtab-close:hover {
   background: rgba(229, 57, 53, 0.35);
   color: #fff;
+}
+
+/* Atrás / adelante: solo dentro de la pestaña activa. */
+.subtab-nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-right: 2px;
+  -webkit-app-region: no-drag;
+}
+
+.subtab-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.subtab-nav-btn svg {
+  display: block;
+}
+
+.subtab-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.subtab-nav-btn:disabled {
+  color: #6e6e7c;
+  cursor: default;
 }

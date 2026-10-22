@@ -10,7 +10,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { app, session, dialog } = require('electron');
+const { app, session } = require('electron');
+const { askChoice } = require('./choice-prompt');
 const { loadShortcuts } = require('./shortcuts-store');
 const { partitionFromSessionId } = require('./session-partition');
 
@@ -178,6 +179,62 @@ async function copyDomainCookies(fromPartition, toPartition, domain) {
 }
 
 /**
+ * Gmail, Ads, YouTube y accounts.google.com comparten el mismo login.
+ * @param {string} domain
+ * @returns {boolean}
+ */
+function isGoogleFamilyDomain(domain) {
+  const d = String(domain || '').toLowerCase();
+  if (!d) return false;
+  if (d === 'google.com' || d.endsWith('.google.com')) return true;
+  if (d === 'gmail.com' || d === 'googlemail.com' || d === 'youtube.com') return true;
+  if (d.startsWith('google.')) return true;
+  return false;
+}
+
+/**
+ * Dominio cuyas cookies de login hay que mirar o copiar.
+ * Para cualquier servicio de Google es `google.com` (SID, SAPISID, etc.).
+ * @param {string} url
+ * @returns {string}
+ */
+function loginCookieDomain(url) {
+  const domain = baseDomainOf(url);
+  if (isGoogleFamilyDomain(domain)) return 'google.com';
+  return domain;
+}
+
+/**
+ * Accesos que pueden prestar la sesión de esta URL de login.
+ * En Google agrupa Gmail, Ads, YouTube y el resto de la familia.
+ * @param {string} url
+ * @returns {Array<{ partition: string, label: string }>}
+ */
+function candidateSessionsForLogin(url) {
+  const domain = baseDomainOf(url);
+  if (!domain) return [];
+  if (!isGoogleFamilyDomain(domain)) return candidateSessionsForDomain(domain);
+
+  const seen = new Set();
+  const out = [];
+  let shortcuts = [];
+  try {
+    shortcuts = loadShortcuts();
+  } catch {
+    return [];
+  }
+  for (const s of shortcuts) {
+    if (!s || s.type !== 'web' || !s.url) continue;
+    if (!isGoogleFamilyDomain(baseDomainOf(s.url))) continue;
+    const partition = partitionFromSessionId(s.sessionId);
+    if (seen.has(partition)) continue;
+    seen.add(partition);
+    out.push({ partition, label: (s.name && String(s.name)) || partition });
+  }
+  return out;
+}
+
+/**
  * ¿Es una URL de login/OAuth? Estos popups deben quedarse en la partition del
  * opener (el flujo devuelve el resultado a la ventana que lo abrió); redirigirlos
  * a otra sesión rompe el proceso.
@@ -237,6 +294,118 @@ function saveDomainChoice(domain, partition) {
   }
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+/** @type {Map<string, { emails: string[], at: number }>} */
+const googleEmailCache = new Map();
+const GOOGLE_EMAIL_CACHE_MS = 10 * 60 * 1000;
+
+function chromeLikeUserAgent() {
+  const chrome = process.versions.chrome || '131.0.0.0';
+  if (process.platform === 'darwin') {
+    return `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
+  }
+  if (process.platform === 'win32') {
+    return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
+  }
+  return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chrome} Safari/537.36`;
+}
+
+/**
+ * @param {unknown} node
+ * @param {string[]} out
+ * @param {number} depth
+ */
+function collectEmails(node, out, depth) {
+  if (node == null || depth > 6 || out.length >= 3) return;
+  if (typeof node === 'string') {
+    const value = node.trim();
+    if (value.length <= 120 && EMAIL_RE.test(value)) {
+      const key = value.toLowerCase();
+      if (!out.some((e) => e.toLowerCase() === key)) out.push(value);
+    }
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) collectEmails(item, out, depth + 1);
+  }
+}
+
+/**
+ * @param {string} partition
+ * @param {string} url
+ * @returns {Promise<string>}
+ */
+async function fetchPartitionText(partition, url) {
+  const ses = session.fromPartition(partition);
+  const prevUa = ses.getUserAgent();
+  ses.setUserAgent(chromeLikeUserAgent());
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 2500);
+  try {
+    const res = await ses.fetch(url, {
+      credentials: 'include',
+      signal: ctrl.signal,
+    });
+    if (!res || !res.ok) return '';
+    return await res.text();
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+    try {
+      ses.setUserAgent(prevUa);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+/**
+ * Mail de la cuenta de Google iniciada en esa partition.
+ * @param {string} partition
+ * @returns {Promise<string[]>}
+ */
+async function googleEmailsForPartition(partition) {
+  if (!partition) return [];
+  const hit = googleEmailCache.get(partition);
+  if (hit && Date.now() - hit.at < GOOGLE_EMAIL_CACHE_MS) return hit.emails;
+
+  const listBody = await fetchPartitionText(
+    partition,
+    'https://accounts.google.com/ListAccounts?gpsia=1&source=ogb&mo=1&mn=1'
+  );
+  /** @type {string[]} */
+  let emails = [];
+  if (listBody) {
+    const raw = listBody.replace(/^\)\]\}'\s*/, '').replace(/^while\s*\(\s*1\s*\)\s*;\s*/, '').trim();
+    try {
+      collectEmails(JSON.parse(raw), emails, 0);
+    } catch {
+      emails = [];
+    }
+  }
+  if (emails.length === 0) {
+    const atom = await fetchPartitionText(partition, 'https://mail.google.com/mail/u/0/feed/atom');
+    const title = /<title>\s*(?:Gmail\s*-\s*)?([^<]+@[^<]+)\s*<\/title>/i.exec(atom || '');
+    const value = title ? title[1].trim() : '';
+    if (EMAIL_RE.test(value)) emails = [value];
+  }
+  if (emails.length) googleEmailCache.set(partition, { emails, at: Date.now() });
+  return emails;
+}
+
+/**
+ * @param {Array<{ id: string, label: string, hint?: string }>} choices
+ */
+async function attachGoogleEmails(choices) {
+  await Promise.all(
+    choices.map(async (choice) => {
+      const emails = await googleEmailsForPartition(choice.id);
+      if (emails.length) choice.hint = emails.join(' · ');
+    })
+  );
+}
+
 /**
  * Pregunta al usuario con qué sesión abrir el sitio.
  * @param {Electron.BrowserWindow | null} hostWindow
@@ -245,34 +414,30 @@ function saveDomainChoice(domain, partition) {
  * @returns {Promise<string | null>} partition elegida, o null para usar la del opener
  */
 async function askUserForSession(hostWindow, domain, candidates) {
-  const buttons = candidates.map((c) => c.label);
-  buttons.push('Sesión de esta ventana');
-  let result;
+  const choices = candidates.map((c) => ({ id: c.partition, label: c.label }));
+  if (isGoogleFamilyDomain(domain)) {
+    try {
+      await attachGoogleEmails(choices);
+    } catch {
+      /* sin mail igual se puede elegir por nombre */
+    }
+  }
+  let picked;
   try {
-    const opts = {
-      type: 'question',
-      title: 'Elegir sesión',
+    picked = await askChoice({
+      hostWindow,
       message: `¿Con qué sesión abrir ${domain}?`,
       detail: 'Tenés más de una sesión iniciada para este sitio.',
-      buttons,
-      cancelId: buttons.length - 1,
-      noLink: true,
-      checkboxLabel: 'Recordar para este sitio',
-      checkboxChecked: false,
-    };
-    result = hostWindow && !hostWindow.isDestroyed()
-      ? await dialog.showMessageBox(hostWindow, opts)
-      : await dialog.showMessageBox(opts);
+      choices,
+      cancelLabel: 'Sesión de esta ventana',
+      rememberLabel: 'Recordar para este sitio',
+    });
   } catch {
     return null;
   }
-  const idx = result.response;
-  if (idx < 0 || idx >= candidates.length) return null;
-  const chosen = candidates[idx].partition;
-  if (result.checkboxChecked) {
-    saveDomainChoice(domain, chosen);
-  }
-  return chosen;
+  if (!picked || !picked.choiceId) return null;
+  if (picked.remember) saveDomainChoice(domain, picked.choiceId);
+  return picked.choiceId;
 }
 
 /**
@@ -323,51 +488,62 @@ async function resolveTargetPartition(url, openerPartition, hostWindow) {
  * @param {string} openerPartition
  */
 async function maybeOfferSessionCopyForAuthTab(hostWindow, wc, url, openerPartition) {
-  const domain = baseDomainOf(url);
-  if (!domain || !openerPartition) return;
-  if (await partitionHasLoginForDomain(openerPartition, domain)) return;
+  const pageDomain = baseDomainOf(url);
+  if (!pageDomain || !openerPartition) return;
+  const cookieDomain = loginCookieDomain(url);
+  if (!cookieDomain) return;
+  if (await partitionHasLoginForDomain(openerPartition, cookieDomain)) return;
 
-  const candidates = candidateSessionsForDomain(domain).filter(
+  const candidates = candidateSessionsForLogin(url).filter(
     (c) => c.partition !== openerPartition
   );
   const donors = [];
   for (const c of candidates) {
-    if (await partitionHasLoginForDomain(c.partition, domain)) donors.push(c);
+    if (await partitionHasLoginForDomain(c.partition, cookieDomain)) donors.push(c);
   }
   if (donors.length === 0) return;
 
-  const rememberKey = `auth:${domain}`;
+  const rememberKey = `auth:${cookieDomain}`;
   const remembered = loadDomainChoices()[rememberKey];
   let chosen = remembered && donors.some((d) => d.partition === remembered) ? remembered : null;
 
   if (!chosen) {
-    const buttons = donors.map((d) => d.label);
-    buttons.push('Iniciar sesión manualmente');
-    const opts = {
-      type: 'question',
-      title: 'Usar sesión existente',
-      message: `¿Usar tu sesión de ${domain} ya iniciada?`,
-      detail: 'Se copiará esa sesión a esta ventana para no tener que loguearte de nuevo.',
-      buttons,
-      cancelId: buttons.length - 1,
-      noLink: true,
-      checkboxLabel: 'Recordar para este sitio',
-      checkboxChecked: false,
-    };
-    let result;
+    const seenLabels = new Map();
+    const choices = donors.map((d) => {
+      const base = d.label || 'Usuario';
+      const n = (seenLabels.get(base) || 0) + 1;
+      seenLabels.set(base, n);
+      const dup = donors.filter((x) => (x.label || 'Usuario') === base).length > 1;
+      return { id: d.partition, label: dup ? `${base} (${n})` : base };
+    });
+    if (isGoogleFamilyDomain(pageDomain)) {
+      try {
+        await attachGoogleEmails(choices);
+      } catch {
+        /* sin mail igual se puede elegir por nombre */
+      }
+    }
+    let picked;
     try {
-      result = hostWindow && !hostWindow.isDestroyed()
-        ? await dialog.showMessageBox(hostWindow, opts)
-        : await dialog.showMessageBox(opts);
+      picked = await askChoice({
+        hostWindow,
+        message: '¿Con qué usuario querés iniciar?',
+        detail: isGoogleFamilyDomain(pageDomain)
+          ? 'Hay cuentas de Google ya iniciadas en otros accesos. Elegí una para entrar sin escribir el correo y la contraseña.'
+          : `Hay sesiones de ${pageDomain} ya iniciadas en otros accesos. Elegí una para no tener que loguearte de nuevo.`,
+        choices,
+        cancelLabel: 'Usuario y contraseña',
+        rememberLabel: 'Recordar para este sitio',
+      });
     } catch {
       return;
     }
-    if (result.response < 0 || result.response >= donors.length) return;
-    chosen = donors[result.response].partition;
-    if (result.checkboxChecked) saveDomainChoice(rememberKey, chosen);
+    if (!picked || !picked.choiceId) return;
+    chosen = picked.choiceId;
+    if (picked.remember) saveDomainChoice(rememberKey, chosen);
   }
 
-  const copied = await copyDomainCookies(chosen, openerPartition, domain);
+  const copied = await copyDomainCookies(chosen, openerPartition, cookieDomain);
   if (copied > 0 && wc && !wc.isDestroyed()) {
     try {
       wc.reload();
@@ -392,6 +568,85 @@ function mayRouteToOtherSession(url, openerPartition) {
   return !candidates.some((c) => c.partition === openerPartition);
 }
 
+/**
+ * Si la página cae en un login (el acceso mismo redirige a Google, o un popup),
+ * pregunta con qué usuario ya iniciado continuar.
+ * @param {Electron.WebContents} webContents
+ * @param {string} partition
+ * @param {() => Electron.BrowserWindow | null} getHostWindow
+ * @param {string} [initialUrl] por si la navegación arrancó antes de enganchar los eventos
+ */
+function attachLoginSessionOffer(webContents, partition, getHostWindow, initialUrl) {
+  if (!webContents || webContents.isDestroyed() || !partition) return;
+  if (webContents.__usualDeskLoginOfferAttached) return;
+  webContents.__usualDeskLoginOfferAttached = true;
+
+  /** @type {Set<string>} */
+  const asked = new Set();
+  let busy = false;
+
+  const consider = (url, isMainFrame) => {
+    if (isMainFrame === false) return;
+    if (!webContents || webContents.isDestroyed()) return;
+    if (!url || typeof url !== 'string') return;
+    if (!isAuthUrl(url)) {
+      if (!busy) asked.clear();
+      return;
+    }
+    const key = loginCookieDomain(url) || baseDomainOf(url);
+    if (!key || asked.has(key) || busy) return;
+    asked.add(key);
+    busy = true;
+    const run = async () => {
+      let host = null;
+      try {
+        host = typeof getHostWindow === 'function' ? getHostWindow() : null;
+        if (host && host.isDestroyed()) host = null;
+        if (host && !host.isVisible()) {
+          await new Promise((resolve) => {
+            let timer = null;
+            const done = () => {
+              if (timer) clearTimeout(timer);
+              try {
+                host.removeListener('show', done);
+              } catch {
+                /* noop */
+              }
+              resolve();
+            };
+            host.once('show', done);
+            timer = setTimeout(done, 2000);
+          });
+          if (host.isDestroyed()) host = null;
+        }
+      } catch {
+        host = null;
+      }
+      if (!webContents || webContents.isDestroyed()) return;
+      await maybeOfferSessionCopyForAuthTab(host, webContents, url, partition);
+    };
+    run()
+      .catch(() => {})
+      .finally(() => {
+        busy = false;
+      });
+  };
+
+  webContents.on('did-start-navigation', (_e, url, _isInPlace, isMainFrame) => {
+    consider(url, isMainFrame);
+  });
+  webContents.on('did-redirect-navigation', (_e, url, _isInPlace, isMainFrame) => {
+    consider(url, isMainFrame);
+  });
+  webContents.on('did-navigate', (_e, url) => {
+    consider(url, true);
+  });
+
+  if (initialUrl && isAuthUrl(initialUrl)) {
+    setImmediate(() => consider(initialUrl, true));
+  }
+}
+
 module.exports = {
   baseDomainOf,
   candidateSessionsForDomain,
@@ -400,6 +655,7 @@ module.exports = {
   copyDomainCookies,
   isAuthUrl,
   maybeOfferSessionCopyForAuthTab,
+  attachLoginSessionOffer,
   resolveTargetPartition,
   mayRouteToOtherSession,
   loadDomainChoices,
