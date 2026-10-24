@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   getVersionHistory: () => ipcRenderer.invoke('get-version-history'),
   openUserDataFolder: () => ipcRenderer.invoke('open-user-data-folder'),
   listBuiltinIcons: () => ipcRenderer.invoke('list-builtin-icons'),
+  fetchWebFavicon: (pageUrl) => ipcRenderer.invoke('fetch-web-favicon', pageUrl),
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
   setAppSettings: (partial) => ipcRenderer.invoke('set-app-settings', partial),
   onSidebarState: (callback) => {

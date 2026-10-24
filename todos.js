@@ -6,7 +6,8 @@
  * Arrastrá un renglón desde cualquier parte para moverlo. En el espacio vacío,
  * el arrastre selecciona varios; Shift+clic también. Se sueltan juntos en otro lugar,
  * justo antes de un documento, o encima de él para meterlos en esa página.
- * Enter baja a un renglón de texto, también vacío. "/" elige el tipo. Tab sangra.
+ * Enter en un checkbox o una viñeta abre otro igual. En uno vacío, pasa a texto.
+ * "/" elige el tipo. Tab sangra.
  * Un documento se edita en un modal, sin cambiar de página.
  * Ctrl+Z deshace y Ctrl+Mayús+Z (o Ctrl+Y) rehace. El historial es de esta
  * sesión; en disco se sigue guardando solo el estado actual.
@@ -1502,7 +1503,11 @@
         return;
       }
       if (gesture.onCheck) {
+        // El arrastre captura el puntero en la página, así que el click del
+        // botón no llega. Se marca acá, y se traga el click por si igual dispara.
+        armSwallowClick();
         clearBlockSelection();
+        toggleTodoDone(gesture.blockId);
         return;
       }
       if (gesture.onContent) {
@@ -1629,9 +1634,9 @@
       closeMenu();
       if (countBlocks() >= MAX_BLOCKS) return;
       const parts = selectionParts(content);
-      // Un renglón vacío con checkbox o viñeta pasa a texto: Enter no obliga a
-      // otro ítem. Si ya es texto, el renglón de abajo queda en blanco.
-      if (!parts.before && !parts.after && block.type !== 'text') {
+      const listItem = block.type === 'todo' || block.type === 'bullet';
+      // Un checkbox o una viñeta vacíos pasan a texto para salir de la lista.
+      if (!parts.before && !parts.after && listItem) {
         block.type = 'text';
         block.done = false;
         block.indent = 0;
@@ -1640,7 +1645,9 @@
         return;
       }
       block.text = parts.before;
-      const created = insertAfter(block.id, 'text', parts.after, parts.after ? block.indent : 0);
+      const nextType = listItem ? block.type : 'text';
+      const nextIndent = listItem ? (block.indent || 0) : (parts.after ? (block.indent || 0) : 0);
+      const created = insertAfter(block.id, nextType, parts.after, nextIndent);
       if (!created) return;
       render({ id: created.id, offset: 0 });
       scheduleSave();
@@ -1863,6 +1870,24 @@
     }
   }
 
+  function paintTodoCheck(block) {
+    const row = rootEl.querySelector(`[data-block-id="${CSS.escape(block.id)}"]`);
+    if (!row) return;
+    row.classList.toggle('is-done', block.done === true);
+    const check = row.querySelector('.notion-check');
+    if (!check) return;
+    check.setAttribute('aria-pressed', block.done ? 'true' : 'false');
+    check.setAttribute('aria-label', block.done ? 'Marcar como pendiente' : 'Marcar como hecha');
+  }
+
+  function toggleTodoDone(blockId) {
+    const found = findBlock(blockId);
+    if (!found || found.block.type !== 'todo') return;
+    found.block.done = !found.block.done;
+    paintTodoCheck(found.block);
+    scheduleSave();
+  }
+
   function renderBlock(column, block, columnIndex) {
     const row = document.createElement('div');
     row.className = 'notion-block' + (block.type === 'todo' && block.done ? ' is-done' : '');
@@ -1910,11 +1935,7 @@
       check.addEventListener('mousedown', (e) => e.preventDefault());
       check.addEventListener('click', () => {
         if (swallowClick) return;
-        block.done = !block.done;
-        row.classList.toggle('is-done', block.done);
-        check.setAttribute('aria-pressed', block.done ? 'true' : 'false');
-        check.setAttribute('aria-label', block.done ? 'Marcar como pendiente' : 'Marcar como hecha');
-        scheduleSave();
+        toggleTodoDone(block.id);
       });
       row.appendChild(check);
     } else if (block.type === 'bullet') {

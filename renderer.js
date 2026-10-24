@@ -49,6 +49,13 @@ let iconBuiltinRows = [];
 let iconDynamicExtras = [];
 let iconPickerReady = false;
 let iconDropdownOpen = false;
+/** Data URL del favicon aplicado solo, para no pisar un icono elegido a mano. */
+let autoFaviconValue = '';
+let suppressAutoFavicon = false;
+let faviconSeq = 0;
+let faviconTimer = null;
+let faviconWait = null;
+let faviconLookupPending = false;
 
 /** Sentinel: abre el panel de emoji (no se guarda en shortcuts) */
 const CUSTOM_EMOJI_VALUE = '__emoji__';
@@ -618,6 +625,367 @@ function fileUrlFromPath(p) {
   return `file:///${encodeURI(norm).replace(/#/g, '%23').replace(/\?/g, '%3F')}`;
 }
 
+/* Hover en la grilla: el panel derecho muestra miniatura, fecha, tamaño y datos
+   del archivo. Al salir vuelve lo que hubiera (placeholder o visor abierto). */
+let hoverDetailId = '';
+let hoverDetailToken = 0;
+let hoverHideTimer = 0;
+const hoverThumbInflight = new Set();
+/** Último punto del puntero sobre la grilla, para reenganchar el hover tras un re-render. */
+let downloadPointer = null;
+
+const DOWNLOAD_TYPE_LABELS = {
+  pdf: 'PDF',
+  png: 'Imagen PNG',
+  jpg: 'Imagen JPEG',
+  jpeg: 'Imagen JPEG',
+  gif: 'Imagen GIF',
+  webp: 'Imagen WebP',
+  svg: 'Imagen SVG',
+  bmp: 'Imagen BMP',
+  avif: 'Imagen AVIF',
+  ico: 'Icono',
+  mp4: 'Video MP4',
+  mov: 'Video MOV',
+  webm: 'Video WebM',
+  mkv: 'Video MKV',
+  avi: 'Video AVI',
+  mp3: 'Audio MP3',
+  wav: 'Audio WAV',
+  m4a: 'Audio M4A',
+  xlsx: 'Excel',
+  xlsm: 'Excel',
+  xls: 'Excel',
+  csv: 'CSV',
+  doc: 'Word',
+  docx: 'Word',
+  ppt: 'PowerPoint',
+  pptx: 'PowerPoint',
+  zip: 'ZIP',
+  rar: 'RAR',
+  '7z': '7-Zip',
+  apk: 'APK',
+  txt: 'Texto',
+  json: 'JSON',
+  sh3d: 'Sweet Home 3D',
+};
+
+const DOWNLOAD_STATE_LABELS = {
+  progressing: 'Descargando',
+  paused: 'En pausa',
+  completed: 'Listo',
+  cancelled: 'Cancelada',
+  interrupted: 'Interrumpida',
+};
+
+function magicDrawerViewOpen() {
+  return ['image-drawer-magic-options', 'image-drawer-magic-loader', 'image-drawer-magic-result'].some(
+    (id) => {
+      const node = document.getElementById(id);
+      return node && !node.classList.contains('hidden');
+    },
+  );
+}
+
+function formatByteSize(n) {
+  const bytes = Number(n);
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = value >= 10 ? 1 : 2;
+  return `${value.toLocaleString('es-AR', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })} ${units[unit]}`;
+}
+
+function hoverSizeLabel(d) {
+  const received = Number(d.receivedBytes) || 0;
+  const total = Number(d.totalBytes) || 0;
+  if (d.state === 'completed') {
+    const n = total || received;
+    return n > 0 ? formatByteSize(n) : '';
+  }
+  if (downloadInProgress(d)) {
+    if (total > 0) return `${formatByteSize(received)} de ${formatByteSize(total)}`;
+    return received > 0 ? formatByteSize(received) : '';
+  }
+  const n = total || received;
+  return n > 0 ? formatByteSize(n) : '';
+}
+
+/** Fecha grande: "Hoy" / "Ayer" / día de semana arriba, y el día-mes bien grande. */
+function hoverDateParts(ts) {
+  const stamp = Number(ts) || 0;
+  if (!stamp) return { kicker: '', date: '—', time: '' };
+  const date = new Date(stamp);
+  const now = new Date();
+  const startOf = (value) => {
+    const copy = new Date(value);
+    copy.setHours(0, 0, 0, 0);
+    return copy.getTime();
+  };
+  const day = startOf(date);
+  const today = startOf(now);
+  let kicker = date.toLocaleDateString('es-AR', { weekday: 'long' });
+  if (day === today) kicker = 'Hoy';
+  else if (day === today - 86400000) kicker = 'Ayer';
+  else kicker = kicker.charAt(0).toUpperCase() + kicker.slice(1);
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const dateLabel = date
+    .toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'short',
+      year: sameYear ? undefined : 'numeric',
+    })
+    .replace(/\./g, '');
+  const time = date.toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return { kicker, date: dateLabel, time };
+}
+
+function compactHoverWhen(ts) {
+  const parts = hoverDateParts(ts);
+  if (!parts.time) return '';
+  return `${parts.kicker} · ${parts.date} · ${parts.time}`;
+}
+
+function folderOfSavePath(savePath) {
+  const raw = String(savePath || '');
+  if (!raw) return { folder: '', full: '' };
+  const parts = raw.replace(/\\/g, '/').split('/').filter(Boolean);
+  parts.pop();
+  return { folder: parts[parts.length - 1] || '', full: raw };
+}
+
+function hoverPreviewUrl(d) {
+  if (!d || d.state !== 'completed' || !d.savePath) return '';
+  // SVG se ve nítido a cualquier tamaño y suele ser liviano. El resto usa la
+  // miniatura ya cacheada: el archivo original no se decodifica en el dock.
+  if (extOfName(d.filename) === 'svg') {
+    const version = downloadThumbVersions.get(d.id);
+    return fileUrlFromPath(d.savePath) + (version ? `?v=${version}` : '');
+  }
+  const cached = docThumbCache.get(String(d.id));
+  if (cached && cached !== 'error') return cached;
+  return '';
+}
+
+function setHoverText(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value || '';
+}
+
+function setHoverMeta(rows) {
+  const dl = document.getElementById('download-hover-meta');
+  if (!dl) return;
+  dl.replaceChildren();
+  for (const row of rows) {
+    if (!row || !row.value) continue;
+    const dt = document.createElement('dt');
+    dt.textContent = row.label;
+    const dd = document.createElement('dd');
+    dd.dataset.key = row.key;
+    dd.textContent = row.value;
+    if (row.title) dd.title = row.title;
+    dl.append(dt, dd);
+  }
+}
+
+function markInspectingDownload(id) {
+  document.querySelectorAll('.download-tile-cell.is-inspecting').forEach((el) => {
+    if (el.dataset.downloadId !== id) el.classList.remove('is-inspecting');
+  });
+  if (!id) return;
+  const cell = document.querySelector(
+    `.download-tile-cell[data-download-id="${CSS.escape(id)}"]`,
+  );
+  cell?.classList.add('is-inspecting');
+}
+
+function hideDownloadHoverDetail() {
+  clearTimeout(hoverHideTimer);
+  hoverDetailId = '';
+  hoverDetailToken += 1;
+  const panel = document.getElementById('download-hover-detail');
+  if (panel) {
+    panel.hidden = true;
+    panel.setAttribute('aria-hidden', 'true');
+  }
+  markInspectingDownload('');
+}
+
+function scheduleHideDownloadHoverDetail() {
+  clearTimeout(hoverHideTimer);
+  hoverHideTimer = setTimeout(() => {
+    if (downloadPointer) {
+      const under = document.elementFromPoint(downloadPointer.x, downloadPointer.y);
+      const cell =
+        under && under.closest ? under.closest('.download-tile-cell[data-download-id]') : null;
+      if (cell) {
+        const next = downloadsRegistry.get(cell.dataset.downloadId);
+        if (next) {
+          showDownloadHoverDetail(next);
+          return;
+        }
+      }
+    }
+    hideDownloadHoverDetail();
+  }, 90);
+}
+
+function paintHoverThumb(d, token) {
+  const img = document.getElementById('download-hover-thumb');
+  const extEl = document.getElementById('download-hover-ext');
+  if (!img || !extEl) return;
+  extEl.textContent = downloadExtLabel(d.filename);
+
+  const showExt = () => {
+    if (token !== hoverDetailToken) return;
+    img.hidden = true;
+    extEl.hidden = false;
+  };
+  const reveal = () => {
+    if (token !== hoverDetailToken) return;
+    img.hidden = false;
+    extEl.hidden = true;
+  };
+
+  const url = hoverPreviewUrl(d);
+  if (!url) {
+    showExt();
+    const thumbId = String(d.id);
+    const canThumb =
+      (isDocThumbDownload(d) || isImageDownload(d)) && extOfName(d.filename) !== 'svg';
+    if (
+      d.state === 'completed' &&
+      d.savePath &&
+      canThumb &&
+      docThumbCache.get(thumbId) !== 'error' &&
+      !hoverThumbInflight.has(thumbId) &&
+      window.usualDesk?.getDownloadThumbnail
+    ) {
+      hoverThumbInflight.add(thumbId);
+      window.usualDesk
+        .getDownloadThumbnail(d.id)
+        .then((res) => {
+          if (res && res.ok && res.url) {
+            docThumbCache.set(thumbId, res.url);
+            if (token !== hoverDetailToken) return;
+            paintHoverThumb(downloadsRegistry.get(thumbId) || d, token);
+          } else {
+            docThumbCache.set(thumbId, 'error');
+          }
+        })
+        .catch(() => {
+          docThumbCache.set(thumbId, 'error');
+        })
+        .finally(() => {
+          hoverThumbInflight.delete(thumbId);
+        });
+    }
+    return;
+  }
+
+  img.alt = d.filename || '';
+  img.onload = reveal;
+  img.onerror = () => showExt();
+  if (img.getAttribute('src') === url) {
+    if (img.complete) {
+      if (img.naturalWidth) reveal();
+      else showExt();
+    }
+    return;
+  }
+  extEl.hidden = true;
+  img.hidden = true;
+  img.src = url;
+}
+
+function showDownloadHoverDetail(d) {
+  if (!d || magicDrawerViewOpen()) return;
+  clearTimeout(hoverHideTimer);
+  const id = String(d.id);
+  if (hoverDetailId !== id) hoverDetailToken += 1;
+  const token = hoverDetailToken;
+  hoverDetailId = id;
+  const panel = document.getElementById('download-hover-detail');
+  if (panel) {
+    panel.hidden = false;
+    panel.setAttribute('aria-hidden', 'false');
+  }
+  markInspectingDownload(id);
+
+  const when = hoverDateParts(d.startedAt);
+  setHoverText('download-hover-kicker', when.kicker);
+  setHoverText('download-hover-date', when.date);
+  setHoverText('download-hover-time', when.time);
+  setHoverText('download-hover-size', hoverSizeLabel(d));
+  setHoverText('download-hover-name', d.filename || 'descarga');
+
+  const ext = extOfName(d.filename);
+  const typeLabel = ext ? DOWNLOAD_TYPE_LABELS[ext] || ext.toUpperCase() : '';
+  const place = folderOfSavePath(d.savePath);
+  const rows = [
+    { key: 'tipo', label: 'Tipo', value: typeLabel },
+    { key: 'origen', label: 'Origen', value: d.sourceName || '' },
+  ];
+  if (d.state && d.state !== 'completed') {
+    rows.push({
+      key: 'estado',
+      label: 'Estado',
+      value: DOWNLOAD_STATE_LABELS[d.state] || d.state,
+    });
+  }
+  if (place.folder) {
+    rows.push({ key: 'carpeta', label: 'Carpeta', value: place.folder, title: place.full });
+  }
+  const opened = Number(d.lastOpenedAt) || 0;
+  if (opened > 0) {
+    rows.push({ key: 'visto', label: 'Visto', value: compactHoverWhen(opened) });
+  }
+  setHoverMeta(rows);
+  paintHoverThumb(d, token);
+}
+
+/** Si un progreso rearmó la grilla, el puntero sigue arriba de un tile: no perder el detalle. */
+function syncHoverDetailAfterRender() {
+  if (!hoverDetailId) return;
+  if (magicDrawerViewOpen()) {
+    hideDownloadHoverDetail();
+    return;
+  }
+  const live = downloadsRegistry.get(hoverDetailId);
+  if (!live) {
+    hideDownloadHoverDetail();
+    return;
+  }
+  if (downloadPointer) {
+    const under = document.elementFromPoint(downloadPointer.x, downloadPointer.y);
+    const cell = under && under.closest ? under.closest('.download-tile-cell[data-download-id]') : null;
+    if (!cell) {
+      hideDownloadHoverDetail();
+      return;
+    }
+    if (cell.dataset.downloadId !== hoverDetailId) {
+      const next = downloadsRegistry.get(cell.dataset.downloadId);
+      if (next) showDownloadHoverDetail(next);
+      else hideDownloadHoverDetail();
+      return;
+    }
+  }
+  showDownloadHoverDetail(live);
+}
+
 /**
  * Un movimiento corto con el botón apretado arrastra el archivo de verdad
  * (OLE), no el botón HTML. El drag HTML no lleva el archivo y WhatsApp,
@@ -646,6 +1014,7 @@ function bindDownloadTileNativeDrag(tile, id) {
       if (Math.hypot(ev.clientX - originX, ev.clientY - originY) < 5) return;
       clearPress();
       tile.dataset.suppressClick = '1';
+      hideDownloadHoverDetail();
       const rect = tile.getBoundingClientRect();
       window.usualDesk.startDownloadDrag?.(id, {
         x: rect.x,
@@ -667,6 +1036,20 @@ function buildDownloadTile(d) {
   const cell = document.createElement('div');
   cell.className = 'download-tile-cell';
   cell.dataset.state = d.state;
+  cell.dataset.downloadId = String(d.id);
+  cell.addEventListener('pointerenter', (e) => {
+    downloadPointer = { x: e.clientX, y: e.clientY };
+    const live = downloadsRegistry.get(String(d.id)) || d;
+    showDownloadHoverDetail(live);
+  });
+  cell.addEventListener('pointerleave', (e) => {
+    const next =
+      e.relatedTarget && e.relatedTarget.closest
+        ? e.relatedTarget.closest('.download-tile-cell[data-download-id]')
+        : null;
+    if (next) return;
+    scheduleHideDownloadHoverDetail();
+  });
 
   const tile = document.createElement('button');
   tile.type = 'button';
@@ -767,6 +1150,7 @@ function buildDownloadTile(d) {
       // el home sin perder su fecha real de descarga.
       window.usualDesk.markDownloadOpened?.(d.id).catch(() => {});
       if (isPreviewableDownload(d) && d.savePath) {
+        hideDownloadHoverDetail();
         openImageDrawer(d);
       } else {
         window.usualDesk.openDownloadFile(d.id).catch(() => {});
@@ -838,6 +1222,7 @@ function renderDownloadsHome() {
   }
 
   if (empty) empty.classList.toggle('hidden', items.length > 0);
+  syncHoverDetailAfterRender();
   schedulePointerPassthroughSync();
 }
 
@@ -899,6 +1284,15 @@ function initPhoneUploadTile() {
 
   loadQr();
   tile.addEventListener('click', loadQr);
+
+  const grid = document.getElementById('downloads-home-grid');
+  grid?.addEventListener('pointermove', (e) => {
+    downloadPointer = { x: e.clientX, y: e.clientY };
+  });
+  grid?.addEventListener('pointerleave', () => {
+    downloadPointer = null;
+    scheduleHideDownloadHoverDetail();
+  });
 }
 
 async function initDownloadsUI() {
@@ -994,6 +1388,7 @@ function syncImageDrawerControls() {
 
 /** Muestra una descarga completada (imagen o PDF) en el visor fijo. */
 function openImageDrawer(d) {
+  hideDownloadHoverDetail();
   const drawer = document.getElementById('image-drawer');
   const title = document.getElementById('image-drawer-title');
   const canvas = document.getElementById('image-drawer-canvas');
@@ -1416,6 +1811,10 @@ function isAssetIconPath(v) {
   return v.includes('/') || /\.(png|jpe?g|svg|webp|gif|ico)$/i.test(v);
 }
 
+function isSiteIconValue(v) {
+  return typeof v === 'string' && v.startsWith('data:image/');
+}
+
 /** Solo nombre legible, sin extensión ni nombre de archivo */
 function formatIconPrettyName(title, file) {
   const stem = title || file.replace(/\.[^.]+$/, '');
@@ -1431,12 +1830,18 @@ function rowForValue(v) {
   return allIconRows().find((r) => r.value === v);
 }
 
+function dropStaleSiteIconRows(keep) {
+  iconDynamicExtras = iconDynamicExtras.filter((row) => !isSiteIconValue(row.value) || row.value === keep);
+}
+
 function ensureDynamicRowForValue(v) {
   if (!v) return;
   if (rowForValue(v)) return;
-  const label = isAssetIconPath(v)
-    ? formatIconPrettyName('', pathBaseName(v))
-    : 'Personalizado';
+  const label = isSiteIconValue(v)
+    ? 'Icono del sitio'
+    : isAssetIconPath(v)
+      ? formatIconPrettyName('', pathBaseName(v))
+      : 'Personalizado';
   iconDynamicExtras.push({
     value: v,
     label,
@@ -1496,7 +1901,7 @@ function renderIconList() {
 
     li.addEventListener('click', (e) => {
       e.stopPropagation();
-      setSelectedIcon(entry.isEmojiPicker ? CUSTOM_EMOJI_VALUE : entry.value);
+      onIconOptionChosen(entry.isEmojiPicker ? CUSTOM_EMOJI_VALUE : entry.value);
       closeIconDropdown();
     });
     iconSelectList.appendChild(li);
@@ -1508,7 +1913,7 @@ function updateTriggerDisplay() {
   const v = (inputIcon.value || '').trim();
   iconSelectTriggerThumb.innerHTML = '';
   if (!v) {
-    iconSelectTriggerText.textContent = 'Sin icono';
+    iconSelectTriggerText.textContent = faviconLookupPending ? 'Buscando icono…' : 'Sin icono';
     return;
   }
   if (isAssetIconPath(v)) {
@@ -1599,6 +2004,18 @@ async function initIconPicker() {
       let t = customEmojiInp.value.trim().slice(0, 8);
       customEmojiInp.value = t;
       if (!inputIcon) return;
+      faviconSeq += 1;
+      if (faviconTimer) {
+        clearTimeout(faviconTimer);
+        faviconTimer = null;
+      }
+      if (!t) {
+        suppressAutoFavicon = false;
+        autoFaviconValue = '';
+        scheduleWebFaviconLookup();
+      } else {
+        suppressAutoFavicon = true;
+      }
       inputIcon.value = t;
       ensureDynamicRowForValue(t);
       updateTriggerDisplay();
@@ -1655,6 +2072,79 @@ function setSelectedIcon(iconPath) {
   }
   renderIconList();
   updateTriggerDisplay();
+}
+
+function cancelFaviconLookup() {
+  faviconSeq += 1;
+  faviconLookupPending = false;
+  if (faviconTimer) {
+    clearTimeout(faviconTimer);
+    faviconTimer = null;
+  }
+}
+
+function scheduleWebFaviconLookup() {
+  if (faviconTimer) clearTimeout(faviconTimer);
+  faviconTimer = null;
+  if (suppressAutoFavicon) return;
+  if (!inputType || inputType.value !== 'web' || !inputUrl) return;
+  if (!inputUrl.value.trim()) return;
+  faviconTimer = setTimeout(() => {
+    faviconTimer = null;
+    lookupWebFavicon().catch(() => {});
+  }, 700);
+}
+
+async function lookupWebFavicon() {
+  if (suppressAutoFavicon) return null;
+  if (!inputType || inputType.value !== 'web' || !inputUrl) return null;
+  const raw = inputUrl.value.trim();
+  if (!raw) return null;
+  const current = inputIcon && inputIcon.value ? inputIcon.value.trim() : '';
+  if (current && current !== autoFaviconValue) return null;
+  const seq = ++faviconSeq;
+  faviconLookupPending = true;
+  if (!current) updateTriggerDisplay();
+  const pending = window.usualDesk.fetchWebFavicon(raw).catch(() => null);
+  faviconWait = pending;
+  let result = null;
+  try {
+    result = await pending;
+  } finally {
+    if (faviconWait === pending) faviconWait = null;
+  }
+  if (seq !== faviconSeq) return null;
+  faviconLookupPending = false;
+  const dataUrl = result && typeof result.dataUrl === 'string' ? result.dataUrl : '';
+  if (!dataUrl.startsWith('data:image/')) {
+    updateTriggerDisplay();
+    return null;
+  }
+  if (!inputType || inputType.value !== 'web') return null;
+  const now = inputIcon && inputIcon.value ? inputIcon.value.trim() : '';
+  if (now && now !== autoFaviconValue) return null;
+  dropStaleSiteIconRows(dataUrl);
+  autoFaviconValue = dataUrl;
+  setSelectedIcon(dataUrl);
+  return dataUrl;
+}
+
+function onIconOptionChosen(next) {
+  cancelFaviconLookup();
+  if (next === CUSTOM_EMOJI_VALUE) {
+    suppressAutoFavicon = true;
+    setSelectedIcon(next);
+    return;
+  }
+  if (!next) {
+    suppressAutoFavicon = false;
+    autoFaviconValue = '';
+    setSelectedIcon('');
+    scheduleWebFaviconLookup();
+    return;
+  }
+  if (next !== autoFaviconValue) suppressAutoFavicon = true;
+  setSelectedIcon(next);
 }
 
 function setTitleBadgeOnCard(shortcutId, count) {
@@ -2012,13 +2502,24 @@ async function addShortcutFromDroppedUrl(url) {
   }
 
   const id = Date.now().toString();
-  shortcuts.push({
+  let icon = '';
+  try {
+    const fav = await window.usualDesk.fetchWebFavicon(url);
+    if (fav && typeof fav.dataUrl === 'string' && fav.dataUrl.startsWith('data:image/')) {
+      icon = fav.dataUrl;
+    }
+  } catch {
+    /* sin red o sin favicon: queda la inicial del nombre */
+  }
+  const entry = {
     id,
     name,
     type: 'web',
     url,
     sessionId: webSessionIdForShortcut(name, id),
-  });
+  };
+  if (icon) entry.icon = icon;
+  shortcuts.push(entry);
   await window.usualDesk.saveShortcuts(shortcuts);
   renderShortcuts();
 }
@@ -2293,6 +2794,12 @@ function updateFormTypeUI() {
     shortcutWebOptions.classList.toggle('hidden', isApp);
   }
   syncWebMutedCheckboxesLockedByFocusMode();
+  if (!isApp) {
+    scheduleWebFaviconLookup();
+  } else if (inputIcon && (inputIcon.value || '').trim() === autoFaviconValue && autoFaviconValue) {
+    autoFaviconValue = '';
+    setSelectedIcon('');
+  }
 }
 
 /**
@@ -2674,6 +3181,9 @@ function showShortcutNameError(message) {
 
 function openAddModal() {
   editingId = null;
+  cancelFaviconLookup();
+  autoFaviconValue = '';
+  suppressAutoFavicon = false;
   clearShortcutNameError();
   modalTitle.textContent = 'Añadir acceso directo';
   modalDelete.classList.add('hidden');
@@ -2692,6 +3202,10 @@ function openAddModal() {
 
 function openEditModal(shortcut) {
   editingId = shortcut.id;
+  cancelFaviconLookup();
+  const existingIcon = shortcut.icon ? String(shortcut.icon).trim() : '';
+  autoFaviconValue = isSiteIconValue(existingIcon) ? existingIcon : '';
+  suppressAutoFavicon = !!(existingIcon && !autoFaviconValue);
   clearShortcutNameError();
   modalTitle.textContent = 'Editar acceso directo';
   modalDelete.classList.remove('hidden');
@@ -2793,11 +3307,49 @@ if (inputName) {
   inputName.addEventListener('input', () => clearShortcutNameError());
 }
 
+if (inputUrl) {
+  inputUrl.addEventListener('input', () => {
+    if (!inputType || inputType.value !== 'web') return;
+    faviconSeq += 1;
+    faviconLookupPending = false;
+    suppressAutoFavicon = false;
+    scheduleWebFaviconLookup();
+  });
+  inputUrl.addEventListener('blur', () => {
+    if (!faviconTimer) return;
+    clearTimeout(faviconTimer);
+    faviconTimer = null;
+    lookupWebFavicon().catch(() => {});
+  });
+}
+
+const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
+if (stripAddShortcutBtn) {
+  stripAddShortcutBtn.addEventListener('click', () => openAddModal());
+}
+
 shortcutForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const editingOriginal = editingId ? shortcuts.find((s) => s.id === editingId) : null;
   const isLoose = !!(editingOriginal && editingOriginal.type === 'loose');
+
+  if (!isLoose && inputType && inputType.value === 'web') {
+    const iconNow = inputIcon && inputIcon.value ? inputIcon.value.trim() : '';
+    if (!iconNow && !suppressAutoFavicon) {
+      if (faviconTimer) {
+        clearTimeout(faviconTimer);
+        faviconTimer = null;
+      }
+      try {
+        if (faviconWait) await faviconWait;
+        const stillEmpty = !(inputIcon && inputIcon.value && inputIcon.value.trim());
+        if (stillEmpty) await lookupWebFavicon();
+      } catch {
+        /* se guarda igual; la franja usa la inicial del nombre */
+      }
+    }
+  }
 
   const data = {
     id: editingId || Date.now().toString(),

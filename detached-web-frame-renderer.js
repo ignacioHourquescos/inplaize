@@ -434,6 +434,13 @@ if (api.onTitleBadge) {
 
 refreshChromeFromMain();
 
+const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
+if (stripAddShortcutBtn) {
+  stripAddShortcutBtn.addEventListener('click', () => {
+    api.openAddShortcut?.().catch(() => {});
+  });
+}
+
 const detachedShellHomeBtn = document.getElementById('shell-home-btn');
 if (detachedShellHomeBtn && window.usualDeskDetached.openDockWelcomeHome) {
   detachedShellHomeBtn.addEventListener('click', () => {

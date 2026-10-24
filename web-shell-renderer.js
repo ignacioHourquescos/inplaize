@@ -285,6 +285,13 @@ if (window.usualDeskShell.onTitleBadge) {
 
 refreshChromeFromMain();
 
+const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
+if (stripAddShortcutBtn) {
+  stripAddShortcutBtn.addEventListener('click', () => {
+    window.usualDeskShell.openAddShortcut?.().catch(() => {});
+  });
+}
+
 const shellHomeBtn = document.getElementById('shell-home-btn');
 if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
   shellHomeBtn.addEventListener('click', () => {

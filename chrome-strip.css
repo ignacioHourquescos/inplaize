@@ -59,6 +59,35 @@
   border-color: var(--ud-chrome-icon-border-hover);
 }
 
+/* Alta de acceso: "+" violeta, borde violeta, sin fondo. Queda fuera del
+   scroll de iconos para que siempre se vea al final de la franja. */
+.shell-shortcut-item.strip-add-shortcut,
+.shell-shortcut-item.strip-add-shortcut:hover,
+.shell-shortcut-item.strip-add-shortcut:active,
+.shell-shortcut-item.strip-add-shortcut.is-active {
+  flex-shrink: 0;
+  align-self: center;
+  background: transparent;
+  border-color: var(--ud-chrome-edit-tab);
+  color: var(--ud-chrome-edit-tab);
+  box-shadow: none;
+  opacity: 1;
+  filter: none;
+  -webkit-app-region: no-drag;
+}
+
+.shell-shortcut-item.strip-add-shortcut:hover,
+.shell-shortcut-item.strip-add-shortcut:active {
+  border-color: #b3a8ff;
+  color: #b3a8ff;
+}
+
+.strip-add-plus {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
 .shell-shortcut-item.is-active {
   background: var(--ud-chrome-icon-active-bg);
   border-color: var(--ud-chrome-icon-active-border);
@@ -161,9 +190,15 @@
 }
 
 .dock-downloads-icon {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   display: block;
+  box-sizing: border-box;
+  padding: 4px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .shell-strip-badge {

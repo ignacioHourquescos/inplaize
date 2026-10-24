@@ -105,6 +105,8 @@ const IPC_CHANNELS = [
 
   'list-builtin-icons',
 
+  'fetch-web-favicon',
+
   'get-app-settings',
 
   'set-app-settings',
@@ -870,6 +872,17 @@ function registerIpcHandlers(state) {
   });
 
 
+
+  ipcMain.handle('fetch-web-favicon', async (_event, pageUrl) => {
+    try {
+      const { resolveWebFavicon } = require('./web-favicon');
+      const dataUrl = await resolveWebFavicon(pageUrl);
+      if (!dataUrl || !dataUrl.startsWith('data:image/')) return null;
+      return { dataUrl };
+    } catch {
+      return null;
+    }
+  });
 
   ipcMain.handle('get-app-settings', () => loadAppSettings());
 
