@@ -68,16 +68,16 @@
     {
       id: 'welcome',
       kind: 'modal',
-      title: '¿Listo para dejar de perderte en el caos de ventanas?',
-      body: '',
+      title: 'Bienvenido a inplaize',
+      body: 'Tu escritorio organizado. Gmail, WhatsApp, Drive… cada cosa en su lugar, sin caos de pestañas.',
       primaryLabel: 'Comenzar',
       secondaryLabel: 'Omitir',
     },
     {
       id: 'hotkey',
       kind: 'modal',
-      title: 'Tu shortcut que va a ser tu mejor amigo',
-      body: 'Apretalo para mostrar u ocultar la aplicación. Probalo ahora antes de continuar.',
+      title: 'Tu atajo mágico',
+      body: 'Presionalo para mostrar u ocultar inplaize desde cualquier parte. Probalo ahora para continuar.',
       keyboardKeys: ['Ctrl', 'Alt', 'D'],
       primaryLabel: 'Siguiente',
       secondaryLabel: 'Omitir',
@@ -88,7 +88,7 @@
       targetSelector: '#dock-home-menu-btn',
       placement: 'bottom',
       title: 'Agregá tu primera ventana',
-      body: 'Pulsá el menú (≡) arriba a la derecha y elegí «Añadir acceso». Por ejemplo: Chrome.',
+      body: 'Toca el menú (≡) y elegí «Añadir acceso». Empezá con lo que más usás: Gmail, WhatsApp, lo que quieras.',
       primaryLabel: 'Siguiente',
       // En real onboarding "Siguiente" abre el modal de añadir; en preview
       // simplemente avanza al paso 3 sin tocar la lista del usuario.
@@ -101,18 +101,18 @@
       kind: 'spotlight',
       targetSelector: '[data-onboarding-target="first-shortcut"]',
       placement: 'bottom',
-      title: 'Cerrar sin tocar el resto',
+      title: 'Cerrá una ventana sin tocar el resto',
       body:
-        'Click corto abre la ventana. Si mantenés apretado el click izquierdo aparece la pildora "× Cerrar" y apagás solo esa ventana.',
+        'Click corto la abre. Si mantenés el click izquierdo apretado, aparece "× Cerrar" y podés cerrar solo esa ventana.',
       primaryLabel: 'Siguiente',
       secondaryLabel: null,
     },
     {
       id: 'import-sessions',
       kind: 'modal',
-      title: 'Traé tus sesiones desde Chrome',
+      title: 'Traé tus sesiones de Chrome',
       body:
-        'Podés copiar tus sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte acá. WhatsApp es la excepción: siempre pide vincular con el QR del teléfono.',
+        'Copiá las sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte. WhatsApp siempre pide vincular con el QR.',
       primaryLabel: 'Terminar',
       secondaryLabel: null,
     },
@@ -217,9 +217,9 @@
   function importErrorText(code) {
     switch (code) {
       case 'CHROME_RUNNING':
-        return 'Google Chrome está abierto. Cerralo por completo y volvé a intentar.';
+        return 'Chrome está abierto. Cerralo completamente y volvé a intentar.';
       case 'CHROME_NOT_FOUND':
-        return 'No se encontró Google Chrome en este equipo.';
+        return 'No encontramos Chrome en este equipo.';
       case 'NO_IMPORTABLE_SHORTCUTS':
         return 'No hay ventanas compatibles para importar.';
       default:
@@ -666,7 +666,7 @@
 
   /**
    * Dibuja un teclado decorativo con las teclas dadas. La última tecla se
-   * resalta en violeta porque es la "letra" del atajo y la que el usuario
+   * resalta en azul porque es la "letra" del atajo y la que el usuario
    * tiene que recordar. Entre tecla y tecla pintamos un "+" tenue.
    * @param {string[]} keys
    */
@@ -690,10 +690,10 @@
     k.forEach((label, i) => {
       const w = sizes[i];
       const isAccent = i === k.length - 1;
-      const fill = isAccent ? 'rgba(167, 139, 250, 0.22)' : 'rgba(255, 255, 255, 0.05)';
-      const stroke = isAccent ? 'rgba(167, 139, 250, 0.95)' : 'rgba(255, 255, 255, 0.2)';
+      const fill = isAccent ? 'rgba(26, 115, 232, 0.12)' : 'rgba(32, 33, 36, 0.04)';
+      const stroke = isAccent ? '#1a73e8' : 'rgba(32, 33, 36, 0.2)';
       const strokeW = isAccent ? 2 : 1.4;
-      const textColor = isAccent ? '#ffffff' : 'rgba(245, 246, 248, 0.92)';
+      const textColor = isAccent ? '#1a73e8' : '#202124';
       parts.push(
         `<rect x="${cursor}" y="${padding}" width="${w}" height="${KEY_HEIGHT}" rx="9" ry="9" ` +
           `fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" />`,
@@ -701,19 +701,19 @@
       // Pequeña sombra inferior para sensación de keycap
       parts.push(
         `<rect x="${cursor + 4}" y="${padding + KEY_HEIGHT - 6}" width="${w - 8}" height="3" rx="2" ` +
-          `fill="rgba(0,0,0,0.35)" />`,
+          `fill="rgba(32, 33, 36, 0.1)" />`,
       );
       parts.push(
         `<text x="${cursor + w / 2}" y="${padding + KEY_HEIGHT / 2 + 5}" text-anchor="middle" ` +
-          `font-family="Inter, 'Miranda Sans', system-ui, sans-serif" font-size="15" ` +
-          `font-weight="${isAccent ? 700 : 600}" fill="${textColor}">${escapeHtml(label)}</text>`,
+          `font-family="'IBM Plex Sans', Inter, system-ui, sans-serif" font-size="15" ` +
+          `font-weight="${isAccent ? 600 : 500}" fill="${textColor}">${escapeHtml(label)}</text>`,
       );
       cursor += w;
       if (i < k.length - 1) {
         parts.push(
           `<text x="${cursor + PLUS_WIDTH / 2}" y="${padding + KEY_HEIGHT / 2 + 5}" text-anchor="middle" ` +
-            `font-family="Inter, system-ui, sans-serif" font-size="14" ` +
-            `fill="rgba(255,255,255,0.45)">+</text>`,
+            `font-family="'IBM Plex Sans', Inter, system-ui, sans-serif" font-size="14" ` +
+            `fill="rgba(95, 99, 104, 0.6)">+</text>`,
         );
         cursor += PLUS_WIDTH;
       }
