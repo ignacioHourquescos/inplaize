@@ -62,6 +62,8 @@
     hotkeyPressed: false,
     hotkeyAttemptedNext: false,
     sidebarStateListenerArmed: false,
+    /** Paso "personalize": apps seleccionadas por el usuario */
+    selectedApps: new Set(),
   };
 
   const STEPS = [
@@ -72,6 +74,24 @@
       body: 'Tu escritorio organizado. Gmail, WhatsApp, Drive… cada cosa en su lugar, sin caos de pestañas.',
       primaryLabel: 'Comenzar',
       secondaryLabel: 'Omitir',
+    },
+    {
+      id: 'personalize',
+      kind: 'modal',
+      title: '¿Qué apps usás más?',
+      body: 'Seleccioná las que más usás y te las agregamos automáticamente.',
+      primaryLabel: 'Continuar',
+      secondaryLabel: 'Omitir',
+      apps: [
+        { id: 'gmail', name: 'Gmail', icon: '📧', url: 'https://mail.google.com' },
+        { id: 'whatsapp', name: 'WhatsApp', icon: '💬', url: 'https://web.whatsapp.com' },
+        { id: 'drive', name: 'Drive', icon: '📁', url: 'https://drive.google.com' },
+        { id: 'calendar', name: 'Calendar', icon: '📅', url: 'https://calendar.google.com' },
+        { id: 'linkedin', name: 'LinkedIn', icon: '💼', url: 'https://linkedin.com' },
+        { id: 'chatgpt', name: 'ChatGPT', icon: '🤖', url: 'https://chat.openai.com' },
+        { id: 'youtube', name: 'YouTube', icon: '▶️', url: 'https://youtube.com' },
+        { id: 'notion', name: 'Notion', icon: '📝', url: 'https://notion.so' },
+      ],
     },
     {
       id: 'hotkey',
@@ -590,7 +610,13 @@
     const stepIndex = STEPS.indexOf(step);
     const stepCount = STEPS.length - 1; // sin contar la bienvenida (índice 0)
     // El paso 0 (welcome) no muestra contador; el resto sí, incluso modals.
-    const counterText = stepIndex >= 1 ? `${stepIndex} de ${stepCount}` : '';
+    const counterText = stepIndex >= 1 ? `Paso ${stepIndex} de ${stepCount}` : '';
+    
+    // Barra de progreso (no se muestra en welcome)
+    const progressPercent = stepIndex === 0 ? 0 : Math.round((stepIndex / stepCount) * 100);
+    const progressBar = stepIndex >= 1 
+      ? `<div class="onboarding-progress-bar"><div class="onboarding-progress-fill" style="width: ${progressPercent}%"></div></div>`
+      : '';
 
     // En modo preview los pasos auto-avanzados (p. ej. "Agregá tu primera
     // ventana") deben tener un botón "Siguiente" porque el usuario ya tiene
@@ -615,6 +641,12 @@
     const body = step.body
       ? `<p class="onboarding-bubble-body">${escapeHtml(step.body)}</p>`
       : '';
+    
+    // Grid de apps para personalización
+    const appGrid = step.id === 'personalize' && Array.isArray(step.apps)
+      ? renderAppGrid(step.apps)
+      : '';
+    
     const keyboard = Array.isArray(step.keyboardKeys) && step.keyboardKeys.length
       ? renderKeyboardSvg(step.keyboardKeys)
       : '';
@@ -631,10 +663,12 @@
 
     bubble.innerHTML = `
       <header class="onboarding-bubble-header">
+        ${progressBar}
         ${counter}
         <h3 class="onboarding-bubble-title">${escapeHtml(step.title)}</h3>
       </header>
       ${body}
+      ${appGrid}
       ${keyboard}
       ${warning}
       <footer class="onboarding-bubble-footer">
@@ -652,6 +686,20 @@
       });
     });
 
+    // Event listeners para el grid de apps (paso personalize)
+    bubble.querySelectorAll('.onboarding-app-option').forEach((option) => {
+      option.addEventListener('click', () => {
+        const appId = option.getAttribute('data-app-id');
+        if (state.selectedApps.has(appId)) {
+          state.selectedApps.delete(appId);
+          option.classList.remove('is-selected');
+        } else {
+          state.selectedApps.add(appId);
+          option.classList.add('is-selected');
+        }
+      });
+    });
+
     if (step.id === 'import-sessions') {
       const footer = bubble.querySelector('.onboarding-bubble-footer');
       const area = document.createElement('div');
@@ -662,6 +710,25 @@
       renderImportArea();
       initImportStepData();
     }
+  }
+
+  /**
+   * Renderiza la grilla de apps para el paso de personalización.
+   * @param {Array} apps
+   */
+  function renderAppGrid(apps) {
+    const items = apps
+      .map((app) => {
+        const selected = state.selectedApps.has(app.id) ? 'is-selected' : '';
+        return `
+          <div class="onboarding-app-option ${selected}" data-app-id="${escapeHtml(app.id)}">
+            <div class="onboarding-app-icon">${escapeHtml(app.icon)}</div>
+            <div class="onboarding-app-name">${escapeHtml(app.name)}</div>
+          </div>
+        `;
+      })
+      .join('');
+    return `<div class="onboarding-app-grid">${items}</div>`;
   }
 
   /**
@@ -780,6 +847,11 @@
     if (!state.active) return;
     const step = STEPS[state.step];
 
+    // Paso "personalize": crear shortcuts para las apps seleccionadas
+    if (step && step.id === 'personalize' && state.selectedApps.size > 0 && !state.preview) {
+      createShortcutsForSelectedApps(step.apps);
+    }
+
     // Paso "hotkey": exigimos que el usuario haya probado Ctrl+Alt+D al
     // menos una vez antes de seguir, también en modo preview (el preview
     // tiene que mostrar exactamente lo que ve un usuario nuevo). Si no se
@@ -813,6 +885,23 @@
     advanceToNextStep();
   }
 
+  async function createShortcutsForSelectedApps(apps) {
+    if (!window.usualDesk || typeof window.usualDesk.addShortcut !== 'function') return;
+    const selectedAppsList = apps.filter((app) => state.selectedApps.has(app.id));
+    for (const app of selectedAppsList) {
+      try {
+        await window.usualDesk.addShortcut({
+          type: 'web',
+          name: app.name,
+          url: app.url,
+          icon: '',
+        });
+      } catch (error) {
+        console.error(`Error creating shortcut for ${app.name}:`, error);
+      }
+    }
+  }
+
   function advanceToNextStep() {
     const next = state.step + 1;
     if (next >= STEPS.length) {
@@ -843,6 +932,7 @@
     const o = opts || {};
     state.active = true;
     state.preview = !!o.preview;
+    state.selectedApps.clear();
     resetImportState();
     const skipWelcome = !!o.skipWelcome;
 
