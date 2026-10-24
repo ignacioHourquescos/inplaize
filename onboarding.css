@@ -167,12 +167,54 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   color: #5f6368;
 }
 
-/* Paso de personalización: lista de apps */
+/* ---- Paso de personalización: lista de apps ---- */
 .onboarding-app-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 12px;
   margin: 16px 0 20px;
+}
+
+/* Mensaje de éxito al agregar apps */
+.onboarding-success-message {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #34a853;
+  background: #e6f4ea;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #137333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: success-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.onboarding-success-message::before {
+  content: '✓';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #34a853;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes success-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .onboarding-app-option {
@@ -196,9 +238,26 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
 }
 
+.onboarding-app-option:active {
+  transform: translateY(0) scale(0.98);
+}
+
 .onboarding-app-option.is-selected {
   border-color: #1a73e8;
   background: #e8f0fe;
+  animation: app-select-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes app-select-in {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .onboarding-app-option.is-selected::after {
@@ -235,6 +294,14 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   font-size: 13px;
   font-weight: 500;
   color: #202124;
+  text-align: center;
+}
+
+.onboarding-app-helper {
+  margin: 0;
+  padding-top: 4px;
+  font-size: 13px;
+  color: #5f6368;
   text-align: center;
 }
 

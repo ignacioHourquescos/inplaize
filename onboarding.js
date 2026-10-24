@@ -70,18 +70,18 @@
     {
       id: 'welcome',
       kind: 'modal',
-      title: 'Bienvenido a inplaize',
-      body: 'Tu escritorio organizado. Gmail, WhatsApp, Drive… cada cosa en su lugar, sin caos de pestañas.',
-      primaryLabel: 'Comenzar',
+      title: '👋 Bienvenido a inplaize',
+      body: 'Tu escritorio organizado. Gmail, WhatsApp, Drive… cada cosa en su lugar, sin caos de pestañas. Configurá todo en menos de un minuto.',
+      primaryLabel: 'Empezar',
       secondaryLabel: 'Omitir',
     },
     {
       id: 'personalize',
       kind: 'modal',
       title: '¿Qué apps usás más?',
-      body: 'Seleccioná las que más usás y te las agregamos automáticamente.',
+      body: 'Elegí las que querés tener siempre a mano. Las agregamos automáticamente.',
       primaryLabel: 'Continuar',
-      secondaryLabel: 'Omitir',
+      secondaryLabel: 'Saltear',
       apps: [
         { id: 'gmail', name: 'Gmail', icon: '📧', url: 'https://mail.google.com' },
         { id: 'whatsapp', name: 'WhatsApp', icon: '💬', url: 'https://web.whatsapp.com' },
@@ -96,7 +96,7 @@
     {
       id: 'hotkey',
       kind: 'modal',
-      title: 'Tu atajo mágico',
+      title: '⌨️ Tu atajo mágico',
       body: 'Presionalo para mostrar u ocultar inplaize desde cualquier parte. Probalo ahora para continuar.',
       keyboardKeys: ['Ctrl', 'Alt', 'D'],
       primaryLabel: 'Siguiente',
@@ -107,8 +107,8 @@
       kind: 'spotlight',
       targetSelector: '#dock-home-menu-btn',
       placement: 'bottom',
-      title: 'Agregá tu primera ventana',
-      body: 'Toca el menú (≡) y elegí «Añadir acceso». Empezá con lo que más usás: Gmail, WhatsApp, lo que quieras.',
+      title: '➕ Agregá más ventanas',
+      body: 'Toca el menú (≡) y elegí «Añadir acceso». Podés agregar cualquier página web o programa.',
       primaryLabel: 'Siguiente',
       // En real onboarding "Siguiente" abre el modal de añadir; en preview
       // simplemente avanza al paso 3 sin tocar la lista del usuario.
@@ -121,7 +121,7 @@
       kind: 'spotlight',
       targetSelector: '[data-onboarding-target="first-shortcut"]',
       placement: 'bottom',
-      title: 'Cerrá una ventana sin tocar el resto',
+      title: '🎯 Cerrá una ventana específica',
       body:
         'Click corto la abre. Si mantenés el click izquierdo apretado, aparece "× Cerrar" y podés cerrar solo esa ventana.',
       primaryLabel: 'Siguiente',
@@ -130,11 +130,11 @@
     {
       id: 'import-sessions',
       kind: 'modal',
-      title: 'Traé tus sesiones de Chrome',
+      title: '🔐 Traé tus sesiones de Chrome',
       body:
         'Copiá las sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte. WhatsApp siempre pide vincular con el QR.',
       primaryLabel: 'Terminar',
-      secondaryLabel: null,
+      secondaryLabel: 'Saltear',
     },
   ];
 
@@ -697,6 +697,17 @@
           state.selectedApps.add(appId);
           option.classList.add('is-selected');
         }
+        // Actualizar el helper text con el contador
+        const step = STEPS[state.step];
+        if (step && step.id === 'personalize' && Array.isArray(step.apps)) {
+          const count = state.selectedApps.size;
+          const helper = bubble.querySelector('.onboarding-app-helper');
+          if (helper) {
+            helper.textContent = count === 0 
+              ? 'Tocá las apps que querés agregar'
+              : `${count} ${count === 1 ? 'app seleccionada' : 'apps seleccionadas'}`;
+          }
+        }
       });
     });
 
@@ -728,7 +739,11 @@
         `;
       })
       .join('');
-    return `<div class="onboarding-app-grid">${items}</div>`;
+    const count = state.selectedApps.size;
+    const helperText = count === 0 
+      ? '<p class="onboarding-app-helper">Tocá las apps que querés agregar</p>'
+      : `<p class="onboarding-app-helper">${count} ${count === 1 ? 'app seleccionada' : 'apps seleccionadas'}</p>`;
+    return `<div class="onboarding-app-grid">${items}</div>${helperText}`;
   }
 
   /**
@@ -802,6 +817,25 @@
       finish();
       return;
     }
+    
+    // Si estamos en el paso "add-first" y ya hay shortcuts (p.ej. del paso de personalización),
+    // saltamos directo al siguiente paso
+    if (step.id === 'add-first' && !state.preview) {
+      const api = window.usualDesk || {};
+      if (typeof api.getShortcuts === 'function') {
+        try {
+          const shortcuts = api.getShortcuts();
+          if (Array.isArray(shortcuts) && shortcuts.length > 0) {
+            // Ya hay shortcuts, saltamos este paso
+            showStep(stepIndex + 1);
+            return;
+          }
+        } catch {
+          // Si falla, continuamos normalmente
+        }
+      }
+    }
+    
     state.step = stepIndex;
     ensureLayer();
     document.documentElement.classList.add('onboarding-active');
@@ -849,7 +883,14 @@
 
     // Paso "personalize": crear shortcuts para las apps seleccionadas
     if (step && step.id === 'personalize' && state.selectedApps.size > 0 && !state.preview) {
+      // Mostrar mensaje de éxito antes de avanzar
+      showSuccessMessage(state.selectedApps.size);
       createShortcutsForSelectedApps(step.apps);
+      // Pequeño delay para que el usuario vea el mensaje de éxito
+      setTimeout(() => {
+        advanceToNextStep();
+      }, 800);
+      return;
     }
 
     // Paso "hotkey": exigimos que el usuario haya probado Ctrl+Alt+D al
@@ -883,6 +924,19 @@
     }
 
     advanceToNextStep();
+  }
+
+  function showSuccessMessage(count) {
+    const bubble = state.bubbleEl;
+    if (!bubble) return;
+    const footer = bubble.querySelector('.onboarding-bubble-footer');
+    if (!footer) return;
+    const existing = bubble.querySelector('.onboarding-success-message');
+    if (existing) existing.remove();
+    const msg = document.createElement('div');
+    msg.className = 'onboarding-success-message';
+    msg.textContent = `¡Listo! ${count} ${count === 1 ? 'app agregada' : 'apps agregadas'}.`;
+    bubble.insertBefore(msg, footer);
   }
 
   async function createShortcutsForSelectedApps(apps) {
