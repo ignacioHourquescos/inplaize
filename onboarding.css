@@ -2,6 +2,7 @@
    Onboarding de primera vez (capa overlay + spotlight + bocadillo).
    El overlay es solo decorativo (`pointer-events:none`) para que el target
    real (p. ej. el "+") siga siendo clickeable durante el spotlight.
+   Estilo: limpio y claro, inspirado en la landing page.
    ========================================================================== */
 
 .onboarding-layer {
@@ -14,31 +15,21 @@
 .onboarding-dim {
   position: absolute;
   inset: 0;
-  background: rgba(8, 8, 12, 0.72);
-  backdrop-filter: blur(0.5px);
-  -webkit-backdrop-filter: blur(0.5px);
-  animation: onboarding-fade-in 220ms ease-out both;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: onboarding-fade-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Cuando hay spotlight, su box-shadow gigante ya pinta toda la zona oscura
-   alrededor del target. El dim se esconde para que el área del target
-   quede totalmente nítida (sin el doble velo). */
+/* Cuando hay spotlight, reducimos la opacidad del dim para mantener
+   visibilidad del contexto */
 .onboarding-layer.has-spotlight .onboarding-dim {
-  display: none;
+  background: rgba(255, 255, 255, 0.92);
 }
 
-/* Welcome: el fondo deja de ser un dim plano para mostrar la ilustración
-   de la app (assets/welcome_background.png) con un leve velo oscuro encima
-   para que el copy del modal se lea bien. Si la imagen no existe (todavía
-   no la copiaste a la carpeta), el `background-color` actúa como fallback. */
+/* Welcome: fondo más limpio, sin imagen de fondo */
 .onboarding-layer[data-step-id='welcome'] .onboarding-dim {
-  background-color: rgba(8, 8, 12, 0.72);
-  background-image:
-    linear-gradient(rgba(8, 8, 12, 0.55), rgba(8, 8, 12, 0.55)),
-    url('assets/welcome_background.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  background: linear-gradient(135deg, #f0f4ff 0%, #ffffff 100%);
 }
 
 .onboarding-spotlight {
@@ -47,56 +38,49 @@
   top: 0;
   width: 0;
   height: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   pointer-events: none;
-  /* "Agujero" hecho con box-shadow gigante: oscurece todo lo que NO sea el
-     target (la zona interior queda transparente) y le agrega un anillo
-     violeta SÓLIDO de 3px alrededor. La capa exterior es un halo más
-     suave que respira con la animación. Sin dim en paralelo: el
-     box-shadow hace todo el trabajo de oscurecimiento del fondo. */
+  /* Spotlight con estilo limpio: borde azul y sombra suave */
   box-shadow:
-    0 0 0 9999px rgba(8, 8, 12, 0.74),
-    0 0 0 3px rgb(167, 139, 250),
-    0 0 30px 8px rgba(124, 108, 255, 0.55);
+    0 0 0 9999px rgba(255, 255, 255, 0.92),
+    0 0 0 3px #1a73e8,
+    0 0 28px 6px rgba(26, 115, 232, 0.35);
   background: transparent;
   opacity: 0;
   transition:
-    left 180ms ease-out,
-    top 180ms ease-out,
-    width 180ms ease-out,
-    height 180ms ease-out,
-    opacity 220ms ease-out;
-  animation: onboarding-spotlight-pulse 2400ms ease-in-out 220ms infinite;
+    left 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    top 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    width 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    height 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: onboarding-spotlight-pulse 2800ms ease-in-out 280ms infinite;
 }
 
-/* Pulse del propio target (e.g. el "+"): un anillo violeta que respira para
-   atraer la mirada incluso aunque la dim no atrape el mouse. */
+/* Pulse del propio target: un anillo azul que respira */
 .is-onboarding-target {
   position: relative;
   z-index: 2147483601 !important;
-  animation: onboarding-target-pulse 2200ms ease-in-out infinite;
+  animation: onboarding-target-pulse 2400ms ease-in-out infinite;
   border-radius: 10px;
 }
 
 html.onboarding-active #dock-home-menu-btn.is-onboarding-target {
-  background: rgba(167, 139, 250, 0.22) !important;
-  color: #ffffff !important;
+  background: rgba(26, 115, 232, 0.12) !important;
+  color: #1a73e8 !important;
 }
 
 html.onboarding-active #dock-home-add-btn.is-onboarding-target {
-  background: rgba(167, 139, 250, 0.22) !important;
-  color: #ffffff !important;
+  background: rgba(26, 115, 232, 0.12) !important;
+  color: #1a73e8 !important;
 }
 
-/* Cuando el onboarding está activo, atenuamos otros elementos de la UI para
-   que el ojo se vaya al target. La franja roja del borde se desactiva
-   visualmente porque el spotlight ya marca la zona. */
+/* Cuando el onboarding está activo, mantenemos opacidad normal */
 html.onboarding-active .dock-home-menu-item,
 html.onboarding-active #quit-app-btn,
 html.onboarding-active #dock-home-menu-btn,
 html.onboarding-active #dock-home-btn {
-  opacity: 0.35;
-  transition: opacity 200ms ease-out;
+  opacity: 0.4;
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html.onboarding-active .dock-home-menu-item:has(.is-onboarding-target),
@@ -112,65 +96,219 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 .onboarding-bubble {
   position: fixed;
   z-index: 2147483602;
-  width: min(360px, calc(100vw - 24px));
-  padding: 18px 18px 14px;
-  border-radius: 14px;
-  background: rgba(20, 22, 27, 0.98);
-  color: #f5f6f8;
-  border: 1px solid rgba(124, 108, 255, 0.45);
+  width: min(420px, calc(100vw - 32px));
+  padding: 32px 32px 28px;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #202124;
+  border: 1px solid rgba(32, 33, 36, 0.12);
   box-shadow:
-    0 18px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  font-family: 'Miranda Sans', 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+    0 24px 56px rgba(32, 33, 36, 0.16),
+    0 4px 12px rgba(32, 33, 36, 0.08);
+  font-family: 'IBM Plex Sans', 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
   pointer-events: auto;
-  animation: onboarding-bubble-in 220ms ease-out both;
+  animation: onboarding-bubble-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .onboarding-bubble[data-kind='modal'] {
-  width: min(420px, calc(100vw - 24px));
-  padding: 24px 24px 20px;
+  width: min(480px, calc(100vw - 32px));
+  padding: 40px 40px 32px;
 }
 
 .onboarding-bubble-header {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+/* Barra de progreso */
+.onboarding-progress-bar {
+  height: 4px;
+  background: #f1f3f4;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.onboarding-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1a73e8 0%, #4285f4 100%);
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .onboarding-counter {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(167, 139, 250, 0.95);
+  color: #1a73e8;
 }
 
 .onboarding-bubble-title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: #f9fafb;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: #202124;
 }
 
 .onboarding-bubble[data-kind='modal'] .onboarding-bubble-title {
-  font-size: 22px;
-  letter-spacing: -0.01em;
+  font-size: 28px;
+  letter-spacing: -0.025em;
 }
 
 .onboarding-bubble-body {
-  margin: 0 0 14px;
+  margin: 0 0 20px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #5f6368;
+}
+
+/* ---- Paso de personalización: lista de apps ---- */
+.onboarding-app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+/* Mensaje de éxito al agregar apps */
+.onboarding-success-message {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #34a853;
+  background: #e6f4ea;
   font-size: 14px;
   line-height: 1.5;
-  color: rgba(229, 231, 235, 0.92);
+  color: #137333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: success-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.onboarding-success-message::before {
+  content: '✓';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #34a853;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+@keyframes success-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.onboarding-app-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border-radius: 12px;
+  border: 2px solid #dadce0;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.onboarding-app-option:hover {
+  border-color: #1a73e8;
+  background: #f8f9fa;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.15);
+}
+
+.onboarding-app-option:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.onboarding-app-option.is-selected {
+  border-color: #1a73e8;
+  background: #e8f0fe;
+  animation: app-select-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes app-select-in {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.onboarding-app-option.is-selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: #1a73e8;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.onboarding-app-option {
+  position: relative;
+}
+
+.onboarding-app-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.onboarding-app-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #202124;
+  text-align: center;
+}
+
+.onboarding-app-helper {
+  margin: 0;
+  padding-top: 4px;
+  font-size: 13px;
+  color: #5f6368;
+  text-align: center;
 }
 
 /* Teclado dibujado en SVG dentro del bocadillo del paso "Ctrl+Alt+D": tres
-   teclas con la última en violeta. Subimos un poco el contraste con un
-   filtro y centramos el SVG. */
+   teclas con la última en azul. */
 .onboarding-keyboard-wrap {
-  margin: 4px 0 18px;
+  margin: 8px 0 24px;
   display: flex;
   justify-content: center;
 }
@@ -178,33 +316,31 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 .onboarding-keyboard {
   max-width: 100%;
   height: auto;
-  filter: drop-shadow(0 6px 14px rgba(124, 108, 255, 0.25));
+  filter: drop-shadow(0 8px 16px rgba(26, 115, 232, 0.15));
 }
 
-/* Aviso ámbar/violeta cuando el usuario intenta avanzar sin probar el atajo
-   en el paso "hotkey". Aparece debajo del teclado dibujado y se va al
-   detectar la primera pulsación. */
+/* Aviso cuando el usuario intenta avanzar sin probar el atajo */
 .onboarding-bubble-warning {
-  margin: 0 0 14px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(167, 139, 250, 0.45);
-  background: rgba(124, 108, 255, 0.12);
-  font-size: 13px;
-  line-height: 1.45;
-  color: #f5f6f8;
-  animation: onboarding-warning-in 220ms ease-out both;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #d2e3fc;
+  background: #e8f0fe;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #174ea6;
+  animation: onboarding-warning-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .onboarding-bubble-warning strong {
-  font-weight: 700;
-  color: #e9e6ff;
+  font-weight: 600;
+  color: #1a73e8;
 }
 
 @keyframes onboarding-warning-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
@@ -215,84 +351,84 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 /* ---- Paso "import-sessions": select de perfil + lista de accesos ---- */
 
 .onboarding-import-area {
-  margin: 0 0 14px;
+  margin: 0 0 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .onboarding-import-hint {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
-  color: rgba(229, 231, 235, 0.85);
+  color: #5f6368;
 }
 
 .onboarding-import-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: rgba(229, 231, 235, 0.92);
+  gap: 12px;
+  font-size: 14px;
+  color: #202124;
 }
 
 .onboarding-import-row select {
   flex: 1;
   min-width: 0;
-  padding: 7px 10px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: #f5f6f8;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #202124;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .onboarding-import-row select option {
-  background: #14161b;
-  color: #f5f6f8;
+  background: #fff;
+  color: #202124;
 }
 
 .onboarding-import-list {
   list-style: none;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #dadce0;
+  background: #f8f9fa;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 160px;
+  gap: 10px;
+  max-height: 180px;
   overflow-y: auto;
 }
 
 .onboarding-import-item {
-  font-size: 13px;
-  color: rgba(229, 231, 235, 0.92);
+  font-size: 14px;
+  color: #202124;
 }
 
 .onboarding-import-item label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
 }
 
 .onboarding-import-item input[type='checkbox'] {
-  accent-color: #8b5cf6;
+  accent-color: #1a73e8;
 }
 
 .onboarding-import-item.is-disabled {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: rgba(229, 231, 235, 0.45);
+  gap: 10px;
+  color: #80868b;
 }
 
 .onboarding-import-note {
-  font-size: 11px;
-  color: rgba(167, 139, 250, 0.8);
+  font-size: 12px;
+  color: #1a73e8;
 }
 
 .onboarding-import-btn {
@@ -308,20 +444,20 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 .onboarding-import-summary {
   list-style: none;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(124, 108, 255, 0.35);
-  background: rgba(124, 108, 255, 0.1);
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #d2e3fc;
+  background: #e8f0fe;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 13px;
-  color: rgba(229, 231, 235, 0.92);
+  gap: 8px;
+  font-size: 14px;
+  color: #174ea6;
 }
 
 .onboarding-bubble-footer {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   justify-content: flex-end;
 }
@@ -331,24 +467,26 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   border: none;
   cursor: pointer;
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 9px;
-  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 10px 24px;
   transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    transform 0.12s ease;
+    background 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.14s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .onboarding-btn-primary {
-  background: #8b5cf6;
+  background: #1a73e8;
   color: #fff;
-  box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.3);
 }
 
 .onboarding-btn-primary:hover {
-  background: #a78bfa;
+  background: #1967d2;
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.4);
   transform: translateY(-1px);
 }
 
@@ -358,12 +496,14 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 
 .onboarding-btn-secondary {
   background: transparent;
-  color: rgba(229, 231, 235, 0.7);
+  color: #5f6368;
+  border: 1px solid #dadce0;
 }
 
 .onboarding-btn-secondary:hover {
-  color: #f3f4f6;
-  background: rgba(255, 255, 255, 0.06);
+  color: #202124;
+  background: #f8f9fa;
+  border-color: #bdc1c6;
 }
 
 /* ---- Flechita del bocadillo apuntando al target ---- */
@@ -371,11 +511,11 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 .onboarding-bubble::before {
   content: '';
   position: absolute;
-  width: 12px;
-  height: 12px;
-  background: rgba(20, 22, 27, 0.98);
-  border-left: 1px solid rgba(124, 108, 255, 0.45);
-  border-top: 1px solid rgba(124, 108, 255, 0.45);
+  width: 14px;
+  height: 14px;
+  background: #ffffff;
+  border-left: 1px solid rgba(32, 33, 36, 0.12);
+  border-top: 1px solid rgba(32, 33, 36, 0.12);
   transform: rotate(45deg);
 }
 
@@ -384,30 +524,30 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 }
 
 .onboarding-bubble[data-placement='bottom']::before {
-  top: -7px;
+  top: -8px;
   left: 50%;
-  margin-left: -6px;
+  margin-left: -7px;
   transform: rotate(45deg);
 }
 
 .onboarding-bubble[data-placement='top']::before {
-  bottom: -7px;
+  bottom: -8px;
   left: 50%;
-  margin-left: -6px;
+  margin-left: -7px;
   transform: rotate(225deg);
 }
 
 .onboarding-bubble[data-placement='right']::before {
-  left: -7px;
+  left: -8px;
   top: 50%;
-  margin-top: -6px;
+  margin-top: -7px;
   transform: rotate(-45deg);
 }
 
 .onboarding-bubble[data-placement='left']::before {
-  right: -7px;
+  right: -8px;
   top: 50%;
-  margin-top: -6px;
+  margin-top: -7px;
   transform: rotate(135deg);
 }
 
@@ -425,7 +565,7 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 @keyframes onboarding-bubble-in {
   from {
     opacity: 0;
-    transform: translateY(6px) scale(0.98);
+    transform: translateY(12px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -437,15 +577,15 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   0%,
   100% {
     box-shadow:
-      0 0 0 9999px rgba(8, 8, 12, 0.74),
-      0 0 0 3px rgb(167, 139, 250),
-      0 0 30px 8px rgba(124, 108, 255, 0.55);
+      0 0 0 9999px rgba(255, 255, 255, 0.92),
+      0 0 0 3px #1a73e8,
+      0 0 28px 6px rgba(26, 115, 232, 0.35);
   }
   50% {
     box-shadow:
-      0 0 0 9999px rgba(8, 8, 12, 0.74),
-      0 0 0 3px rgb(167, 139, 250),
-      0 0 44px 16px rgba(124, 108, 255, 0.78);
+      0 0 0 9999px rgba(255, 255, 255, 0.92),
+      0 0 0 3px #1a73e8,
+      0 0 40px 14px rgba(26, 115, 232, 0.55);
   }
 }
 
@@ -453,13 +593,13 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   0%,
   100% {
     box-shadow:
-      0 0 0 0 rgba(167, 139, 250, 0.55),
-      0 0 0 1px rgba(167, 139, 250, 0);
+      0 0 0 0 rgba(26, 115, 232, 0.4),
+      0 0 0 1px rgba(26, 115, 232, 0);
   }
   50% {
     box-shadow:
-      0 0 0 6px rgba(167, 139, 250, 0),
-      0 0 0 1px rgba(167, 139, 250, 0.7);
+      0 0 0 8px rgba(26, 115, 232, 0),
+      0 0 0 1px rgba(26, 115, 232, 0.6);
   }
 }
 

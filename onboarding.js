@@ -62,22 +62,42 @@
     hotkeyPressed: false,
     hotkeyAttemptedNext: false,
     sidebarStateListenerArmed: false,
+    /** Paso "personalize": apps seleccionadas por el usuario */
+    selectedApps: new Set(),
   };
 
   const STEPS = [
     {
       id: 'welcome',
       kind: 'modal',
-      title: '¿Listo para dejar de perderte en el caos de ventanas?',
-      body: '',
-      primaryLabel: 'Comenzar',
+      title: '👋 Bienvenido a inplaize',
+      body: 'Tu escritorio organizado. Gmail, WhatsApp, Drive… cada cosa en su lugar, sin caos de pestañas. Configurá todo en menos de un minuto.',
+      primaryLabel: 'Empezar',
       secondaryLabel: 'Omitir',
+    },
+    {
+      id: 'personalize',
+      kind: 'modal',
+      title: '¿Qué apps usás más?',
+      body: 'Elegí las que querés tener siempre a mano. Las agregamos automáticamente.',
+      primaryLabel: 'Continuar',
+      secondaryLabel: 'Saltear',
+      apps: [
+        { id: 'gmail', name: 'Gmail', icon: '📧', url: 'https://mail.google.com' },
+        { id: 'whatsapp', name: 'WhatsApp', icon: '💬', url: 'https://web.whatsapp.com' },
+        { id: 'drive', name: 'Drive', icon: '📁', url: 'https://drive.google.com' },
+        { id: 'calendar', name: 'Calendar', icon: '📅', url: 'https://calendar.google.com' },
+        { id: 'linkedin', name: 'LinkedIn', icon: '💼', url: 'https://linkedin.com' },
+        { id: 'chatgpt', name: 'ChatGPT', icon: '🤖', url: 'https://chat.openai.com' },
+        { id: 'youtube', name: 'YouTube', icon: '▶️', url: 'https://youtube.com' },
+        { id: 'notion', name: 'Notion', icon: '📝', url: 'https://notion.so' },
+      ],
     },
     {
       id: 'hotkey',
       kind: 'modal',
-      title: 'Tu shortcut que va a ser tu mejor amigo',
-      body: 'Apretalo para mostrar u ocultar la aplicación. Probalo ahora antes de continuar.',
+      title: '⌨️ Tu atajo mágico',
+      body: 'Presionalo para mostrar u ocultar inplaize desde cualquier parte. Probalo ahora para continuar.',
       keyboardKeys: ['Ctrl', 'Alt', 'D'],
       primaryLabel: 'Siguiente',
       secondaryLabel: 'Omitir',
@@ -87,8 +107,8 @@
       kind: 'spotlight',
       targetSelector: '#dock-home-menu-btn',
       placement: 'bottom',
-      title: 'Agregá tu primera ventana',
-      body: 'Pulsá el menú (≡) arriba a la derecha y elegí «Añadir acceso». Por ejemplo: Chrome.',
+      title: '➕ Agregá más ventanas',
+      body: 'Toca el menú (≡) y elegí «Añadir acceso». Podés agregar cualquier página web o programa.',
       primaryLabel: 'Siguiente',
       // En real onboarding "Siguiente" abre el modal de añadir; en preview
       // simplemente avanza al paso 3 sin tocar la lista del usuario.
@@ -101,20 +121,20 @@
       kind: 'spotlight',
       targetSelector: '[data-onboarding-target="first-shortcut"]',
       placement: 'bottom',
-      title: 'Cerrar sin tocar el resto',
+      title: '🎯 Cerrá una ventana específica',
       body:
-        'Click corto abre la ventana. Si mantenés apretado el click izquierdo aparece la pildora "× Cerrar" y apagás solo esa ventana.',
+        'Click corto la abre. Si mantenés el click izquierdo apretado, aparece "× Cerrar" y podés cerrar solo esa ventana.',
       primaryLabel: 'Siguiente',
       secondaryLabel: null,
     },
     {
       id: 'import-sessions',
       kind: 'modal',
-      title: 'Traé tus sesiones desde Chrome',
+      title: '🔐 Traé tus sesiones de Chrome',
       body:
-        'Podés copiar tus sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte acá. WhatsApp es la excepción: siempre pide vincular con el QR del teléfono.',
+        'Copiá las sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte. WhatsApp siempre pide vincular con el QR.',
       primaryLabel: 'Terminar',
-      secondaryLabel: null,
+      secondaryLabel: 'Saltear',
     },
   ];
 
@@ -217,9 +237,9 @@
   function importErrorText(code) {
     switch (code) {
       case 'CHROME_RUNNING':
-        return 'Google Chrome está abierto. Cerralo por completo y volvé a intentar.';
+        return 'Chrome está abierto. Cerralo completamente y volvé a intentar.';
       case 'CHROME_NOT_FOUND':
-        return 'No se encontró Google Chrome en este equipo.';
+        return 'No encontramos Chrome en este equipo.';
       case 'NO_IMPORTABLE_SHORTCUTS':
         return 'No hay ventanas compatibles para importar.';
       default:
@@ -590,7 +610,13 @@
     const stepIndex = STEPS.indexOf(step);
     const stepCount = STEPS.length - 1; // sin contar la bienvenida (índice 0)
     // El paso 0 (welcome) no muestra contador; el resto sí, incluso modals.
-    const counterText = stepIndex >= 1 ? `${stepIndex} de ${stepCount}` : '';
+    const counterText = stepIndex >= 1 ? `Paso ${stepIndex} de ${stepCount}` : '';
+    
+    // Barra de progreso (no se muestra en welcome)
+    const progressPercent = stepIndex === 0 ? 0 : Math.round((stepIndex / stepCount) * 100);
+    const progressBar = stepIndex >= 1 
+      ? `<div class="onboarding-progress-bar"><div class="onboarding-progress-fill" style="width: ${progressPercent}%"></div></div>`
+      : '';
 
     // En modo preview los pasos auto-avanzados (p. ej. "Agregá tu primera
     // ventana") deben tener un botón "Siguiente" porque el usuario ya tiene
@@ -615,6 +641,12 @@
     const body = step.body
       ? `<p class="onboarding-bubble-body">${escapeHtml(step.body)}</p>`
       : '';
+    
+    // Grid de apps para personalización
+    const appGrid = step.id === 'personalize' && Array.isArray(step.apps)
+      ? renderAppGrid(step.apps)
+      : '';
+    
     const keyboard = Array.isArray(step.keyboardKeys) && step.keyboardKeys.length
       ? renderKeyboardSvg(step.keyboardKeys)
       : '';
@@ -631,10 +663,12 @@
 
     bubble.innerHTML = `
       <header class="onboarding-bubble-header">
+        ${progressBar}
         ${counter}
         <h3 class="onboarding-bubble-title">${escapeHtml(step.title)}</h3>
       </header>
       ${body}
+      ${appGrid}
       ${keyboard}
       ${warning}
       <footer class="onboarding-bubble-footer">
@@ -652,6 +686,31 @@
       });
     });
 
+    // Event listeners para el grid de apps (paso personalize)
+    bubble.querySelectorAll('.onboarding-app-option').forEach((option) => {
+      option.addEventListener('click', () => {
+        const appId = option.getAttribute('data-app-id');
+        if (state.selectedApps.has(appId)) {
+          state.selectedApps.delete(appId);
+          option.classList.remove('is-selected');
+        } else {
+          state.selectedApps.add(appId);
+          option.classList.add('is-selected');
+        }
+        // Actualizar el helper text con el contador
+        const step = STEPS[state.step];
+        if (step && step.id === 'personalize' && Array.isArray(step.apps)) {
+          const count = state.selectedApps.size;
+          const helper = bubble.querySelector('.onboarding-app-helper');
+          if (helper) {
+            helper.textContent = count === 0 
+              ? 'Tocá las apps que querés agregar'
+              : `${count} ${count === 1 ? 'app seleccionada' : 'apps seleccionadas'}`;
+          }
+        }
+      });
+    });
+
     if (step.id === 'import-sessions') {
       const footer = bubble.querySelector('.onboarding-bubble-footer');
       const area = document.createElement('div');
@@ -665,8 +724,31 @@
   }
 
   /**
+   * Renderiza la grilla de apps para el paso de personalización.
+   * @param {Array} apps
+   */
+  function renderAppGrid(apps) {
+    const items = apps
+      .map((app) => {
+        const selected = state.selectedApps.has(app.id) ? 'is-selected' : '';
+        return `
+          <div class="onboarding-app-option ${selected}" data-app-id="${escapeHtml(app.id)}">
+            <div class="onboarding-app-icon">${escapeHtml(app.icon)}</div>
+            <div class="onboarding-app-name">${escapeHtml(app.name)}</div>
+          </div>
+        `;
+      })
+      .join('');
+    const count = state.selectedApps.size;
+    const helperText = count === 0 
+      ? '<p class="onboarding-app-helper">Tocá las apps que querés agregar</p>'
+      : `<p class="onboarding-app-helper">${count} ${count === 1 ? 'app seleccionada' : 'apps seleccionadas'}</p>`;
+    return `<div class="onboarding-app-grid">${items}</div>${helperText}`;
+  }
+
+  /**
    * Dibuja un teclado decorativo con las teclas dadas. La última tecla se
-   * resalta en violeta porque es la "letra" del atajo y la que el usuario
+   * resalta en azul porque es la "letra" del atajo y la que el usuario
    * tiene que recordar. Entre tecla y tecla pintamos un "+" tenue.
    * @param {string[]} keys
    */
@@ -690,10 +772,10 @@
     k.forEach((label, i) => {
       const w = sizes[i];
       const isAccent = i === k.length - 1;
-      const fill = isAccent ? 'rgba(167, 139, 250, 0.22)' : 'rgba(255, 255, 255, 0.05)';
-      const stroke = isAccent ? 'rgba(167, 139, 250, 0.95)' : 'rgba(255, 255, 255, 0.2)';
+      const fill = isAccent ? 'rgba(26, 115, 232, 0.12)' : 'rgba(32, 33, 36, 0.04)';
+      const stroke = isAccent ? '#1a73e8' : 'rgba(32, 33, 36, 0.2)';
       const strokeW = isAccent ? 2 : 1.4;
-      const textColor = isAccent ? '#ffffff' : 'rgba(245, 246, 248, 0.92)';
+      const textColor = isAccent ? '#1a73e8' : '#202124';
       parts.push(
         `<rect x="${cursor}" y="${padding}" width="${w}" height="${KEY_HEIGHT}" rx="9" ry="9" ` +
           `fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" />`,
@@ -701,19 +783,19 @@
       // Pequeña sombra inferior para sensación de keycap
       parts.push(
         `<rect x="${cursor + 4}" y="${padding + KEY_HEIGHT - 6}" width="${w - 8}" height="3" rx="2" ` +
-          `fill="rgba(0,0,0,0.35)" />`,
+          `fill="rgba(32, 33, 36, 0.1)" />`,
       );
       parts.push(
         `<text x="${cursor + w / 2}" y="${padding + KEY_HEIGHT / 2 + 5}" text-anchor="middle" ` +
-          `font-family="Inter, 'Miranda Sans', system-ui, sans-serif" font-size="15" ` +
-          `font-weight="${isAccent ? 700 : 600}" fill="${textColor}">${escapeHtml(label)}</text>`,
+          `font-family="'IBM Plex Sans', Inter, system-ui, sans-serif" font-size="15" ` +
+          `font-weight="${isAccent ? 600 : 500}" fill="${textColor}">${escapeHtml(label)}</text>`,
       );
       cursor += w;
       if (i < k.length - 1) {
         parts.push(
           `<text x="${cursor + PLUS_WIDTH / 2}" y="${padding + KEY_HEIGHT / 2 + 5}" text-anchor="middle" ` +
-            `font-family="Inter, system-ui, sans-serif" font-size="14" ` +
-            `fill="rgba(255,255,255,0.45)">+</text>`,
+            `font-family="'IBM Plex Sans', Inter, system-ui, sans-serif" font-size="14" ` +
+            `fill="rgba(95, 99, 104, 0.6)">+</text>`,
         );
         cursor += PLUS_WIDTH;
       }
@@ -735,6 +817,25 @@
       finish();
       return;
     }
+    
+    // Si estamos en el paso "add-first" y ya hay shortcuts (p.ej. del paso de personalización),
+    // saltamos directo al siguiente paso
+    if (step.id === 'add-first' && !state.preview) {
+      const api = window.usualDesk || {};
+      if (typeof api.getShortcuts === 'function') {
+        try {
+          const shortcuts = api.getShortcuts();
+          if (Array.isArray(shortcuts) && shortcuts.length > 0) {
+            // Ya hay shortcuts, saltamos este paso
+            showStep(stepIndex + 1);
+            return;
+          }
+        } catch {
+          // Si falla, continuamos normalmente
+        }
+      }
+    }
+    
     state.step = stepIndex;
     ensureLayer();
     document.documentElement.classList.add('onboarding-active');
@@ -780,6 +881,18 @@
     if (!state.active) return;
     const step = STEPS[state.step];
 
+    // Paso "personalize": crear shortcuts para las apps seleccionadas
+    if (step && step.id === 'personalize' && state.selectedApps.size > 0 && !state.preview) {
+      // Mostrar mensaje de éxito antes de avanzar
+      showSuccessMessage(state.selectedApps.size);
+      createShortcutsForSelectedApps(step.apps);
+      // Pequeño delay para que el usuario vea el mensaje de éxito
+      setTimeout(() => {
+        advanceToNextStep();
+      }, 800);
+      return;
+    }
+
     // Paso "hotkey": exigimos que el usuario haya probado Ctrl+Alt+D al
     // menos una vez antes de seguir, también en modo preview (el preview
     // tiene que mostrar exactamente lo que ve un usuario nuevo). Si no se
@@ -813,6 +926,36 @@
     advanceToNextStep();
   }
 
+  function showSuccessMessage(count) {
+    const bubble = state.bubbleEl;
+    if (!bubble) return;
+    const footer = bubble.querySelector('.onboarding-bubble-footer');
+    if (!footer) return;
+    const existing = bubble.querySelector('.onboarding-success-message');
+    if (existing) existing.remove();
+    const msg = document.createElement('div');
+    msg.className = 'onboarding-success-message';
+    msg.textContent = `¡Listo! ${count} ${count === 1 ? 'app agregada' : 'apps agregadas'}.`;
+    bubble.insertBefore(msg, footer);
+  }
+
+  async function createShortcutsForSelectedApps(apps) {
+    if (!window.usualDesk || typeof window.usualDesk.addShortcut !== 'function') return;
+    const selectedAppsList = apps.filter((app) => state.selectedApps.has(app.id));
+    for (const app of selectedAppsList) {
+      try {
+        await window.usualDesk.addShortcut({
+          type: 'web',
+          name: app.name,
+          url: app.url,
+          icon: '',
+        });
+      } catch (error) {
+        console.error(`Error creating shortcut for ${app.name}:`, error);
+      }
+    }
+  }
+
   function advanceToNextStep() {
     const next = state.step + 1;
     if (next >= STEPS.length) {
@@ -843,6 +986,7 @@
     const o = opts || {};
     state.active = true;
     state.preview = !!o.preview;
+    state.selectedApps.clear();
     resetImportState();
     const skipWelcome = !!o.skipWelcome;
 
