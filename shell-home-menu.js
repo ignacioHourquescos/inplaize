@@ -7,108 +7,11 @@
  * @param {() => void | Promise<void>} [api.enterShortcutsEditMode]
  * @param {() => void | Promise<void>} [api.exitShortcutsEditMode]
  * @param {() => void | Promise<void>} [api.openSettings]
+ * @param {() => void | Promise<void>} [api.openAppearance]
  * @param {() => void | Promise<void>} [api.hidePanel]
  * @param {() => void | Promise<void>} [api.quitApp]
  * @param {(cb: (on: boolean) => void) => void} [api.onShortcutsEditModeSync]
  */
-function escapeMenuText(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-const VERSION_HISTORY_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-function formatVersionHistoryDate(iso) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim());
-  if (!match) return '';
-  const month = VERSION_HISTORY_MONTHS[Number(match[2]) - 1];
-  if (!month) return '';
-  return `${Number(match[3])} ${month} ${match[1]}`;
-}
-
-function versionHistoryHostApi() {
-  return window.usualDesk || window.usualDeskShell || window.usualDeskDetached || null;
-}
-
-function setVersionHistoryVisible(show) {
-  const open = show === true;
-  const main = document.getElementById('dock-home-menu-main');
-  const panel = document.getElementById('dock-version-history');
-  const title = document.querySelector('#dock-home-menu .dock-home-menu-drawer-title');
-  const back = document.getElementById('dock-version-history-back');
-  if (main) main.hidden = open;
-  if (panel) panel.hidden = !open;
-  if (title) title.textContent = open ? 'Versiones' : 'Menú';
-  if (back) back.hidden = !open;
-}
-
-function renderVersionHistoryList(list, entries, currentVersion) {
-  const items = Array.isArray(entries) ? entries : [];
-  if (!items.length) {
-    list.innerHTML = '<p class="dock-version-history-status">Todavía no hay versiones para mostrar.</p>';
-    return;
-  }
-  const current = currentVersion ? String(currentVersion) : '';
-  list.innerHTML = items
-    .map((entry) => {
-      const version = entry && entry.version ? String(entry.version) : '';
-      if (!version) return '';
-      const date = formatVersionHistoryDate(entry.date);
-      const notes = Array.isArray(entry.notes) ? entry.notes.map((note) => String(note).trim()).filter(Boolean) : [];
-      const isCurrent = current !== '' && version === current;
-      const notesHtml = notes.length
-        ? `<ul class="dock-version-entry-notes">${notes.map((note) => `<li>${escapeMenuText(note)}</li>`).join('')}</ul>`
-        : '';
-      const dateHtml = date ? `<time class="dock-version-entry-date" datetime="${escapeMenuText(entry.date)}">${escapeMenuText(date)}</time>` : '';
-      const currentHtml = isCurrent ? '<span class="dock-version-entry-current">actual</span>' : '';
-      return `<article class="dock-version-entry${isCurrent ? ' is-current' : ''}">
-        <div class="dock-version-entry-meta">
-          <span class="dock-version-entry-version">v${escapeMenuText(version)}${currentHtml}</span>
-          ${dateHtml}
-        </div>
-        ${notesHtml}
-      </article>`;
-    })
-    .join('');
-}
-
-let versionHistoryRequest = 0;
-
-async function loadVersionHistoryList() {
-  const list = document.getElementById('dock-version-history-list');
-  if (!list) return;
-  const requestId = ++versionHistoryRequest;
-  list.innerHTML = '<p class="dock-version-history-status">Cargando…</p>';
-  const api = versionHistoryHostApi();
-  if (!api || typeof api.getVersionHistory !== 'function') {
-    list.innerHTML = '<p class="dock-version-history-status">No se pudo cargar el historial.</p>';
-    return;
-  }
-  try {
-    const historyPromise = api.getVersionHistory();
-    const versionPromise = typeof api.getAppVersion === 'function' ? api.getAppVersion().catch(() => null) : null;
-    const [entries, info] = await Promise.all([historyPromise, versionPromise]);
-    if (requestId !== versionHistoryRequest) return;
-    renderVersionHistoryList(list, entries, info && info.version);
-  } catch (err) {
-    console.error('get-version-history', err);
-    if (requestId !== versionHistoryRequest) return;
-    list.innerHTML = '<p class="dock-version-history-status">No se pudo cargar el historial.</p>';
-  }
-}
-
-function openVersionHistory() {
-  setVersionHistoryVisible(true);
-  const list = document.getElementById('dock-version-history-list');
-  if (list) list.scrollTop = 0;
-  const back = document.getElementById('dock-version-history-back');
-  back?.focus();
-  loadVersionHistoryList();
-}
-
 function paintAppVersion() {
   const el = document.getElementById('dock-app-version');
   if (!el) return;
@@ -138,25 +41,38 @@ function initShellHomeMenu(api) {
   const editToggle = document.getElementById('shortcuts-edit-toggle');
   if (!menuBtn || !menu || !backdrop || !api) return;
 
-  function setOpen(open) {
+  function setOpen(open, opts) {
     const isOpen = open === true;
-    if (isOpen) setVersionHistoryVisible(false);
+    const silent = !!(opts && opts.silent);
+    if (menu.classList.contains('is-open') === isOpen) return;
     menu.classList.toggle('is-open', isOpen);
     backdrop.classList.toggle('is-open', isOpen);
     menuBtn.classList.toggle('is-open', isOpen);
+    document.documentElement.setAttribute('data-home-menu-open', isOpen ? 'on' : 'off');
     menuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     menu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
     backdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-    if (typeof api.onDrawerOpenChange === 'function') {
-      api.onDrawerOpenChange(isOpen);
+    if (!silent && typeof api.onDrawerOpenChange === 'function') {
+      const editOn = !!(
+        editToggle
+        && (editToggle.classList.contains('is-on') || editToggle.getAttribute('aria-checked') === 'true')
+      );
+      api.onDrawerOpenChange(isOpen, editOn);
     }
   }
 
   window.__dockHomeMenu = {
     open: () => setOpen(true),
     close: () => setOpen(false),
+    setOpen,
     isOpen: () => menu.classList.contains('is-open'),
   };
+
+  const menuBridge = window.usualDeskShell || window.usualDeskDetached || window.usualDesk;
+  if (menuBridge && typeof menuBridge.onMenuOverlayApply === 'function' && !menu.dataset.overlayApply) {
+    menu.dataset.overlayApply = '1';
+    menuBridge.onMenuOverlayApply((open) => setOpen(open === true, { silent: true }));
+  }
 
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -172,13 +88,8 @@ function initShellHomeMenu(api) {
   menuCloseBtn?.addEventListener('click', () => setOpen(false));
 
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !menu.classList.contains('is-open')) return;
-    const history = document.getElementById('dock-version-history');
-    if (history && !history.hidden) {
-      setVersionHistoryVisible(false);
-      menuBtn.focus();
-      return;
-    }
+    if (e.key !== 'Escape') return;
+    if (!menu.classList.contains('is-open')) return;
     setOpen(false);
     menuBtn.focus();
   });
@@ -193,13 +104,12 @@ function initShellHomeMenu(api) {
   }
 
   bindItem('dock-home-add-btn', () => api.openAddShortcut?.());
-  bindItem('settings-btn', () => api.openSettings?.());
-  bindItem('dock-version-history-btn', () => openVersionHistory(), true);
   bindItem('quit-app-btn', () => api.quitApp?.());
-
-  document.getElementById('dock-version-history-back')?.addEventListener('click', () => {
-    setVersionHistoryVisible(false);
+  bindItem('settings-btn', () => {
+    if (typeof api.openAppearance === 'function') api.openAppearance();
+    else api.openSettings?.();
   });
+  bindItem('internal-btn', () => api.openSettings?.());
 
   if (editToggle) {
     editToggle.addEventListener('click', () => {
@@ -226,11 +136,6 @@ const SHELL_HOME_MENU_DRAWER_HTML = `
 <div id="dock-home-menu-backdrop" class="dock-home-menu-backdrop" aria-hidden="true"></div>
 <aside id="dock-home-menu" class="dock-home-menu-drawer" aria-hidden="true" aria-label="Opciones">
   <div class="dock-home-menu-drawer-head">
-    <button type="button" id="dock-version-history-back" class="dock-home-menu-back" hidden aria-label="Volver al menú">
-      <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M14.5 6.5L8.5 12l6 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
     <span class="dock-home-menu-drawer-title">Menú</span>
     <button type="button" id="dock-home-menu-close" class="dock-home-menu-close" aria-label="Cerrar menú">
       <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -264,12 +169,12 @@ const SHELL_HOME_MENU_DRAWER_HTML = `
       </svg>
       <span class="dock-home-menu-item-label">Configuración</span>
     </button>
-    <button type="button" id="dock-version-history-btn" class="dock-home-menu-item" role="menuitem">
+    <button type="button" id="internal-btn" class="dock-home-menu-item" role="menuitem">
       <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.85"/>
-        <path d="M12 8v4.5l2.5 1.5" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 3h6M10 3v6L6.2 16.8A3.1 3.1 0 0 0 9 21h6a3.1 3.1 0 0 0 2.8-4.2L14 9V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M8.5 14h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       </svg>
-      <span class="dock-home-menu-item-label">Historial de versiones</span>
+      <span class="dock-home-menu-item-label">Internal</span>
     </button>
     <div class="dock-home-menu-sep" role="separator" aria-hidden="true"></div>
     <button type="button" id="quit-app-btn" class="dock-home-menu-item dock-home-menu-item-danger" role="menuitem">
@@ -280,9 +185,6 @@ const SHELL_HOME_MENU_DRAWER_HTML = `
       <span class="dock-home-menu-item-label">Cerrar aplicación</span>
     </button>
   </nav>
-  <div id="dock-version-history" class="dock-version-history" hidden>
-    <div id="dock-version-history-list" class="dock-version-history-list" role="list" aria-label="Historial de versiones"></div>
-  </div>
 </aside>`;
 
 const SHELL_HOME_MENU_BTN_HTML = `
@@ -326,5 +228,6 @@ if (typeof window !== 'undefined') {
   window.UsualDeskShellHomeMenu = {
     init: initShellHomeMenu,
     mountChrome: mountShellHomeMenuChrome,
+    drawerHtml: SHELL_HOME_MENU_DRAWER_HTML,
   };
 }

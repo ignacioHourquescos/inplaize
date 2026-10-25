@@ -155,12 +155,15 @@ function renderChrome(payload) {
   }
   const items = payload && Array.isArray(payload.items) ? payload.items : [];
   if (!strip) return;
+  const addBtn = document.getElementById('strip-add-shortcut');
+  if (addBtn) addBtn.remove();
   strip.innerHTML = '';
   if (items.length === 0) {
     const span = document.createElement('span');
     span.className = 'shortcut-strip-empty';
     span.textContent = 'Sin accesos directos';
     strip.appendChild(span);
+    if (addBtn) strip.appendChild(addBtn);
     return;
   }
   for (const it of items) {
@@ -238,6 +241,7 @@ function renderChrome(payload) {
 
     strip.appendChild(cell);
   }
+  if (addBtn) strip.appendChild(addBtn);
 }
 
 async function refreshChromeFromMain() {
@@ -313,11 +317,12 @@ function initShellHomeMenuChrome(api) {
     openAddShortcut: () => api.openAddShortcut?.().catch(() => {}),
     enterShortcutsEditMode: () => api.enterShortcutsEditMode?.().catch(() => {}),
     exitShortcutsEditMode: () => api.requestExitShortcutEditMode?.().catch(() => {}),
+    openAppearance: () => api.openAppearance?.().catch(() => {}),
     openSettings: () => api.openSettings?.().catch(() => {}),
     hidePanel: () => api.collapseDockSidebar?.().catch(() => {}),
     quitApp: () => api.closeApp?.().catch(() => {}),
     onShortcutsEditModeSync: (cb) => api.onShortcutsEditModeSync?.(cb),
-    onDrawerOpenChange: (open) => api.notifyShellMenuDrawer?.(open === true),
+    onDrawerOpenChange: (open, editMode) => api.notifyShellMenuDrawer?.(open === true, editMode === true),
   });
 }
 

@@ -6,7 +6,7 @@
   <title>inplaize</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shell-home-menu.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="onboarding.css">
@@ -60,8 +60,39 @@
               <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+          <div class="open-url-slot" id="open-url-slot" data-mouse-hit>
+            <button
+              type="button"
+              id="open-url-btn"
+              class="shell-shortcut-item open-url-btn"
+              data-mouse-hit
+              data-tooltip="Internet"
+              data-tooltip-placement="bottom"
+              aria-label="Abrir el navegador"
+            >
+              <svg class="open-url-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
+                <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 4c2.2 2.4 3.3 5.1 3.3 8s-1.1 5.6-3.3 8c-2.2-2.4-3.3-5.1-3.3-8s1.1-5.6 3.3-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <form id="open-url-form" class="open-url-form" hidden autocomplete="off" data-mouse-hit>
+              <div class="open-url-card" data-mouse-hit>
+                <input
+                  id="open-url-input"
+                  class="open-url-input"
+                  type="text"
+                  placeholder="Pegar enlace"
+                  spellcheck="false"
+                  enterkeyhint="go"
+                  aria-label="Enlace para abrir"
+                />
+              </div>
+              <p class="open-url-error" hidden></p>
+            </form>
+          </div>
         </div>
-        <div id="shortcuts-container"></div>
+        <div id="shortcuts-container">
         <button
           type="button"
           id="strip-add-shortcut"
@@ -77,6 +108,7 @@
             </svg>
           </span>
         </button>
+        </div>
         <div id="header-actions" class="dock-chrome-menu-wrap" aria-label="Menú de opciones">
           <div id="dock-edit-mode-banner" class="dock-edit-mode-banner" aria-hidden="true">
             <button
@@ -112,42 +144,15 @@
         </div>
       </div>
 
-      <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegación suelta">
-        <div class="loose-nav-actions">
-          <button type="button" id="loose-nav-back" class="loose-nav-btn" data-tooltip="Atrás" disabled aria-label="Atrás">
+      <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegador">
+        <div class="loose-nav-tabs-row">
+          <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-new-tab" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom" aria-label="Nueva pestaña">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
             </svg>
           </button>
-          <button type="button" id="loose-nav-forward" class="loose-nav-btn" data-tooltip="Adelante" disabled aria-label="Adelante">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-          <button type="button" id="loose-nav-reload" class="loose-nav-btn" data-tooltip="Recargar" aria-label="Recargar">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 4v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M20 10a8 8 0 0 0-14.9-3M4 14a8 8 0 0 0 14.9 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+          <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
         </div>
-        <form id="loose-nav-url-form" class="loose-nav-url-form" autocomplete="off">
-          <input type="text" id="loose-nav-url-input" class="loose-nav-url-input" placeholder="Buscar en Google o escribir URL" spellcheck="false" />
-        </form>
-        <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
-        <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-btn loose-nav-new-tab" data-tooltip="Nueva pestaña" aria-label="Nueva pestaña">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <line x1="8" y1="3" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <button type="button" id="loose-nav-close-mode" class="loose-nav-btn loose-nav-btn-close" data-tooltip="Cerrar navegación suelta" aria-label="Cerrar navegación suelta">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
       </div>
 
       <div id="dock-viewport" class="dock-viewport">
@@ -187,22 +192,6 @@
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="m15 14 5-5-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5 5.5 5.5 0 0 0 9.5 20H13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              id="canvas-options-btn"
-              class="canvas-options-btn"
-              data-mouse-hit
-              aria-label="Opciones del canvas"
-              aria-haspopup="menu"
-              aria-expanded="false"
-              aria-controls="canvas-options-menu"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="5" cy="12" r="1.8" fill="currentColor"/>
-                <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
-                <circle cx="19" cy="12" r="1.8" fill="currentColor"/>
               </svg>
             </button>
           </div>
@@ -283,7 +272,7 @@
             </aside>
           </div>
 
-          <!-- Visor fijo (1/3 derecho): vista previa de imágenes (con edición básica) y PDFs.
+          <!-- Visor fijo (1/3 derecho): imágenes (con edición básica), PDFs y videos.
                Sin archivo seleccionado muestra un placeholder. -->
           <aside id="image-drawer" class="image-drawer is-empty" data-mouse-hit aria-label="Vista previa de archivo">
             <div class="image-drawer-head">
@@ -294,9 +283,10 @@
               <canvas id="image-drawer-canvas" class="image-drawer-canvas hidden"></canvas>
               <!-- webview (no iframe): el visor de PDF de Chromium no funciona en iframes dentro de Electron -->
               <webview id="image-drawer-pdf" class="image-drawer-pdf hidden" src="about:blank" plugins="true"></webview>
+              <video id="image-drawer-video" class="image-drawer-video hidden" controls controlslist="nodownload" playsinline preload="metadata"></video>
               <p id="image-drawer-error" class="image-drawer-error hidden">No se pudo cargar el archivo.</p>
               <div id="image-drawer-placeholder" class="image-drawer-placeholder">
-                <p class="image-drawer-placeholder-text">Pasá el mouse sobre un archivo para ver el detalle. Hacé click para abrirlo.</p>
+                <p class="image-drawer-placeholder-text">Seleccioná un archivo para verlo acá.</p>
               </div>
 
               <!-- Cajón mágico: lista de opciones para el archivo soltado. -->
@@ -367,18 +357,6 @@
               </button>
               <button type="button" id="image-drawer-save" class="image-drawer-save" disabled>Guardar</button>
             </div>
-            <div id="download-hover-detail" class="download-hover-detail" hidden aria-hidden="true">
-              <div class="download-hover-thumb-wrap">
-                <img id="download-hover-thumb" class="download-hover-thumb" alt="" hidden />
-                <span id="download-hover-ext" class="download-hover-ext" hidden></span>
-              </div>
-              <p id="download-hover-kicker" class="download-hover-kicker"></p>
-              <p id="download-hover-date" class="download-hover-date"></p>
-              <p id="download-hover-time" class="download-hover-time"></p>
-              <p id="download-hover-size" class="download-hover-size"></p>
-              <p id="download-hover-name" class="download-hover-name"></p>
-              <dl id="download-hover-meta" class="download-hover-meta"></dl>
-            </div>
           </aside>
         </div>
         <div id="dock-inline-editor" class="dock-inline-editor hidden" data-mouse-hit></div>
@@ -395,11 +373,6 @@
         aria-label="Opciones"
       >
         <div class="dock-home-menu-drawer-head">
-          <button type="button" id="dock-version-history-back" class="dock-home-menu-back" hidden aria-label="Volver al menú">
-            <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M14.5 6.5L8.5 12l6 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
           <span class="dock-home-menu-drawer-title">Menú</span>
           <button type="button" id="dock-home-menu-close" class="dock-home-menu-close" aria-label="Cerrar menú">
             <svg class="dock-home-menu-close-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -441,12 +414,12 @@
             </svg>
             <span class="dock-home-menu-item-label">Configuración</span>
           </button>
-          <button type="button" id="dock-version-history-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Historial de versiones" data-tooltip-placement="left">
+          <button type="button" id="internal-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Herramientas internas" data-tooltip-placement="left">
             <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.85"/>
-              <path d="M12 8v4.5l2.5 1.5" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 3h6M10 3v6L6.2 16.8A3.1 3.1 0 0 0 9 21h6a3.1 3.1 0 0 0 2.8-4.2L14 9V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M8.5 14h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
-            <span class="dock-home-menu-item-label">Historial de versiones</span>
+            <span class="dock-home-menu-item-label">Internal</span>
           </button>
           <div class="dock-home-menu-sep" role="separator" aria-hidden="true"></div>
           <button type="button" id="quit-app-btn" class="dock-home-menu-item dock-home-menu-item-danger" role="menuitem" data-tooltip="Cerrar aplicación" data-tooltip-placement="left">
@@ -457,16 +430,49 @@
             <span class="dock-home-menu-item-label">Cerrar aplicación</span>
           </button>
         </nav>
-        <div id="dock-version-history" class="dock-version-history" hidden>
-          <div id="dock-version-history-list" class="dock-version-history-list" role="list" aria-label="Historial de versiones"></div>
-        </div>
       </aside>
     </div>
 
-    <!-- Configuración -->
+    <!-- Configuración: tema del lienzo -->
+    <div id="appearance-modal-overlay" class="hidden" data-mouse-hit>
+      <div id="appearance-modal" class="settings-modal-card" role="dialog" aria-modal="true" aria-labelledby="appearance-modal-title">
+        <h3 class="settings-modal-title" id="appearance-modal-title">Configuración</h3>
+        <div class="settings-modal-section">
+          <div class="type-field-label" id="appearance-theme-label">Tema</div>
+          <div
+            class="appearance-theme-options"
+            id="appearance-theme-options"
+            role="radiogroup"
+            aria-labelledby="appearance-theme-label"
+          >
+            <button type="button" class="appearance-theme-option" role="radio" data-value="dark" aria-checked="false">
+              <span class="appearance-theme-swatch is-dark" aria-hidden="true">
+                <span class="appearance-theme-swatch-bar"></span>
+                <span class="appearance-theme-swatch-line"></span>
+                <span class="appearance-theme-swatch-line is-short"></span>
+              </span>
+              <span class="appearance-theme-option-label">Modo oscuro</span>
+            </button>
+            <button type="button" class="appearance-theme-option" role="radio" data-value="light" aria-checked="false">
+              <span class="appearance-theme-swatch is-light" aria-hidden="true">
+                <span class="appearance-theme-swatch-bar"></span>
+                <span class="appearance-theme-swatch-line"></span>
+                <span class="appearance-theme-swatch-line is-short"></span>
+              </span>
+              <span class="appearance-theme-option-label">Modo claro</span>
+            </button>
+          </div>
+        </div>
+        <div class="settings-modal-actions">
+          <button type="button" id="appearance-modal-close" class="btn-primary settings-modal-done">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Internal: panel de pruebas -->
     <div id="settings-modal-overlay" class="hidden" data-mouse-hit>
       <div id="settings-modal" class="settings-modal-card">
-        <h3 class="settings-modal-title">Configuración</h3>
+        <h3 class="settings-modal-title">Internal</h3>
         <div class="settings-modal-section">
           <div class="type-field-label" id="dock-position-label">Panel en pantalla</div>
           <div
@@ -531,9 +537,9 @@
         </div>
         <div class="settings-modal-section">
           <div class="type-field-label">Tutorial</div>
-          <p class="settings-modal-help">
-            Volvé a ver el recorrido guiado: el atajo Ctrl+Alt+D, cómo agregar tu
-            primera ventana y los gestos del mouse para cerrar y entrar en Modo Foco.
+          <p class="settings-modal-help" id="settings-onboarding-help">
+            Volvé a ver el recorrido guiado: el atajo Ctrl+Alt+D y cómo agregar tu
+            primera ventana.
           </p>
           <button type="button" id="onboarding-replay-btn" class="btn-secondary settings-onboarding-replay">
             Ver tutorial otra vez
@@ -659,6 +665,7 @@
   </div>
 
   <script src="ui-tooltip.js"></script>
+  <script src="open-url-bar.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="onboarding.js"></script>

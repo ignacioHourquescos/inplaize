@@ -14,6 +14,7 @@ const { app, session } = require('electron');
 const { askChoice } = require('./choice-prompt');
 const { loadShortcuts } = require('./shortcuts-store');
 const { partitionFromSessionId } = require('./session-partition');
+const { withScheme } = require('./load-web-url');
 
 /** TLDs de dos niveles más comunes para aproximar el dominio registrable. */
 const TWO_LEVEL_TLDS = new Set([
@@ -33,7 +34,8 @@ const TWO_LEVEL_TLDS = new Set([
 function baseDomainOf(url) {
   let host = '';
   try {
-    const u = new URL(String(url || ''));
+    // Accesos guardados sin esquema ("www.figma.com") también tienen dominio.
+    const u = new URL(withScheme(String(url || '')));
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
     host = u.hostname.toLowerCase();
   } catch {
@@ -139,6 +141,8 @@ async function copyDomainCookies(fromPartition, toPartition, domain) {
     return 0;
   }
   let copied = 0;
+  /** @type {string[]} */
+  const failed = [];
   for (const c of cookies) {
     if (!cookieInDomain(c, domain)) continue;
     const name = String(c.name || '');
@@ -159,16 +163,26 @@ async function copyDomainCookies(fromPartition, toPartition, domain) {
       httpOnly: !!c.httpOnly,
       sameSite,
     };
-    if (!isHostPrefixed && rawDomain) details.domain = rawDomain;
+    // Una cookie host-only (sin Domain) no debe pasar a valer para todo el dominio.
+    if (!isHostPrefixed && rawDomain && c.hostOnly !== true) details.domain = rawDomain;
     if (!c.session && typeof c.expirationDate === 'number') {
       details.expirationDate = c.expirationDate;
     }
     try {
       await to.cookies.set(details);
       copied += 1;
-    } catch {
-      /* noop */
+    } catch (err) {
+      failed.push(`${name}@${rawDomain}: ${err && err.message ? err.message : err}`);
     }
+  }
+  try {
+    const { log } = require('./logger');
+    log(
+      `Sesión copiada ${fromPartition} → ${toPartition} (${domain}): ${copied} ok, ${failed.length} fallaron` +
+        (failed.length ? ` [${failed.slice(0, 5).join(' | ')}]` : '')
+    );
+  } catch {
+    /* noop */
   }
   try {
     await to.cookies.flushStore();

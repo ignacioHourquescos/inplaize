@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onboarding · inplaize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="onboarding.css">
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #e8eaed;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const pressListeners = [];
+      const hotkey = ['Ctrl', 'Alt', 'D'];
+
+      window.usualDesk = {
+        setOnboardingActive: function () {},
+        setOnboardingHotkeyTrial: function (on) {
+          if (window.__hotkeyYieldTimer) {
+            clearInterval(window.__hotkeyYieldTimer);
+            window.__hotkeyYieldTimer = null;
+          }
+          const ping = function (still) {
+            fetch('/hotkey-yield', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ on: still }),
+            }).catch(function () {});
+          };
+          ping(on === true);
+          if (on === true) {
+            window.__hotkeyYieldTimer = setInterval(function () { ping(true); }, 800);
+          }
+          return Promise.resolve(true);
+        },
+        setIgnoreMouse: function () {},
+        expandSidebar: function () { return Promise.resolve(); },
+        collapseSidebar: function () { return Promise.resolve(); },
+        setAppSettings: function (partial) {
+          if (partial && Array.isArray(partial.dockHotkey) && partial.dockHotkey.length === 3) {
+            hotkey.splice(0, 3, partial.dockHotkey[0], partial.dockHotkey[1], partial.dockHotkey[2]);
+          }
+          return Promise.resolve({ dockHotkey: hotkey.slice() });
+        },
+        getAppSettings: function () {
+          return Promise.resolve({ dockHotkey: hotkey.slice(), onboardingCompleted: false });
+        },
+        onOnboardingHotkeyPress: function (callback) {
+          pressListeners.push(callback);
+        },
+        getChromeImportStatus: function () {
+          return Promise.resolve({
+            platformSupported: true,
+            chromeFound: true,
+            chromeRunning: false,
+          });
+        },
+        listChromeProfiles: function () {
+          return Promise.resolve([{ directory: 'Default', name: 'Personal', userName: '' }]);
+        },
+        getShortcuts: function () {
+          return Promise.resolve([
+            { id: 'gmail', type: 'web', name: 'Gmail', url: 'https://mail.google.com' },
+            { id: 'linkedin', type: 'web', name: 'LinkedIn', url: 'https://www.linkedin.com' },
+          ]);
+        },
+        addShortcut: function () { return Promise.resolve(); },
+        importChromeSessionsForShortcuts: function () {
+          return Promise.resolve({ importedByShortcut: [{ name: 'Gmail', imported: 1 }] });
+        },
+      };
+
+      window.addEventListener('keydown', function (e) {
+        if (e.repeat) return;
+        const letter = hotkey.find(function (label) { return label.length === 1; }) || 'D';
+        const need = {
+          Ctrl: e.ctrlKey || e.key === 'Control',
+          Alt: e.altKey || e.key === 'Alt',
+          Shift: e.shiftKey || e.key === 'Shift',
+          Win: e.metaKey || e.key === 'Meta',
+        };
+        const modsOk = hotkey.every(function (label) {
+          if (label.length === 1) return true;
+          return need[label] === true;
+        });
+        const letterDown = e.key && e.key.toUpperCase() === letter;
+        if (!modsOk || !letterDown) return;
+        e.preventDefault();
+        pressListeners.forEach(function (fn) { fn(); });
+      }, true);
+
+      window.addEventListener('pagehide', function () {
+        if (window.__hotkeyYieldTimer) clearInterval(window.__hotkeyYieldTimer);
+        try {
+          navigator.sendBeacon('/hotkey-yield', new Blob(
+            [JSON.stringify({ on: false })],
+            { type: 'application/json' },
+          ));
+        } catch (err) { /* noop */ }
+      });
+
+      window.addEventListener('DOMContentLoaded', function () {
+        const opts = { preview: true };
+        if (params.get('step')) opts.step = params.get('step');
+        if (params.get('stage') === 'desk') opts.hotkeyStage = 'desk';
+        window.UsualDeskOnboarding.start(opts);
+      });
+    })();
+  </script>
+  <script src="onboarding.js"></script>
+</body>
+</html>

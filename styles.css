@@ -408,7 +408,7 @@ html[data-dock-position='center'] #sidebar.drop-target-active {
   -webkit-app-region: no-drag;
 }
 
-/* Logo de inplaize (tareas) + flecha (descargas), a la izquierda de los accesos. */
+/* Logo de inplaize (tareas), flecha (descargas) y globo (abrir enlace), a la izquierda de los accesos. */
 .dock-strip-lead {
   display: flex;
   align-items: center;
@@ -428,7 +428,7 @@ html[data-dock-layout='modal'] .dock-strip-lead {
 }
 
 html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item {
-  border-color: var(--border);
+  border-color: transparent;
   background: var(--bg-card);
   color: var(--text-primary);
 }
@@ -438,7 +438,7 @@ html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item:hover {
 }
 
 html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item.is-active {
-  border-color: var(--accent);
+  border-color: transparent;
   background: rgba(79, 70, 229, 0.08);
   box-shadow: none;
 }
@@ -449,15 +449,12 @@ html[data-dock-layout='topbar'] .dock-strip-lead {
   margin-left: var(--ud-chrome-strip-pad-x);
 }
 
-html[data-dock-layout='topbar'] #strip-add-shortcut {
-  margin-right: 2px;
-}
-
-html[data-dock-layout='modal'] #strip-add-shortcut {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  justify-self: start;
-  margin: 0 16px 12px;
+/* El "+" va dentro de la tira, pegado al último icono. El fondo es el de la
+   barra para que, si queda fijo al hacer scroll, no se transparente el icono de abajo. */
+html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut,
+html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:hover,
+html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:active {
+  background: var(--ud-chrome-strip-bg) !important;
 }
 
 /* ---- Shortcuts Container ---- */
@@ -1095,6 +1092,14 @@ html[data-dock-layout='modal'] .shortcut-card.shortcut-card-editing {
   transition: opacity 0.2s ease;
 }
 
+/* Por encima del panel a pantalla completa (la franja también queda debajo). */
+html[data-dock-layout='topbar'] #modal-overlay {
+  z-index: 240;
+  padding: 28px 20px;
+  overflow: auto;
+  align-items: safe center;
+}
+
 #modal-overlay.hidden {
   opacity: 0;
   pointer-events: none;
@@ -1102,7 +1107,8 @@ html[data-dock-layout='modal'] .shortcut-card.shortcut-card-editing {
 
 /* ---- Modal configuración ---- */
 
-#settings-modal-overlay {
+#settings-modal-overlay,
+#appearance-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -1114,7 +1120,8 @@ html[data-dock-layout='modal'] .shortcut-card.shortcut-card-editing {
   transition: opacity 0.2s ease;
 }
 
-#settings-modal-overlay.hidden {
+#settings-modal-overlay.hidden,
+#appearance-modal-overlay.hidden {
   opacity: 0;
   pointer-events: none;
 }
@@ -1235,6 +1242,105 @@ html[data-dock-layout='modal'] .shortcut-card.shortcut-card-editing {
   min-width: 100px;
 }
 
+.appearance-theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.appearance-theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.appearance-theme-option:hover {
+  border-color: #c4c9d4;
+}
+
+.appearance-theme-option.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: #eef2ff;
+}
+
+.appearance-theme-option:focus {
+  outline: none;
+}
+
+.appearance-theme-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.appearance-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 72px;
+  padding: 10px;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.appearance-theme-swatch.is-dark {
+  background: #12121a;
+}
+
+.appearance-theme-swatch.is-light {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
+.appearance-theme-swatch-bar {
+  height: 8px;
+  width: 46%;
+  border-radius: 4px;
+}
+
+.appearance-theme-swatch.is-dark .appearance-theme-swatch-bar {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.appearance-theme-swatch.is-light .appearance-theme-swatch-bar {
+  background: #1a1a2e;
+}
+
+.appearance-theme-swatch-line {
+  height: 6px;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.appearance-theme-swatch-line.is-short {
+  width: 68%;
+}
+
+.appearance-theme-swatch.is-dark .appearance-theme-swatch-line {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.appearance-theme-swatch.is-light .appearance-theme-swatch-line {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.appearance-theme-option-label {
+  padding: 0 2px 2px;
+}
+
 .type-segmented-triple .type-segment {
   padding: 9px 8px;
   font-size: 12px;
@@ -1255,6 +1361,11 @@ html[data-dock-layout='modal'] .shortcut-card.shortcut-card-editing {
   font-weight: 600;
   margin-bottom: 16px;
   letter-spacing: -0.02em;
+}
+
+.form-group.hidden,
+.form-row.hidden {
+  display: none;
 }
 
 .shortcut-form .form-group {
@@ -1679,6 +1790,7 @@ html[data-dock-layout='topbar'] {
   --dock-muted: #9ca3af;
   --dock-btn: #1a1a22;
   --dock-btn-hover: #24242e;
+  --ud-home-menu-drawer-w: 240px;
 }
 
 html[data-dock-layout='topbar'] #app {
@@ -1936,6 +2048,7 @@ html[data-dock-layout='topbar'] .dock-home-menu-btn.is-open {
 }
 
 html[data-dock-layout='topbar'] .dock-home-menu-drawer {
+  width: var(--ud-home-menu-drawer-w);
   background: var(--ud-chrome-canvas);
 }
 
@@ -1970,6 +2083,10 @@ html[data-dock-layout='topbar'] .dock-home-menu-drawer {
   width: 100%;
   flex: 1 1 auto;
   overflow-y: auto;
+}
+
+.dock-home-menu-drawer-body[hidden] {
+  display: none;
 }
 
 .dock-home-menu-sep {
@@ -2159,6 +2276,11 @@ html[data-dock-layout='topbar'] .dock-viewport {
   background-image:
     radial-gradient(circle at 22% 18%, rgba(139, 92, 246, 0.08), transparent 52%),
     radial-gradient(circle at 78% 88%, rgba(99, 102, 241, 0.06), transparent 48%);
+}
+
+html[data-loose-nav='on'][data-dock-layout='topbar'] .dock-viewport {
+  background: #fff;
+  background-image: none;
 }
 
 /* Pantalla principal: tareas (logo) o descargas + visor (flecha). */
@@ -2485,14 +2607,14 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
 }
 
 /* ==========================================================================
-   Formulario incrustado (modo topbar): UI oscura minimalista, moderna.
-   - Bloque centrado, ancho 560px, sin sombra ni borde de tarjeta
+   Formulario de acceso directo en topbar: modal oscuro centrado.
+   - Tarjeta de 560px sobre el lienzo, con borde y sombra
    - Labels en mayúsculas pequeñas tipo "etiqueta"
    - Inputs muy planos, focus con acento violeta
    - Todo alineado a la izquierda
    ========================================================================== */
 #modal.shortcut-modal-embed {
-  --fm-bg: transparent;
+  --fm-bg: #14141c;
   --fm-surface: #0f0f16;
   --fm-surface-hover: #161620;
   --fm-border: #23232d;
@@ -2501,19 +2623,20 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
   --fm-text-muted: #8b8b99;
   --fm-label: #7e7e8c;
 
-  width: 100%;
+  width: min(560px, calc(100vw - 40px));
   max-width: 560px;
-  margin: 0;
-  padding: 0;
-  border-radius: 0;
-  border: none;
-  box-shadow: none;
+  margin: auto;
+  padding: 22px 24px 20px;
+  border-radius: 16px;
+  border: 1px solid #2c2c38;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
   background: var(--fm-bg);
   color: var(--fm-text);
   display: flex;
   flex-direction: column;
   gap: 22px;
   text-align: left;
+  flex: 0 0 auto;
 }
 
 #modal.shortcut-modal-embed .shortcut-form {
@@ -2647,8 +2770,8 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
   background: rgba(79, 70, 229, 0.18);
 }
 
-/* Agrupación de opciones web (checkbox stack) */
-#modal.shortcut-modal-embed #shortcut-web-options {
+/* Agrupación de opciones web (checkbox stack). :not(.hidden) para que el alta no fuerce el bloque de orden ni las opciones de programa. */
+#modal.shortcut-modal-embed #shortcut-web-options:not(.hidden) {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2697,7 +2820,7 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
 }
 
 /* Orden en la barra: segmentado compacto alineado a la izquierda */
-#modal.shortcut-modal-embed #shortcut-order-group {
+#modal.shortcut-modal-embed #shortcut-order-group:not(.hidden) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2879,13 +3002,214 @@ html[data-dock-layout='topbar'] .shortcut-icon-slot {
   background: transparent;
 }
 
-/* Modo edición: gris en los iconos del icono (no en el contenedor, para no duplicar filtros) */
-html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shell-shortcut-icon-wrap {
+/* Modo edición: gris solo en el dibujo del acceso. El "+" no entra. */
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card .shell-shortcut-icon-wrap {
   filter: grayscale(1);
 }
 
 html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card-editing .shell-shortcut-icon-wrap {
   filter: none;
+}
+
+/* Lápiz (editar) y tacho (eliminar), solo mientras el modo edición está activo. */
+.shortcut-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  z-index: 4;
+  -webkit-app-region: no-drag;
+}
+
+.shortcut-edit-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(17, 17, 22, 0.9);
+  color: #ececf4;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
+  -webkit-app-region: no-drag;
+}
+
+.shortcut-edit-action svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
+}
+
+.shortcut-edit-pencil:hover,
+.shortcut-card-editing .shortcut-edit-pencil {
+  background: #7c6cff;
+  color: #fff;
+}
+
+.shortcut-edit-trash {
+  color: #fda4af;
+}
+
+.shortcut-edit-trash:hover {
+  background: #e11d48;
+  color: #fff;
+}
+
+.shortcut-edit-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #7c6cff;
+}
+
+#shortcuts-container.shortcuts-edit-mode .shortcut-card {
+  cursor: grab;
+  touch-action: none;
+}
+
+#shortcuts-container.shortcuts-edit-mode .shortcut-edit-action {
+  cursor: pointer;
+}
+
+html.is-shortcut-reordering,
+html.is-shortcut-reordering * {
+  cursor: grabbing !important;
+}
+
+html.is-shortcut-reordering .shortcut-edit-action {
+  pointer-events: none !important;
+}
+
+.shortcut-card.reorder-placeholder .shortcut-edit-actions {
+  visibility: hidden;
+}
+
+html[data-dock-layout='topbar'][data-shortcuts-edit='on'] {
+  --ud-chrome-strip-h: 76px;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card.shell-shortcut-item {
+  overflow: hidden;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  max-height: 58px !important;
+  flex: 0 0 44px !important;
+  padding: 4px 3px !important;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-edit-actions {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: auto;
+  gap: 4px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-edit-action {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-width: 0;
+  border-radius: 5px;
+  background: rgba(12, 12, 16, 0.94);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+  pointer-events: auto;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-edit-action svg {
+  width: 12px;
+  height: 12px;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-edit-pencil:hover,
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card-editing .shortcut-edit-pencil {
+  background: #7c6cff;
+  color: #fff;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-edit-trash:hover {
+  background: #e11d48;
+  color: #fff;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container.reorder-active .shortcut-card.reorder-placeholder {
+  opacity: 0.45 !important;
+  border-style: dashed !important;
+  border-color: rgba(167, 139, 250, 0.95) !important;
+  background: rgba(124, 108, 255, 0.14) !important;
+}
+
+html[data-dock-layout='topbar'] .reorder-ghost.shortcut-card.shell-shortcut-item {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  max-height: 58px !important;
+  padding: 4px 3px !important;
+  opacity: 1 !important;
+  background: #2c2c34 !important;
+  border-color: #7c6cff !important;
+  border-style: solid !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55) !important;
+  transform: scale(1.06) !important;
+}
+
+html[data-dock-layout='topbar'] .reorder-ghost.shortcut-card-editing .shortcut-edit-pencil {
+  background: #7c6cff;
+  color: #fff;
+}
+
+html[data-dock-layout='topbar'] .reorder-ghost .shell-shortcut-icon-wrap {
+  filter: none;
+}
+
+html[data-dock-layout='modal'] #shortcuts-container.shortcuts-edit-mode .shortcut-edit-actions {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+}
+
+html[data-dock-position='center'] #shortcuts-container.shortcuts-edit-mode .shortcut-card {
+  padding-bottom: 36px;
+}
+
+html[data-dock-layout='modal']:not([data-dock-position='center']) #shortcuts-container.shortcuts-edit-mode .shortcut-card {
+  padding-right: 72px;
+}
+
+html[data-dock-layout='modal']:not([data-dock-position='center']) #shortcuts-container.shortcuts-edit-mode .shortcut-edit-actions {
+  top: 50%;
+  bottom: auto;
+  left: auto;
+  width: auto;
+  transform: translateY(-50%);
 }
 
 html[data-dock-layout='topbar'] .shortcuts-empty {
@@ -2926,32 +3250,26 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
 }
 
 /* ==========================================================================
-   Navegación suelta: barra de pestañas incrustada dentro del dock.
-   Se muestra justo debajo de la franja de iconos cuando el usuario entra
-   en modo “navegación suelta”. El área bajo la barra es donde el proceso
-   principal ancla el BrowserView activo.
+   Navegación suelta: fila de pestañas bajo la franja de iconos.
+   Misma pieza que las sub-pestañas del mail: atrás/adelante viven en la
+   pestaña activa. El “+” queda fijo al inicio. El enlace de una pestaña
+   nueva se tipea donde irían el favicon y el nombre.
    ========================================================================== */
 
 .loose-nav-bar {
-  --ln-surface: #0f0f16;
-  --ln-surface-2: #161620;
-  --ln-border: #23232d;
-  --ln-text: #ececf1;
-  --ln-muted: #9ca3af;
   --ln-accent: #7c6cff;
 
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
   flex: 0 0 auto;
-  height: 38px;
-  min-height: 38px;
-  padding: 0 8px;
-  background: #0a0a10;
-  border-bottom: 1px solid var(--ln-border);
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  background: var(--ud-chrome-strip-bg);
+  border-bottom: 1px solid var(--ud-chrome-strip-border);
   -webkit-app-region: no-drag;
-  color: var(--ln-text);
+  color: var(--ud-chrome-text);
   user-select: none;
 }
 
@@ -2964,56 +3282,58 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   display: none !important;
 }
 
-.loose-nav-actions {
+.loose-nav-tabs-row {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
+  align-items: stretch;
+  gap: 4px;
+  height: 36px;
+  padding: 4px 8px 0;
+  background: var(--ud-chrome-strip-bg);
+  overflow: hidden;
 }
 
-.loose-nav-btn {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ln-muted);
-  cursor: pointer;
+.loose-nav-new-tab {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 0 2px;
   padding: 0;
-  transition: background 0.12s ease, color 0.12s ease;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
-.loose-nav-btn:hover:not(:disabled) {
-  background: var(--ln-surface-2);
-  color: var(--ln-text);
-}
-
-.loose-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.loose-nav-btn.loose-nav-btn-close:hover {
-  background: #e81123;
-  color: #fff;
+.loose-nav-new-tab:hover {
+  background: var(--ud-chrome-icon-bg-hover);
 }
 
 .loose-nav-tabs-strip {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: row;
-  align-items: center;
-  gap: 3px;
-  overflow: hidden;
-  padding: 0 2px;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
   height: 100%;
   -webkit-app-region: no-drag;
+}
+
+.loose-nav-tabs-strip::-webkit-scrollbar {
+  height: 4px;
+}
+
+.loose-nav-tabs-strip::-webkit-scrollbar-thumb {
+  background: #44444e;
+  border-radius: 4px;
 }
 
 .loose-nav-tab {
@@ -3021,43 +3341,89 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  /* Ancho cómodo cuando hay sitio; se encoge hasta dejar solo el favicon. */
-  flex: 1 1 180px;
-  min-width: 30px;
-  max-width: 200px;
-  padding: 0 8px;
+  min-width: 120px;
+  max-width: 260px;
+  flex: 0 1 auto;
+  padding: 0 8px 0 4px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
   background: transparent;
-  color: var(--ln-muted);
+  color: var(--ud-chrome-icon-muted);
+  font: inherit;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   overflow: hidden;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-
-/* Cuando el ancho es muy pequeño, el padding lateral baja para priorizar el favicon. */
-.loose-nav-tab {
-  padding: 0 6px;
+  -webkit-app-region: no-drag;
 }
 
 .loose-nav-tab:hover {
-  background: var(--ln-surface);
-  color: var(--ln-text);
+  background: var(--ud-chrome-icon-bg-hover);
 }
 
 .loose-nav-tab.is-active {
-  background: var(--ln-surface-2);
-  color: var(--ln-text);
-  border-color: var(--ln-border);
-  box-shadow: inset 0 -2px 0 var(--ln-accent);
+  min-width: 176px;
+  padding-left: 4px;
+  background: var(--ud-chrome-icon-active-bg);
+  border-color: var(--ud-chrome-icon-active-border);
+  color: var(--ud-chrome-text);
+}
+
+.loose-nav-tab.is-composing {
+  flex: 1 1 320px;
+  min-width: 200px;
+  max-width: 520px;
+  padding: 0 4px 0 10px;
+  background: var(--ud-chrome-icon-active-bg);
+  border-color: var(--ud-chrome-icon-active-border);
+  color: var(--ud-chrome-text);
+  cursor: text;
+}
+
+.loose-nav-tab-nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.loose-nav-tab-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-tab-nav-btn svg {
+  display: block;
+}
+
+.loose-nav-tab-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.loose-nav-tab-nav-btn:disabled {
+  color: #6e6e7c;
+  cursor: default;
+}
+
+.loose-nav-tab-reload {
+  color: inherit;
 }
 
 .loose-nav-tab-fav {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   border-radius: 3px;
   object-fit: contain;
@@ -3065,7 +3431,24 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
 }
 
 .loose-nav-tab-fav.is-placeholder {
-  background: linear-gradient(135deg, #4a3fdb, #7c6cff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #3a3a44;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.loose-nav-tab-fav.is-loading {
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(200, 200, 212, 0.25);
+  border-top-color: var(--ud-chrome-text);
+  border-radius: 50%;
+  animation: loose-nav-spin 0.8s linear infinite;
 }
 
 .loose-nav-tab-title {
@@ -3076,74 +3459,53 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   text-overflow: ellipsis;
 }
 
-.loose-nav-tab-close {
-  width: 18px;
-  height: 18px;
-  min-width: 18px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.loose-nav-tab-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
   padding: 0;
-  opacity: 0;
-  transition: opacity 0.12s ease, background 0.12s ease;
-}
-
-.loose-nav-tab:hover .loose-nav-tab-close,
-.loose-nav-tab.is-active .loose-nav-tab-close {
-  opacity: 0.75;
-}
-
-.loose-nav-tab-close:hover {
-  opacity: 1 !important;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.loose-nav-tab.is-loading .loose-nav-tab-fav {
-  animation: loose-nav-spin 0.9s linear infinite;
-}
-
-@keyframes loose-nav-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.loose-nav-url-form {
-  display: flex;
-  align-items: center;
-  /* Ancho fijo cómodo a la izquierda; se encoge un poco si la ventana es muy estrecha. */
-  flex: 0 1 280px;
-  min-width: 160px;
-  max-width: 360px;
-  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
   -webkit-app-region: no-drag;
 }
 
-.loose-nav-url-input {
-  width: 100%;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--ln-border);
-  border-radius: 6px;
-  background: var(--ln-surface);
-  color: var(--ln-text);
-  font-size: 12px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.12s ease, background 0.12s ease;
+.loose-nav-tab-url::placeholder {
+  color: #8d8d9c;
 }
 
-.loose-nav-url-input::placeholder {
-  color: #5c5c68;
+.loose-nav-tab-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
-.loose-nav-url-input:focus {
-  border-color: var(--ln-accent);
-  background: var(--ln-surface-2);
+.loose-nav-tab-close:hover {
+  background: rgba(229, 57, 53, 0.35);
+  color: #fff;
+}
+
+@keyframes loose-nav-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Superficie bajo la barra donde el main posiciona el BrowserView.
@@ -3160,6 +3522,14 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
 }
 
 .loose-nav-surface.hidden {
+  display: none !important;
+}
+
+/* Navegación suelta: el BrowserView tapa el HTML, así que el menú visible
+   es una vista por encima de la página. Este drawer no se anima (si no,
+   la página tendría que ceder ancho y se reacomoda). Sin velo. */
+html[data-loose-nav='on'] .dock-home-menu-backdrop,
+html[data-loose-nav='on'] .dock-home-menu-drawer {
   display: none !important;
 }
 
@@ -3270,13 +3640,8 @@ html[data-loose-nav='on'] #dock-inline-editor {
 }
 
 .download-tile-cell.is-today:hover,
-.download-tile-cell.is-older:hover,
-.download-tile-cell.is-inspecting {
+.download-tile-cell.is-older:hover {
   opacity: 1;
-}
-
-.download-tile-cell.is-inspecting .download-tile {
-  box-shadow: 0 0 0 2px var(--accent, #4f46e5);
 }
 
 .downloads-home-empty {
@@ -3488,160 +3853,6 @@ html[data-loose-nav='on'] #dock-inline-editor {
   -webkit-app-region: no-drag;
 }
 
-/* Detalle al pasar el mouse: tapa el visor sin cerrar lo que ya estaba abierto. */
-.download-hover-detail {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  padding: 18px 20px 16px;
-  background: var(--dock-surface-2, #12121a);
-  overflow: auto;
-  pointer-events: none;
-  box-sizing: border-box;
-}
-
-.download-hover-detail[hidden] {
-  display: none !important;
-}
-
-.download-hover-thumb-wrap {
-  flex: 1 1 auto;
-  min-height: 148px;
-  max-height: 42%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 16px;
-  border-radius: 16px;
-  overflow: hidden;
-  background-color: #0c0c12;
-  background-image:
-    linear-gradient(45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.035) 75%),
-    linear-gradient(45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.035) 75%);
-  background-size: 18px 18px;
-  background-position: 0 0, 9px 9px;
-}
-
-.download-hover-thumb {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  display: block;
-}
-
-.download-hover-thumb[hidden],
-.download-hover-ext[hidden] {
-  display: none !important;
-}
-
-.download-hover-ext {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: #a5b4fc;
-}
-
-.download-hover-kicker {
-  margin: 0 0 2px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--dock-muted, #9ca3af);
-}
-
-.download-hover-kicker:empty {
-  display: none;
-}
-
-.download-hover-date {
-  margin: 0;
-  font-size: clamp(32px, 3.4vw, 48px);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
-  color: var(--dock-text, #ececf1);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.download-hover-time {
-  margin: 4px 0 0;
-  font-size: 18px;
-  font-weight: 500;
-  line-height: 1.2;
-  color: var(--dock-muted, #9ca3af);
-}
-
-.download-hover-time:empty {
-  display: none;
-}
-
-.download-hover-size {
-  margin: 10px 0 0;
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  color: var(--dock-text, #ececf1);
-}
-
-.download-hover-size:empty {
-  display: none;
-}
-
-.download-hover-name {
-  margin: 12px 0 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--dock-text, #ececf1);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-}
-
-.download-hover-meta {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--dock-border, #252530);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 16px;
-  row-gap: 8px;
-  font-size: 13px;
-  line-height: 1.3;
-}
-
-.download-hover-meta:empty {
-  display: none;
-}
-
-.download-hover-meta dt {
-  margin: 0;
-  color: var(--dock-muted, #9ca3af);
-  font-weight: 500;
-}
-
-.download-hover-meta dd {
-  margin: 0;
-  min-width: 0;
-  color: var(--dock-text, #ececf1);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Sin archivo seleccionado: se ocultan cabecera y herramientas, queda el placeholder. */
 .image-drawer.is-empty .image-drawer-head,
 .image-drawer.is-empty .image-drawer-toolbar {
@@ -3747,8 +3958,26 @@ html[data-loose-nav='on'] #dock-inline-editor {
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
 }
 
+.image-drawer.is-video .image-drawer-body {
+  background: #000;
+  padding: 0;
+}
+
+.image-drawer-video {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: #000;
+  border-radius: 6px;
+  outline: none;
+}
+
 .image-drawer-canvas.hidden,
 .image-drawer-pdf.hidden,
+.image-drawer-video.hidden,
 .image-drawer-error.hidden {
   display: none;
 }
@@ -3817,6 +4046,110 @@ html[data-loose-nav='on'] #dock-inline-editor {
 .image-drawer-save:disabled {
   opacity: 0.35;
   cursor: default;
+}
+
+/* Modo claro: la zona de archivos (grilla y visor) deja el negro de fondo. */
+html[data-canvas-theme='light'] .dock-viewport:has(#dock-home-panel[data-home-view='downloads']) {
+  background-color: #ffffff;
+  background-image: none;
+}
+
+html[data-canvas-theme='light'] #dock-home-panel[data-home-view='downloads'],
+html[data-canvas-theme='light'] .downloads-home {
+  background: #ffffff;
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .downloads-home-empty {
+  color: #52525b;
+}
+
+html[data-canvas-theme='light'] .download-tile {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+html[data-canvas-theme='light'] .image-drawer {
+  background: #ffffff;
+  border-left-color: rgba(0, 0, 0, 0.08);
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .image-drawer-head {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+html[data-canvas-theme='light'] .image-drawer-toolbar {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+html[data-canvas-theme='light'] .image-drawer-title {
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .image-drawer-placeholder-text,
+html[data-canvas-theme='light'] .image-drawer-error {
+  color: #52525b;
+}
+
+html[data-canvas-theme='light'] .image-drawer-close {
+  color: #52525b;
+}
+
+html[data-canvas-theme='light'] .image-drawer-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .image-drawer-body {
+  background-color: #f4f4f5;
+  background-image:
+    linear-gradient(45deg, rgba(0, 0, 0, 0.045) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.045) 75%),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.045) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.045) 75%);
+  background-size: 22px 22px;
+  background-position: 0 0, 11px 11px;
+}
+
+html[data-canvas-theme='light'] .image-drawer.is-video .image-drawer-body {
+  background: #000;
+}
+
+html[data-canvas-theme='light'] .image-drawer-tool {
+  background: #f4f4f5;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #3f3f46;
+}
+
+html[data-canvas-theme='light'] .image-drawer-tool:hover:not(:disabled) {
+  background: #e4e4e7;
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .magic-file-name,
+html[data-canvas-theme='light'] .magic-options-title,
+html[data-canvas-theme='light'] .magic-loader-pct {
+  color: #3f3f46;
+}
+
+html[data-canvas-theme='light'] .magic-file-name {
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .magic-options-cancel {
+  color: #52525b;
+}
+
+html[data-canvas-theme='light'] .magic-options-cancel:hover {
+  color: #18181b;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+html[data-canvas-theme='light'] .magic-spinner {
+  border-color: rgba(0, 0, 0, 0.12);
+  border-top-color: var(--accent);
+}
+
+html[data-canvas-theme='light'] .magic-loader-bar {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* ---------------- Cajón mágico ---------------- */
@@ -3890,6 +4223,33 @@ html[data-loose-nav='on'] #dock-inline-editor {
   color: #a5b4fc;
   transform: scale(1.03);
   box-shadow: 0 0 14px rgba(79, 70, 229, 0.25);
+}
+
+/* Arrastre interno de un archivo: el panel sigue en pantalla. */
+html.is-internal-file-drag,
+html.is-internal-file-drag * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.download-drag-ghost {
+  position: fixed;
+  z-index: 10000;
+  max-width: 220px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(20, 20, 26, 0.94);
+  color: #ececf1;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: translate(14px, 16px);
 }
 
 .magic-zone.is-rejected {

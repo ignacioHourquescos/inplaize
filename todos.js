@@ -41,8 +41,6 @@
   let menuEl = null;
   let menuBlockId = null;
   let menuIndex = 0;
-  let canvasMenuEl = null;
-  const canvasOptionsBtn = document.getElementById('canvas-options-btn');
   const canvasUndoBtn = document.getElementById('canvas-undo-btn');
   const canvasRedoBtn = document.getElementById('canvas-redo-btn');
   const CANVAS_THEME_KEY = 'inplaize.canvasTheme';
@@ -332,7 +330,6 @@
       historyCurrent = historyJson();
       historyKey = null;
       historyAt = 0;
-      closeCanvasMenu();
       selectedIds = new Set();
       selectionAnchorId = null;
       const restored = focusInSnapshot(historyCurrent, focus);
@@ -622,43 +619,6 @@
     setCanvasTheme(theme);
   }
 
-  function closeCanvasMenu() {
-    if (canvasMenuEl) canvasMenuEl.remove();
-    canvasMenuEl = null;
-    canvasOptionsBtn?.setAttribute('aria-expanded', 'false');
-  }
-
-  function openCanvasMenu() {
-    if (!canvasOptionsBtn) return;
-    closeMenu();
-    closeCanvasMenu();
-    const menu = document.createElement('div');
-    menu.id = 'canvas-options-menu';
-    menu.className = 'notion-menu canvas-options-menu';
-    menu.setAttribute('data-mouse-hit', '');
-    menu.setAttribute('role', 'menu');
-    const item = menuButton('◐', 'Invertir colores', () => {
-      setCanvasTheme(canvasIsLight() ? 'dark' : 'light');
-      closeCanvasMenu();
-    });
-    item.setAttribute('role', 'menuitemcheckbox');
-    item.setAttribute('aria-checked', canvasIsLight() ? 'true' : 'false');
-    if (canvasIsLight()) item.classList.add('is-checked');
-    menu.appendChild(item);
-    layerParent.appendChild(menu);
-    canvasMenuEl = menu;
-    canvasOptionsBtn.setAttribute('aria-expanded', 'true');
-    const rect = canvasOptionsBtn.getBoundingClientRect();
-    const width = menu.offsetWidth;
-    const height = menu.offsetHeight;
-    let left = rect.left;
-    let top = rect.top - height - 8;
-    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
-    if (top < 8) top = rect.bottom + 8;
-    menu.style.left = `${Math.max(8, left)}px`;
-    menu.style.top = `${top}px`;
-  }
-
   function menuItems() {
     if (!menuEl) return [];
     return [...menuEl.querySelectorAll('.notion-menu-item')];
@@ -689,7 +649,6 @@
   }
 
   function openMenu(anchor, block, mode) {
-    closeCanvasMenu();
     closeMenu();
     menuBlockId = block.id;
     const row = rootEl.querySelector(`[data-block-id="${CSS.escape(block.id)}"]`);
@@ -1743,6 +1702,8 @@
       content.textContent = block.text;
       focusBlock(block.id, 4000);
     }
+    const hostNow = findBlock(block.id);
+    if (hostNow) syncColumnEmptyHint(hostNow.column);
     const pending = clearColumnOnEmpty;
     clearColumnOnEmpty = null;
     if (pending && pending.blockId === block.id && !blockHasText(block)) {
@@ -1819,7 +1780,7 @@
     const columnsEl = document.createElement('div');
     columnsEl.className = 'notion-columns';
 
-    state.columns.forEach((column, columnIndex) => {
+    state.columns.forEach((column) => {
       const columnEl = document.createElement('div');
       columnEl.className = 'notion-column';
       columnEl.dataset.columnId = column.id;
@@ -1851,7 +1812,7 @@
       }
 
       column.blocks.forEach((block) => {
-        columnEl.appendChild(renderBlock(column, block, columnIndex));
+        columnEl.appendChild(renderBlock(column, block));
       });
       columnsEl.appendChild(columnEl);
     });
@@ -1888,7 +1849,30 @@
     scheduleSave();
   }
 
-  function renderBlock(column, block, columnIndex) {
+  function columnIsEmpty(column) {
+    return column.blocks.every((item) => !(item.text || '').trim());
+  }
+
+  /** Primera línea de una columna vacía: invita a escribir, sin tener que hacer clic. */
+  function applyEmptyHint(content, hint) {
+    if (hint) {
+      content.dataset.placeholder = 'Agregar nota';
+      content.dataset.hint = '1';
+      return;
+    }
+    content.dataset.placeholder = 'Escribí…';
+    delete content.dataset.hint;
+  }
+
+  function syncColumnEmptyHint(column) {
+    const first = column.blocks[0];
+    if (!first) return;
+    const content = rootEl.querySelector(`[data-block-id="${CSS.escape(first.id)}"] .notion-content`);
+    if (!content) return;
+    applyEmptyHint(content, columnIsEmpty(column));
+  }
+
+  function renderBlock(column, block) {
     const row = document.createElement('div');
     row.className = 'notion-block' + (block.type === 'todo' && block.done ? ' is-done' : '');
     row.dataset.blockId = block.id;
@@ -1951,12 +1935,8 @@
     content.spellcheck = true;
     content.setAttribute('role', 'textbox');
     content.setAttribute('aria-label', block.type === 'todo' ? 'Checkbox' : block.type === 'bullet' ? 'Viñeta' : 'Texto');
-    const columnEmpty = column.blocks.every((item) => !(item.text || '').trim());
-    const hint = columnEmpty && column.blocks[0] === block;
-    content.dataset.placeholder = hint && columnIndex === 0
-      ? 'Escribí acá. Enter baja de renglón, / elige checkbox, viñeta o documento'
-      : 'Escribí…';
-    if (hint) content.dataset.hint = '1';
+    const hint = columnIsEmpty(column) && column.blocks[0] === block;
+    applyEmptyHint(content, hint);
     content.textContent = block.text || '';
     content.addEventListener('keydown', (e) => onBlockKeydown(e, block, content));
     content.addEventListener('beforeinput', (e) => onBlockBeforeInput(e, block));
@@ -1970,9 +1950,6 @@
     const target = e.target instanceof Node ? e.target : null;
     if (selectedIds.size && target && !homeEl.contains(target) && !(target instanceof Element && target.closest('.notion-menu'))) {
       clearBlockSelection();
-    }
-    if (canvasMenuEl && target && !canvasMenuEl.contains(target) && !canvasOptionsBtn?.contains(target)) {
-      closeCanvasMenu();
     }
     if (!menuEl) return;
     if (target && menuEl.contains(target)) return;
@@ -1997,9 +1974,8 @@
     }
     if (e.key !== 'Escape') return;
     if (document.documentElement.classList.contains('doc-modal-open')) return;
-    if (menuEl || canvasMenuEl) {
+    if (menuEl) {
       closeMenu();
-      closeCanvasMenu();
       return;
     }
     if (selectedIds.size) {
@@ -2007,7 +1983,6 @@
       return;
     }
     closeMenu();
-    closeCanvasMenu();
   });
 
   document.addEventListener('pointermove', onBlockGestureMove);
@@ -2016,17 +1991,7 @@
 
   homeEl.addEventListener('scroll', () => {
     closeMenu();
-    closeCanvasMenu();
   }, { passive: true });
-
-  if (canvasOptionsBtn) {
-    canvasOptionsBtn.addEventListener('mousedown', (e) => e.preventDefault());
-    canvasOptionsBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (canvasMenuEl) closeCanvasMenu();
-      else openCanvasMenu();
-    });
-  }
 
   [canvasUndoBtn, canvasRedoBtn].forEach((btn) => {
     if (!btn) return;
@@ -2040,6 +2005,11 @@
   });
 
   loadCanvasTheme();
+
+  window.InplaizeCanvasTheme = {
+    isLight: canvasIsLight,
+    set: setCanvasTheme,
+  };
 
   homeEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || blockGesture || (press && press.dragging)) return;

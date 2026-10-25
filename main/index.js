@@ -80,6 +80,27 @@ function enableAutoStart() {
   }
 }
 
+app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
+  let allow = false;
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    allow =
+      host === 'localhost' ||
+      host === '::1' ||
+      host.endsWith('.localhost') ||
+      host.endsWith('.local') ||
+      /^127\.\d+\.\d+\.\d+$/.test(host);
+  } catch {
+    allow = false;
+  }
+  if (allow) {
+    event.preventDefault();
+    callback(true);
+    return;
+  }
+  callback(false);
+});
+
 app.whenReady().then(() => {
   if (process.platform === 'win32' && !app.isPackaged) {
     const ok = installWindowsTaskbarShortcut();

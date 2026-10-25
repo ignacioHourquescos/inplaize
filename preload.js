@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('usualDesk', {
   getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
   saveShortcuts: (shortcuts) => ipcRenderer.invoke('save-shortcuts', shortcuts),
   openShortcut: (shortcut) => ipcRenderer.invoke('open-shortcut', shortcut),
+  openPastedUrl: (url) => ipcRenderer.invoke('open-pasted-url', url),
+  showUrlPrompt: () => ipcRenderer.invoke('url-prompt-show'),
+  openAppBrowser: () => ipcRenderer.invoke('app-browser-open'),
+  setUrlPromptOpen: (open) => ipcRenderer.invoke('url-prompt-open', open === true),
   setWebShortcutMuted: (shortcut, muted) =>
     ipcRenderer.invoke('set-web-shortcut-muted', { shortcut, muted }),
   setWebShortcutNotificationsMuted: (shortcut, muted) =>
@@ -18,7 +22,6 @@ contextBridge.exposeInMainWorld('usualDesk', {
   closeApp: () => ipcRenderer.invoke('close-app'),
   getUserDataPath: () => ipcRenderer.invoke('get-user-data-path'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-  getVersionHistory: () => ipcRenderer.invoke('get-version-history'),
   openUserDataFolder: () => ipcRenderer.invoke('open-user-data-folder'),
   listBuiltinIcons: () => ipcRenderer.invoke('list-builtin-icons'),
   fetchWebFavicon: (pageUrl) => ipcRenderer.invoke('fetch-web-favicon', pageUrl),
@@ -35,6 +38,9 @@ contextBridge.exposeInMainWorld('usualDesk', {
   },
   onOpenSettingsModal: (callback) => {
     ipcRenderer.on('open-settings-modal', () => callback());
+  },
+  onOpenAppearanceModal: (callback) => {
+    ipcRenderer.on('open-appearance-modal', () => callback());
   },
   onShortcutTitleBadge: (callback) => {
     ipcRenderer.on('shortcut-title-badge', (_event, payload) => callback(payload));
@@ -88,11 +94,20 @@ contextBridge.exposeInMainWorld('usualDesk', {
   looseNavNavigate: (url) => ipcRenderer.invoke('loose-nav-navigate', { url }),
   looseNavBack: () => ipcRenderer.invoke('loose-nav-back'),
   looseNavForward: () => ipcRenderer.invoke('loose-nav-forward'),
-  looseNavReload: () => ipcRenderer.invoke('loose-nav-reload'),
+  looseNavReload: (tabId) => ipcRenderer.invoke('loose-nav-reload', tabId ? String(tabId) : null),
   looseNavOpenExternal: (url) => ipcRenderer.invoke('loose-nav-open-external', { url }),
   looseNavGetState: () => ipcRenderer.invoke('loose-nav-get-state'),
   looseNavSetViewportBounds: (bounds) =>
     ipcRenderer.invoke('loose-nav-set-viewport-bounds', bounds),
+  setMenuOverlayOpen: (open, editMode) =>
+    ipcRenderer.invoke('menu-overlay-set-open', {
+      open: open === true,
+      editMode: editMode === true,
+    }),
+  hideMenuOverlay: () => ipcRenderer.invoke('menu-overlay-hide'),
+  onMenuOverlayApply: (callback) => {
+    ipcRenderer.on('menu-overlay-apply', (_event, open) => callback(open === true));
+  },
   onLooseNavState: (callback) => {
     ipcRenderer.on('loose-nav-state', (_event, payload) => callback(payload));
   },
@@ -155,6 +170,16 @@ contextBridge.exposeInMainWorld('usualDesk', {
   getTodos: () => ipcRenderer.invoke('get-todos'),
   saveTodos: (payload) => ipcRenderer.invoke('save-todos', payload),
   holdDockBlur: (ms) => ipcRenderer.invoke('hold-dock-blur', ms),
+  onGestureCoachShow: (callback) => {
+    ipcRenderer.on('gesture-coach-show', () => callback());
+  },
+  closeGestureCoach: (opts) => ipcRenderer.invoke('gesture-coach-close', opts || {}),
+  setOnboardingActive: (on) => ipcRenderer.invoke('set-onboarding-active', on === true),
+  setOnboardingHotkeyTrial: (on) => ipcRenderer.invoke('set-onboarding-hotkey-trial', on === true),
+  moveOnboardingCursor: (point) => ipcRenderer.invoke('onboarding-move-cursor', point),
+  onOnboardingHotkeyPress: (callback) => {
+    ipcRenderer.on('onboarding-hotkey-press', () => callback());
+  },
   onTodosChanged: (callback) => {
     ipcRenderer.on('todos-changed', () => callback());
   },

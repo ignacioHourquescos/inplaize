@@ -154,12 +154,15 @@ function renderChrome(payload) {
   }
   const items = payload && Array.isArray(payload.items) ? payload.items : [];
   if (!strip) return;
+  const addBtn = document.getElementById('strip-add-shortcut');
+  if (addBtn) addBtn.remove();
   strip.innerHTML = '';
   if (items.length === 0) {
     const span = document.createElement('span');
     span.className = 'shortcut-strip-empty';
     span.textContent = 'Sin accesos directos';
     strip.appendChild(span);
+    if (addBtn) strip.appendChild(addBtn);
     return;
   }
   for (const it of items) {
@@ -237,6 +240,7 @@ function renderChrome(payload) {
 
     strip.appendChild(cell);
   }
+  if (addBtn) strip.appendChild(addBtn);
 }
 
 async function refreshChromeFromMain() {
@@ -258,6 +262,11 @@ const SUBTAB_NAV_BACK_SVG =
 const SUBTAB_NAV_FORWARD_SVG =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
   '<path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '</svg>';
+const SUBTAB_NAV_RELOAD_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M21 3v5h-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
   '</svg>';
 
 function applyPageNav(state) {
@@ -287,36 +296,46 @@ function makeSubtabNavButton(className, label, svg, enabled, onClick) {
   return btn;
 }
 
-/** Flechas de historial, únicamente en la solapa activa. */
-function appendActiveTabNav(el) {
+/** Atrás y adelante solo en la solapa activa. Recargar, en cada una. */
+function appendTabControls(el, tab) {
   const nav = document.createElement('span');
   nav.className = 'subtab-nav';
   nav.addEventListener('click', (ev) => ev.stopPropagation());
+  if (tab.isActive) {
+    nav.appendChild(makeSubtabNavButton(
+      'subtab-nav-back',
+      'Atrás',
+      SUBTAB_NAV_BACK_SVG,
+      pageNav.canGoBack,
+      () => api.goBack?.().catch(() => {})
+    ));
+    nav.appendChild(makeSubtabNavButton(
+      'subtab-nav-forward',
+      'Adelante',
+      SUBTAB_NAV_FORWARD_SVG,
+      pageNav.canGoForward,
+      () => api.goForward?.().catch(() => {})
+    ));
+  }
   nav.appendChild(makeSubtabNavButton(
-    'subtab-nav-back',
-    'Atrás',
-    SUBTAB_NAV_BACK_SVG,
-    pageNav.canGoBack,
-    () => api.goBack?.().catch(() => {})
-  ));
-  nav.appendChild(makeSubtabNavButton(
-    'subtab-nav-forward',
-    'Adelante',
-    SUBTAB_NAV_FORWARD_SVG,
-    pageNav.canGoForward,
-    () => api.goForward?.().catch(() => {})
+    'subtab-nav-reload',
+    'Recargar',
+    SUBTAB_NAV_RELOAD_SVG,
+    true,
+    () => api.frameAction('reload-tab', tab.id)
   ));
   el.appendChild(nav);
 }
 
 /**
- * Fila de sub-pestañas: solo visible cuando hay más de una pestaña
- * (la principal del servicio + las abiertas con Ctrl+click / target=_blank).
+ * Fila de pestañas de la ventana. Con una sola página no se muestra:
+ * el sitio ocupa ese lugar. Aparece al abrir un link en otra pestaña.
+ * También se oculta si una app de escritorio tapa la página.
  */
 function renderSubTabs(payload) {
   if (!subtabStrip) return;
   const tabs = payload && Array.isArray(payload.tabs) ? payload.tabs : [];
-  if (tabs.length <= 1) {
+  if (tabs.length < 2 || (payload && payload.embedded)) {
     subtabStrip.hidden = true;
     subtabStrip.innerHTML = '';
     return;
@@ -331,7 +350,7 @@ function renderSubTabs(payload) {
     el.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
     el.title = tab.title || '';
 
-    if (tab.isActive) appendActiveTabNav(el);
+    appendTabControls(el, tab);
 
     const icon = document.createElement('span');
     icon.className = 'subtab-icon';
@@ -462,11 +481,12 @@ function initShellHomeMenuChrome(api) {
     openAddShortcut: () => api.openAddShortcut?.().catch(() => {}),
     enterShortcutsEditMode: () => api.enterShortcutsEditMode?.().catch(() => {}),
     exitShortcutsEditMode: () => api.requestExitShortcutEditMode?.().catch(() => {}),
+    openAppearance: () => api.openAppearance?.().catch(() => {}),
     openSettings: () => api.openSettings?.().catch(() => {}),
     hidePanel: () => api.collapseDockSidebar?.().catch(() => {}),
     quitApp: () => api.closeApp?.().catch(() => {}),
     onShortcutsEditModeSync: (cb) => api.onShortcutsEditModeSync?.(cb),
-    onDrawerOpenChange: (open) => api.notifyShellMenuDrawer?.(open === true),
+    onDrawerOpenChange: (open, editMode) => api.notifyShellMenuDrawer?.(open === true, editMode === true),
   });
 }
 

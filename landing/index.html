@@ -73,7 +73,7 @@
       justify-content: center;
       gap: 40px;
       width: 100%;
-      padding: 32px 24px 48px;
+      padding: 92px 24px 48px;
       box-sizing: border-box;
     }
 
@@ -181,6 +181,137 @@
       text-decoration: underline;
     }
 
+    .site-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid #e8eaed;
+      backdrop-filter: blur(8px);
+    }
+
+    .sh-inner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 1120px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .sh-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 18px;
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      text-decoration: none;
+    }
+
+    .sh-mark {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+    }
+
+    .sh-mark::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.95);
+      transform: translate(-50%, -50%);
+    }
+
+    .sh-mark::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #8b5cf6;
+      transform: translate(-50%, -50%);
+    }
+
+    .sh-nav {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .sh-nav a {
+      padding: 6px 14px;
+      border-radius: 8px;
+      color: var(--ink-soft);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .sh-nav a:hover {
+      background: #f1f3f4;
+      color: var(--ink);
+    }
+
+    .sh-nav a[aria-current="page"] {
+      background: #f1f3f4;
+      color: var(--ink);
+    }
+
+    .sh-spacer {
+      flex: 1;
+    }
+
+    .sh-cta {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 20px;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .sh-cta:hover {
+      background: var(--blue-hover);
+    }
+
+    @media (max-width: 640px) {
+      .sh-inner {
+        padding: 0 14px;
+      }
+
+      .sh-brand {
+        margin-right: 6px;
+      }
+
+      .sh-brand span:last-child {
+        display: none;
+      }
+
+      .sh-nav a {
+        padding: 6px 10px;
+      }
+    }
+
     .fine {
       margin: 16px 0 0;
       max-width: 36em;
@@ -208,7 +339,7 @@
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 64px 24px 48px;
+      padding: 96px 24px 48px;
     }
 
     body.is-after .hero {
@@ -292,6 +423,7 @@
       background: #f4f5f7;
       box-shadow: 0 18px 40px rgba(32, 33, 36, 0.08);
       text-align: left;
+      container-type: inline-size;
     }
 
     .ibar {
@@ -322,29 +454,53 @@
       position: relative;
       display: grid;
       place-items: center;
+      margin: 0;
+      padding: 0;
       background: transparent;
+      cursor: pointer;
+      font: inherit;
+      transition: background 0.18s ease, border-color 0.18s ease;
+    }
+
+    .ibar-icon img,
+    .ibar-icon .web-globe {
+      width: 20px;
+      height: 20px;
+      opacity: 0.42;
+      filter: grayscale(0.75);
+      transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
     }
 
     .ibar-icon img {
-      width: 20px;
-      height: 20px;
       border-radius: 4px;
       object-fit: cover;
     }
 
-    .ibar-icon.is-off img {
-      opacity: 0.42;
-      filter: grayscale(0.75);
+    .ibar-icon .web-globe {
+      display: block;
     }
 
-    .ibar-icon.is-focus img {
-      animation: wake 5.6s linear infinite;
+    .ibar-icon:hover img,
+    .ibar-icon:hover .web-globe {
+      opacity: 0.85;
+      filter: none;
+      transform: scale(1.1);
     }
 
-    @keyframes wake {
-      0%, 62% { opacity: 0.42; filter: grayscale(0.75); }
-      72%, 92% { opacity: 1; filter: none; }
-      100% { opacity: 0.42; filter: grayscale(0.75); }
+    .ibar-icon.is-active {
+      border-color: #565663;
+      background: rgba(255, 255, 255, 0.09);
+    }
+
+    .ibar-icon.is-active img,
+    .ibar-icon.is-active .web-globe {
+      opacity: 1;
+      filter: none;
+    }
+
+    .ibar-icon:focus-visible {
+      outline: 2px solid #a78bfa;
+      outline-offset: 2px;
     }
 
     .ibar-badge {
@@ -364,12 +520,15 @@
       text-align: center;
     }
 
+    /* La manito que toca cada ícono, hasta que el usuario toma el control. */
     .focus-ring,
     .hand {
       position: absolute;
       left: 0;
       top: 0;
+      opacity: 0;
       pointer-events: none;
+      transition: transform 0.6s cubic-bezier(0.45, 0, 0.2, 1), opacity 0.25s ease;
     }
 
     .focus-ring {
@@ -377,9 +536,15 @@
       width: 34px;
       height: 34px;
       border-radius: 10px;
-      box-shadow: 0 0 0 2px #7c6cff;
-      opacity: 0;
-      animation: hand-focus 5.6s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+    }
+
+    .focus-ring.is-tap {
+      animation: ring-tap 0.7s ease-out;
+    }
+
+    @keyframes ring-tap {
+      0% { opacity: 1; box-shadow: 0 0 0 2px #3b82f6; }
+      100% { opacity: 0; box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
     }
 
     .hand {
@@ -387,89 +552,1010 @@
       width: 36px;
       height: 36px;
       filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45));
-      animation: hand-move 5.6s cubic-bezier(0.45, 0, 0.2, 1) infinite;
     }
 
-    @keyframes hand-move {
-      0%, 12% { transform: translate(52px, 20px); }
-      26%, 36% { transform: translate(92px, 20px); }
-      48%, 56% { transform: translate(132px, 20px); }
-      68%, 90% { transform: translate(172px, 20px); }
-      100% { transform: translate(172px, 20px); }
+    .ibar.is-demo .hand {
+      opacity: 1;
     }
 
-    @keyframes hand-focus {
-      0%, 60% { opacity: 0; transform: translate(130px, 9px); }
-      70%, 92% { opacity: 1; transform: translate(170px, 9px); }
-      100% { opacity: 0; transform: translate(170px, 9px); }
-    }
-
-    .desk .show-toast {
-      width: auto;
-      margin: 22px 20px 28px;
-    }
-
-    .show-toast {
-      width: min(340px, 100%);
-      margin-top: 40px;
-      position: relative;
-      overflow: hidden;
-      text-align: left;
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      box-shadow: 0 10px 28px rgba(32, 33, 36, 0.1);
-    }
-
-    .show-toast::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 3px;
-      background: linear-gradient(180deg, #7c3aed, #2563eb);
-    }
-
-    .show-inner {
+    /* La ventana de abajo: la app que se tocó en la barra. */
+    .desk-win {
       display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      padding: 14px 16px 14px 16px;
-    }
-
-    .show-toast img {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      object-fit: cover;
-      border: 1px solid #e5e7eb;
+      flex-direction: column;
+      height: 49cqi;
+      min-height: 0;
+      overflow: hidden;
       background: #fff;
     }
 
-    .show-src {
-      display: block;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: #6b7280;
+    .wc-bar {
+      display: flex;
+      align-items: flex-end;
+      height: 5.6cqi;
+      padding: 0 1cqi;
+      background: #dee1e6;
     }
 
-    .show-toast strong {
-      display: block;
-      margin-top: 2px;
-      font-size: 14px;
+    .wc-tab {
+      display: flex;
+      align-items: center;
+      gap: 1cqi;
+      max-width: 78%;
+      height: 4.2cqi;
+      padding: 0 1.4cqi;
+      border-radius: 1.2cqi 1.2cqi 0 0;
+      background: #fff;
+      color: #202124;
+      font-size: 2.15cqi;
       font-weight: 500;
-      color: #111827;
     }
 
-    .show-toast p {
-      margin: 2px 0 0;
-      font-size: 12px;
-      line-height: 1.45;
-      color: #6b7280;
+    .wc-tab img,
+    .wc-dot {
+      width: 2.5cqi;
+      height: 2.5cqi;
+      flex: 0 0 auto;
+      border-radius: 0.45cqi;
+      object-fit: cover;
     }
+
+    .wc-dot {
+      background: linear-gradient(135deg, #c4b5fd, #7c3aed);
+    }
+
+    .wc-tab span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Ventana de app nativa: barra de título simple, sin pestaña ni barra de dirección. */
+    .wc-bar.is-native {
+      align-items: center;
+      height: 4.8cqi;
+      padding: 0 1cqi 0 1.6cqi;
+      background: #f3f4f6;
+      border-bottom: 1px solid #e3e5e8;
+    }
+
+    .wc-title {
+      display: flex;
+      align-items: center;
+      gap: 1cqi;
+      min-width: 0;
+      color: #202124;
+      font-size: 2cqi;
+      font-weight: 500;
+    }
+
+    .wc-title img {
+      width: 2.5cqi;
+      height: 2.5cqi;
+      flex: 0 0 auto;
+      border-radius: 0.45cqi;
+      object-fit: cover;
+    }
+
+    .wc-title span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .wc-bar.is-native .wc-controls {
+      margin-bottom: 0;
+    }
+
+    .wc-controls {
+      display: flex;
+      align-items: center;
+      margin-left: auto;
+      margin-bottom: 0.45cqi;
+    }
+
+    .wc-controls i {
+      position: relative;
+      width: 3.2cqi;
+      height: 2.8cqi;
+    }
+
+    .wc-controls i::before,
+    .wc-controls i::after {
+      content: '';
+      position: absolute;
+      background: #5f6368;
+    }
+
+    .wc-controls i:nth-child(1)::before {
+      left: 0.7cqi;
+      right: 0.7cqi;
+      top: 50%;
+      height: 1.2px;
+      transform: translateY(-50%);
+    }
+
+    .wc-controls i:nth-child(2)::before {
+      left: 0.85cqi;
+      right: 0.85cqi;
+      top: 0.65cqi;
+      bottom: 0.65cqi;
+      background: transparent;
+      border: 1.2px solid #5f6368;
+      border-radius: 0.25cqi;
+    }
+
+    .wc-controls i:nth-child(3)::before,
+    .wc-controls i:nth-child(3)::after {
+      left: 0.75cqi;
+      right: 0.75cqi;
+      top: 50%;
+      height: 1.2px;
+      transform: translateY(-50%) rotate(45deg);
+    }
+
+    .wc-controls i:nth-child(3)::after {
+      transform: translateY(-50%) rotate(-45deg);
+    }
+
+    .wc-url {
+      height: 4.2cqi;
+      margin: 0.6cqi 1.4cqi 0;
+      padding: 0 1.4cqi;
+      border-radius: 99px;
+      background: #f1f3f4;
+      color: #202124;
+      font-size: 1.8cqi;
+      line-height: 4.2cqi;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .wc-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1cqi;
+      padding: 1.6cqi 2cqi 0;
+    }
+
+    .wc-lines i {
+      display: block;
+      height: 1.35cqi;
+      border-radius: 99px;
+      background: #e4e7eb;
+    }
+
+    .wc-lines i:nth-child(1) { width: 92%; }
+    .wc-lines i:nth-child(2) { width: 70%; }
+    .wc-lines i:nth-child(3) { width: 82%; }
+    .wc-lines i:nth-child(4) { width: 54%; }
+
+    /* ---- Dibujos de las apps. Son bocetos: bloques y líneas, no pantallas reales. ---- */
+    .pv {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      overflow: hidden;
+      margin-top: 0.8cqi;
+      color: #3c4043;
+      font-size: 1.5cqi;
+      line-height: 1.2;
+      animation: pv-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes pv-in {
+      from { opacity: 0; transform: translateY(1.2cqi); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .pv i {
+      display: block;
+      height: 1.1cqi;
+      border-radius: 99px;
+      background: #e4e7eb;
+    }
+
+    .pv em {
+      font-style: normal;
+    }
+
+    .pv-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9cqi;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .pv-ava {
+      flex: 0 0 auto;
+      width: 3.8cqi;
+      height: 3.8cqi;
+      border-radius: 50%;
+      background: #cfd4da;
+    }
+
+    .pv-ava.is-big {
+      width: 6cqi;
+      height: 6cqi;
+      margin-top: -3.4cqi;
+      border: 0.5cqi solid #fff;
+      box-sizing: border-box;
+    }
+
+    /* Calendar */
+    .pv-cal-side {
+      flex: 0 0 17%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4cqi;
+      padding: 1.4cqi 1.8cqi;
+    }
+
+    .pv-cal-new {
+      display: flex;
+      align-items: center;
+      gap: 0.8cqi;
+      width: 88%;
+      height: 4.6cqi;
+      padding-left: 1.4cqi;
+      box-sizing: border-box;
+      border-radius: 99px;
+      background: #fff;
+      box-shadow: 0 1px 5px rgba(60, 64, 67, 0.35);
+      color: #3c4043;
+      font-size: 1.7cqi;
+      font-weight: 600;
+    }
+
+    .pv-cal-new em {
+      color: #1a73e8;
+      font-size: 2.8cqi;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .pv-cal-mini {
+      height: 12cqi;
+      border-radius: 1cqi;
+      background:
+        radial-gradient(circle, #dadce0 0.35cqi, transparent 0.4cqi) 0 0 / 14.28% 20%;
+    }
+
+    .pv-cal-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 0.6cqi 1.8cqi 0 0;
+    }
+
+    .pv-cal-head {
+      display: flex;
+      align-items: center;
+      gap: 1.6cqi;
+      height: 3.8cqi;
+    }
+
+    .pv-cal-head b {
+      font-size: 2.2cqi;
+      font-weight: 500;
+      color: #202124;
+    }
+
+    .pv-cal-today {
+      padding: 0.5cqi 1.5cqi;
+      border: 1px solid #dadce0;
+      border-radius: 99px;
+      font-size: 1.6cqi;
+    }
+
+    .pv-cal-dow {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      padding: 0.5cqi 0;
+      color: #70757a;
+      font-size: 1.3cqi;
+      text-align: center;
+    }
+
+    .pv-cal-grid {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      grid-template-rows: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid #dadce0;
+      border-left: 1px solid #dadce0;
+    }
+
+    .pv-cal-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35cqi;
+      min-height: 0;
+      padding: 0.4cqi 0.6cqi;
+      overflow: hidden;
+      border-right: 1px solid #dadce0;
+      border-bottom: 1px solid #dadce0;
+      color: #3c4043;
+      font-size: 1.25cqi;
+    }
+
+    .pv-cal-cell b {
+      align-self: center;
+      font-weight: 500;
+    }
+
+    .pv-cal-cell.is-today b {
+      display: grid;
+      place-items: center;
+      width: 2.4cqi;
+      height: 2.4cqi;
+      border-radius: 50%;
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .pv-ev {
+      display: block;
+      flex: 0 0 auto;
+      height: 1.5cqi;
+      border-radius: 0.4cqi;
+      background: #1a73e8;
+    }
+
+    .pv-ev.is-g { background: #1e8e3e; }
+    .pv-ev.is-r { background: #d93025; }
+    .pv-ev.is-y { background: #f9ab00; }
+
+    /* WhatsApp */
+    .pv-wa-list {
+      flex: 0 0 33%;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-right: 1px solid #e4e7eb;
+    }
+
+    .pv-wa-top {
+      display: flex;
+      align-items: center;
+      height: 5.2cqi;
+      padding: 0 1.6cqi;
+      background: #f0f2f5;
+    }
+
+    .pv-wa-search {
+      height: 3cqi;
+      margin: 1cqi 1.4cqi;
+      border-radius: 99px;
+      background: #f0f2f5;
+    }
+
+    .pv-wa-chat {
+      display: flex;
+      align-items: center;
+      gap: 1.4cqi;
+      padding: 1cqi 1.6cqi;
+    }
+
+    .pv-wa-chat.is-active {
+      background: #f0f2f5;
+    }
+
+    .pv-wa-pane {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: #efeae2;
+    }
+
+    .pv-wa-head {
+      display: flex;
+      align-items: center;
+      gap: 1.4cqi;
+      height: 5.2cqi;
+      padding: 0 1.6cqi;
+      background: #f0f2f5;
+      color: #202124;
+      font-size: 1.7cqi;
+    }
+
+    .pv-wa-msgs {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2cqi;
+      padding: 1.6cqi 2cqi;
+      overflow: hidden;
+    }
+
+    .pv-bub {
+      display: flex;
+      flex-direction: column;
+      gap: 0.7cqi;
+      box-sizing: border-box;
+      padding: 1cqi 1.4cqi;
+      border-radius: 1.2cqi;
+      background: #fff;
+    }
+
+    .pv-bub i {
+      height: 0.9cqi;
+      background: rgba(32, 33, 36, 0.14);
+    }
+
+    .pv-bub.is-out {
+      align-self: flex-end;
+      background: #d9fdd3;
+    }
+
+    .pv-wa-input {
+      display: flex;
+      align-items: center;
+      height: 5cqi;
+      padding: 0 1.6cqi;
+      background: #f0f2f5;
+    }
+
+    .pv-wa-input span {
+      flex: 1;
+      height: 3cqi;
+      border-radius: 99px;
+      background: #fff;
+    }
+
+    /* Gmail */
+    .pv-mail-side {
+      flex: 0 0 18%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4cqi;
+      padding: 1.4cqi 1.8cqi;
+    }
+
+    .pv-mail-new {
+      display: grid;
+      place-items: center;
+      width: 86%;
+      height: 4.6cqi;
+      border-radius: 1.6cqi;
+      background: #c2e7ff;
+      color: #001d35;
+      font-size: 1.6cqi;
+      font-weight: 600;
+    }
+
+    .pv-mail-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding-right: 1.4cqi;
+    }
+
+    .pv-mail-search {
+      height: 3.6cqi;
+      margin: 0.4cqi 0 1cqi;
+      border-radius: 99px;
+      background: #eaf1fb;
+    }
+
+    .pv-mail-row {
+      display: flex;
+      align-items: center;
+      gap: 1.2cqi;
+      padding: 1.1cqi 1cqi;
+      border-top: 1px solid #e4e7eb;
+      background: #f2f6fc;
+    }
+
+    .pv-mail-row.is-unread {
+      background: #fff;
+    }
+
+    .pv-mail-row.is-unread .pv-from {
+      background: #5f6368;
+    }
+
+    .pv-box,
+    .pv-star {
+      flex: 0 0 auto;
+      width: 1.5cqi;
+      height: 1.5cqi;
+      border: 1.5px solid #c4c7c5;
+      border-radius: 0.3cqi;
+      box-sizing: border-box;
+    }
+
+    .pv-star {
+      border-radius: 50%;
+    }
+
+    .pv-mail-row .pv-from {
+      flex: 0 0 11%;
+    }
+
+    .pv-mail-row .pv-time {
+      flex: 0 0 4cqi;
+    }
+
+    /* Drive */
+    .pv-drive-side {
+      flex: 0 0 18%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4cqi;
+      padding: 1.4cqi 1.8cqi;
+    }
+
+    .pv-drive-new {
+      display: flex;
+      align-items: center;
+      gap: 0.8cqi;
+      width: 86%;
+      height: 4.6cqi;
+      padding-left: 1.4cqi;
+      box-sizing: border-box;
+      border-radius: 1.6cqi;
+      background: #fff;
+      box-shadow: 0 1px 5px rgba(60, 64, 67, 0.35);
+      font-size: 1.7cqi;
+      font-weight: 600;
+    }
+
+    .pv-drive-new em {
+      color: #1a73e8;
+      font-size: 2.8cqi;
+      font-weight: 400;
+      line-height: 1;
+    }
+
+    .pv-drive-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.6cqi;
+      padding: 1.2cqi 2cqi 0 0.6cqi;
+    }
+
+    .pv-drive-title {
+      color: #202124;
+      font-size: 2.1cqi;
+      font-weight: 500;
+    }
+
+    .pv-drive-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.6cqi;
+    }
+
+    .pv-folder {
+      position: relative;
+      height: 4.4cqi;
+      border-radius: 1cqi;
+      background: #e8eaed;
+    }
+
+    .pv-folder i {
+      position: absolute;
+      left: 1.4cqi;
+      top: 1.5cqi;
+      width: 2cqi;
+      height: 1.5cqi;
+      border-radius: 0.3cqi;
+      background: #5f6368;
+    }
+
+    .pv-file {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8cqi;
+      height: 8.6cqi;
+      padding: 5cqi 1.2cqi 0;
+      box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #e0e3e7;
+      border-radius: 1cqi;
+      background: #fff;
+    }
+
+    .pv-file::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3.6cqi;
+      background: #1a73e8;
+    }
+
+    .pv-file.is-g::before { background: #1e8e3e; }
+    .pv-file.is-y::before { background: #f9ab00; }
+
+    .pv-file i {
+      height: 0.8cqi;
+    }
+
+    /* LinkedIn */
+    .pv-li {
+      flex-direction: column;
+      margin-top: 0.8cqi;
+      background: #f3f2ef;
+    }
+
+    .pv-li-nav {
+      display: flex;
+      align-items: center;
+      gap: 1.4cqi;
+      height: 4.6cqi;
+      padding: 0 2cqi;
+      background: #fff;
+      border-bottom: 1px solid #e0dfdc;
+    }
+
+    .pv-li-logo {
+      display: grid;
+      place-items: center;
+      width: 3.2cqi;
+      height: 3.2cqi;
+      border-radius: 0.5cqi;
+      background: #0a66c2;
+      color: #fff;
+      font-size: 1.9cqi;
+      font-weight: 800;
+    }
+
+    .pv-li-search {
+      width: 22cqi;
+      height: 3cqi;
+      border-radius: 0.6cqi;
+      background: #edf3f8;
+    }
+
+    .pv-li-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 22% 1fr 22%;
+      gap: 1.6cqi;
+      padding: 1.6cqi 2cqi 0;
+    }
+
+    .pv-li-card,
+    .pv-li-post {
+      display: flex;
+      flex-direction: column;
+      gap: 1cqi;
+      overflow: hidden;
+      border: 1px solid #e0dfdc;
+      border-radius: 1cqi;
+      background: #fff;
+    }
+
+    .pv-li-card {
+      align-items: center;
+      padding: 0 1.4cqi 1.4cqi;
+    }
+
+    .pv-li-card .pv-lines {
+      width: 100%;
+      flex: 0 0 auto;
+    }
+
+    .pv-li-card.is-side {
+      align-items: stretch;
+      padding-top: 1.4cqi;
+    }
+
+    .pv-li-banner {
+      align-self: stretch;
+      height: 5cqi;
+      margin: 0 -1.4cqi;
+      background: linear-gradient(135deg, #8cb8e8, #0a66c2);
+    }
+
+    .pv-li-feed {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .pv-li-post {
+      padding: 1.4cqi;
+    }
+
+    .pv-li-who {
+      display: flex;
+      align-items: center;
+      gap: 1.2cqi;
+    }
+
+    .pv-li-img {
+      flex: 1 1 auto;
+      min-height: 4cqi;
+      border-radius: 0.8cqi;
+      background: linear-gradient(135deg, #d6e4f3, #b9d3ee);
+    }
+
+    /* ChatGPT */
+    .pv-gpt-side {
+      flex: 0 0 18%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.3cqi;
+      padding: 1.8cqi 1.6cqi;
+      background: #f9f9f9;
+    }
+
+    .pv-gpt-side i {
+      background: #dcdcdc;
+    }
+
+    .pv-gpt-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.8cqi;
+      padding: 2cqi 6cqi 1.8cqi;
+    }
+
+    .pv-gpt-user {
+      align-self: flex-end;
+      width: 40%;
+      padding: 1.1cqi 1.6cqi;
+      box-sizing: border-box;
+      border-radius: 2cqi;
+      background: #f1f1f1;
+    }
+
+    .pv-gpt-ans {
+      display: flex;
+      gap: 1.4cqi;
+    }
+
+    .pv-gpt-dot {
+      flex: 0 0 auto;
+      width: 3cqi;
+      height: 3cqi;
+      border-radius: 50%;
+      background: #202124;
+    }
+
+    .pv-gpt-input {
+      display: flex;
+      align-items: center;
+      height: 5cqi;
+      margin-top: auto;
+      padding: 0 2cqi;
+      border: 1px solid #d9d9d9;
+      border-radius: 99px;
+      box-sizing: border-box;
+    }
+
+    .pv-gpt-input i {
+      width: 30%;
+    }
+
+    /* YouTube */
+    .pv-yt {
+      flex-direction: column;
+      margin-top: 0.8cqi;
+    }
+
+    .pv-yt-nav {
+      display: flex;
+      align-items: center;
+      gap: 8cqi;
+      height: 4.6cqi;
+      padding: 0 2cqi;
+    }
+
+    .pv-yt-logo {
+      width: 6cqi;
+      height: 3.6cqi;
+      border-radius: 1cqi;
+      background: #ff0033;
+    }
+
+    .pv-yt-search {
+      flex: 0 1 30cqi;
+      height: 3cqi;
+      border: 1px solid #d3d3d3;
+      border-radius: 99px;
+      box-sizing: border-box;
+    }
+
+    .pv-yt-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 30%;
+      gap: 2cqi;
+      padding: 0 2cqi;
+    }
+
+    .pv-yt-main {
+      display: flex;
+      flex-direction: column;
+      gap: 1cqi;
+      min-height: 0;
+    }
+
+    .pv-yt-player {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 1.2cqi;
+      background: #1c1c1c;
+    }
+
+    .pv-yt-player em {
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 2.4cqi 0 2.4cqi 4cqi;
+      border-color: transparent transparent transparent #fff;
+      opacity: 0.9;
+    }
+
+    .pv-yt-bar {
+      position: absolute;
+      left: 1.4cqi;
+      right: 1.4cqi;
+      bottom: 1.2cqi;
+      height: 0.5cqi;
+      border-radius: 99px;
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .pv-yt-bar i {
+      width: 38%;
+      height: 100%;
+      background: #ff0033;
+    }
+
+    .pv-yt-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2cqi;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .pv-yt-item {
+      display: flex;
+      gap: 1cqi;
+    }
+
+    .pv-yt-thumb {
+      flex: 0 0 44%;
+      aspect-ratio: 16 / 9;
+      border-radius: 0.8cqi;
+      background: #d9dce0;
+    }
+
+    .pv-yt-item .pv-lines {
+      padding-top: 0.6cqi;
+    }
+
+    /* Notion */
+    .pv-nt-side {
+      flex: 0 0 18%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4cqi;
+      padding: 1.8cqi 1.6cqi;
+      background: #f7f7f5;
+    }
+
+    .pv-nt-side i {
+      background: #e3e2e0;
+    }
+
+    .pv-nt-main {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5cqi;
+      padding: 3cqi 8cqi 0;
+    }
+
+    .pv-nt-main > .pv-lines,
+    .pv-gpt-side > .pv-lines {
+      flex: 0 0 auto;
+    }
+
+    .pv-nt-title {
+      width: 46%;
+      height: 3.2cqi;
+      border-radius: 0.8cqi;
+      background: #37352f;
+    }
+
+    .pv-nt-todo {
+      display: flex;
+      align-items: center;
+      gap: 1.2cqi;
+    }
+
+    .pv-nt-check {
+      flex: 0 0 auto;
+      box-sizing: border-box;
+      width: 1.9cqi;
+      height: 1.9cqi;
+      border: 1.5px solid #37352f;
+      border-radius: 0.4cqi;
+    }
+
+    .pv-nt-todo.is-done .pv-nt-check {
+      border-color: #2383e2;
+      background: #2383e2;
+    }
+
+    .pv-nt-todo.is-done i {
+      background: #ececea;
+    }
+
+    /* Google */
+    .pv-g {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2cqi;
+      padding-bottom: 3cqi;
+    }
+
+    .pv-g-logo {
+      font-size: 9cqi;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .pv-g-logo .is-b { color: #4285f4; }
+    .pv-g-logo .is-r { color: #ea4335; }
+    .pv-g-logo .is-y { color: #fbbc05; }
+    .pv-g-logo .is-g { color: #34a853; }
+
+    .pv-g-search {
+      display: flex;
+      align-items: center;
+      width: 46cqi;
+      height: 5.4cqi;
+      padding: 0 2.4cqi;
+      box-sizing: border-box;
+      border: 1px solid #dfe1e5;
+      border-radius: 99px;
+      box-shadow: 0 1px 4px rgba(32, 33, 36, 0.12);
+    }
+
+    .pv-g-search i {
+      width: 24%;
+    }
+
+    .pv-g-btns {
+      display: flex;
+      gap: 1.4cqi;
+    }
+
+    .pv-g-btns span {
+      width: 11cqi;
+      height: 3.6cqi;
+      border-radius: 0.8cqi;
+      background: #f2f3f5;
+    }
+
 
     .after .actions {
       margin-top: 28px;
@@ -1033,7 +2119,7 @@
 
       .hero {
         gap: 28px;
-        padding: 24px 16px 32px;
+        padding: 84px 16px 32px;
       }
 
       .questions {
@@ -1067,6 +2153,10 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      .pv { animation: none; }
+      /* La demo sigue corriendo, pero la manito salta de ícono en vez de deslizarse. */
+      .focus-ring,
+      .hand { transition: opacity 0.25s ease; }
       .spark {
         filter: none;
       }
@@ -1074,6 +2164,38 @@
   </style>
 </head>
 <body>
+  <script>
+    /* La animación de entrada se muestra solo en la primera visita. */
+    (function () {
+      var KEY = 'inplaize-intro-seen';
+      var seen = false;
+      try {
+        seen = localStorage.getItem(KEY) === '1';
+        if (!seen) localStorage.setItem(KEY, '1');
+      } catch (e) {
+        seen = false;
+      }
+      if (seen) document.body.classList.add('is-after');
+    })();
+  </script>
+  <header class="site-header">
+    <div class="sh-inner">
+      <a class="sh-brand" href="./" aria-label="inplaize, inicio">
+        <span class="sh-mark" aria-hidden="true"></span>
+        <span>inplaize</span>
+      </a>
+      <nav class="sh-nav" aria-label="Principal">
+        <a href="./" aria-current="page">Inicio</a>
+        <a href="manual/">Manual</a>
+        <a href="historia/">Acerca</a>
+      </nav>
+      <span class="sh-spacer"></span>
+      <a
+        class="sh-cta"
+        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.3.2/inplaize.Setup.1.3.2.exe"
+      >Descargar</a>
+    </div>
+  </header>
   <div class="page">
     <main class="hero">
       <div class="questions">
@@ -1217,36 +2339,33 @@
       </div>
       <h1>Todo en su lugar.</h1>
       <div class="desk">
-        <div class="ibar" aria-hidden="true">
-          <span class="ibar-logo"></span>
-          <span class="ibar-icon is-off"><img src="icons/gpt.png" alt="" /></span>
-          <span class="ibar-icon is-off"><img src="icons/youtube.png" alt="" /></span>
-          <span class="ibar-icon is-off"><img src="icons/whatsapp.png" alt="" /><span class="ibar-badge">1</span></span>
-          <span class="ibar-icon is-focus"><img src="icons/whatsapp.png" alt="" /></span>
-          <span class="ibar-icon is-off"><img src="icons/gmail.png" alt="" /></span>
-          <span class="ibar-icon is-off"><img src="icons/dirve.png" alt="" /></span>
-          <span class="focus-ring"></span>
+        <div class="ibar" role="toolbar" aria-label="Aplicaciones de ejemplo">
+          <span class="ibar-logo" aria-hidden="true"></span>
+          <button class="ibar-icon" type="button" data-app="gpt" aria-label="ChatGPT"><img src="icons/gpt.png" alt="" /></button>
+          <button class="ibar-icon" type="button" data-app="youtube" aria-label="YouTube"><img src="icons/youtube.png" alt="" /></button>
+          <button class="ibar-icon" type="button" data-app="whatsapp" aria-label="WhatsApp"><img src="icons/whatsapp.png" alt="" /><span class="ibar-badge">1</span></button>
+          <button class="ibar-icon" type="button" data-app="google" aria-label="Google">
+            <svg class="web-globe" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="8.2" fill="#1a73e8"/>
+              <circle cx="12" cy="12" r="8.2" fill="none" stroke="#f9ab00" stroke-width="1.7"/>
+              <ellipse cx="12" cy="12" rx="3.35" ry="8.2" fill="none" stroke="#f9ab00" stroke-width="1.35"/>
+              <path d="M3.9 12h16.2" fill="none" stroke="#f9ab00" stroke-width="1.35" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="ibar-icon" type="button" data-app="gmail" aria-label="Gmail"><img src="icons/gmail.png" alt="" /></button>
+          <button class="ibar-icon" type="button" data-app="drive" aria-label="Drive"><img src="icons/dirve.png" alt="" /></button>
+          <span class="focus-ring" aria-hidden="true"></span>
           <svg class="hand" viewBox="0 0 24 24" aria-hidden="true">
             <path fill="#fff" stroke="#111" stroke-width="1.15" stroke-linejoin="round" stroke-linecap="round" d="M8.2 11.2V3.8a1.6 1.6 0 0 1 3.2 0V10M11.4 9.2V5.2a1.6 1.6 0 0 1 3.2 0v5.4M14.6 9.6V6.4a1.6 1.6 0 0 1 3.2 0V13c0 3.2-2 5.6-5 5.6h-.6c-1.7 0-3.2-.8-4.2-2.1L5.6 13a1.7 1.7 0 0 1 2.5-2.2l.1.1V11"/>
           </svg>
         </div>
-        <article class="show-toast">
-          <div class="show-inner">
-            <img src="icons/whatsapp.png" alt="" />
-            <div>
-              <span class="show-src">WhatsApp</span>
-              <strong>Nuevo mensaje</strong>
-              <p>El grupo</p>
-            </div>
-          </div>
-        </article>
+        <div class="desk-win" aria-hidden="true"></div>
       </div>
       <div class="actions">
         <a
           class="cta"
           href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.3.2/inplaize.Setup.1.3.2.exe"
         >Descargar</a>
-        <a class="quiet" href="https://github.com/ignacioHourquescos/inplaize/releases">Otras versiones</a>
       </div>
     </section>
   </div>
@@ -1266,6 +2385,183 @@
         });
       }
       setTimeout(finish, 7000);
+    })();
+  </script>
+  <script>
+    /* Barra de ejemplo: al tocar un ícono, la ventana de abajo pasa a ser esa app. */
+    (function () {
+      var bar = document.querySelector('.ibar');
+      var win = document.querySelector('.desk-win');
+      var hand = bar && bar.querySelector('.hand');
+      var ring = bar && bar.querySelector('.focus-ring');
+      if (!bar || !win) return;
+      var icons = Array.prototype.slice.call(bar.querySelectorAll('.ibar-icon'));
+
+      function lines(widths) {
+        return '<span class="pv-lines">' + widths.map(function (w) { return '<i style="width:' + w + '%"></i>'; }).join('') + '</span>';
+      }
+
+      function whatsapp() {
+        var chat = function (active) { return '<div class="pv-wa-chat' + (active ? ' is-active' : '') + '"><span class="pv-ava"></span>' + lines([58, 86]) + '</div>'; };
+        var bub = function (dir, w) { return '<span class="pv-bub is-' + dir + '" style="width:' + w + '%"><i style="width:90%"></i><i style="width:60%"></i></span>'; };
+        return '<div class="pv pv-wa">' +
+          '<div class="pv-wa-list"><div class="pv-wa-top"><span class="pv-ava"></span></div><span class="pv-wa-search"></span>' +
+            chat(false) + chat(true) + chat(false) + chat(false) + '</div>' +
+          '<div class="pv-wa-pane"><div class="pv-wa-head"><span class="pv-ava"></span><b>El grupo</b></div>' +
+            '<div class="pv-wa-msgs">' + bub('in', 54) + bub('out', 42) + bub('in', 34) + bub('out', 50) + '</div>' +
+            '<div class="pv-wa-input"><span></span></div></div>' +
+          '</div>';
+      }
+
+      function gmail() {
+        var row = function (unread) {
+          return '<div class="pv-mail-row' + (unread ? ' is-unread' : '') + '"><span class="pv-box"></span><span class="pv-star"></span>' +
+            '<i class="pv-from"></i>' + lines([88, 52]) + '<i class="pv-time"></i></div>';
+        };
+        return '<div class="pv pv-mail">' +
+          '<div class="pv-mail-side"><span class="pv-mail-new">Redactar</span>' + lines([86, 64, 72, 50]) + '</div>' +
+          '<div class="pv-mail-main"><span class="pv-mail-search"></span>' + row(true) + row(true) + row(false) + row(false) + row(false) + '</div>' +
+          '</div>';
+      }
+
+      function drive() {
+        var folder = '<span class="pv-folder"><i></i></span>';
+        var file = function (c) { return '<span class="pv-file is-' + c + '"><i></i><i></i><i></i></span>'; };
+        return '<div class="pv pv-drive">' +
+          '<div class="pv-drive-side"><span class="pv-drive-new"><em>+</em>Nuevo</span>' + lines([80, 62, 74, 56]) + '</div>' +
+          '<div class="pv-drive-main"><b class="pv-drive-title">Mi unidad</b>' +
+            '<div class="pv-drive-row">' + folder + folder + folder + folder + '</div>' +
+            '<div class="pv-drive-row">' + file('b') + file('g') + file('y') + file('b') + '</div></div>' +
+          '</div>';
+      }
+
+      function chatgpt() {
+        return '<div class="pv pv-gpt">' +
+          '<div class="pv-gpt-side">' + lines([80, 60, 70, 52, 66]) + '</div>' +
+          '<div class="pv-gpt-main"><span class="pv-gpt-user"><i style="width:80%"></i></span>' +
+            '<div class="pv-gpt-ans"><span class="pv-gpt-dot"></span>' + lines([96, 88, 92, 60]) + '</div>' +
+            '<span class="pv-gpt-input"><i></i></span></div>' +
+          '</div>';
+      }
+
+      function youtube() {
+        var item = '<div class="pv-yt-item"><span class="pv-yt-thumb"></span>' + lines([90, 58]) + '</div>';
+        return '<div class="pv pv-yt">' +
+          '<div class="pv-yt-nav"><span class="pv-yt-logo"></span><span class="pv-yt-search"></span></div>' +
+          '<div class="pv-yt-body">' +
+            '<div class="pv-yt-main"><span class="pv-yt-player"><em></em><span class="pv-yt-bar"><i></i></span></span>' + lines([70, 40]) + '</div>' +
+            '<div class="pv-yt-list">' + item + item + item + '</div>' +
+          '</div></div>';
+      }
+
+      function google() {
+        var letters = [['G', 'b'], ['o', 'r'], ['o', 'y'], ['g', 'b'], ['l', 'g'], ['e', 'r']]
+          .map(function (p) { return '<span class="is-' + p[1] + '">' + p[0] + '</span>'; }).join('');
+        return '<div class="pv pv-g"><div class="pv-g-logo">' + letters + '</div>' +
+          '<span class="pv-g-search"><i></i></span><div class="pv-g-btns"><span></span><span></span></div></div>';
+      }
+
+      var APPS = {
+        gpt: { name: 'ChatGPT', icon: 'icons/gpt.png', url: 'chatgpt.com', build: chatgpt },
+        youtube: { name: 'YouTube', icon: 'icons/youtube.png', url: 'youtube.com', build: youtube },
+        whatsapp: { name: 'WhatsApp', icon: 'icons/whatsapp.png', url: 'web.whatsapp.com', build: whatsapp },
+        google: { name: 'Google', icon: 'icons/google.png', url: 'google.com', build: google },
+        gmail: { name: 'Gmail', icon: 'icons/gmail.png', url: 'mail.google.com', build: gmail },
+        drive: { name: 'Drive', icon: 'icons/dirve.png', url: 'drive.google.com', build: drive }
+      };
+      var ORDER = ['gpt', 'youtube', 'whatsapp', 'google', 'gmail', 'drive'];
+
+      function iconFor(key) {
+        for (var i = 0; i < icons.length; i++) if (icons[i].getAttribute('data-app') === key) return icons[i];
+        return null;
+      }
+
+      function show(key) {
+        var app = APPS[key];
+        if (!app) return;
+        win.innerHTML =
+          '<div class="wc-bar is-native"><div class="wc-title"><img src="' + app.icon + '" alt="" /><span>' + app.name + '</span></div>' +
+          '<span class="wc-controls"><i></i><i></i><i></i></span></div>' +
+          app.build();
+        icons.forEach(function (el) { el.classList.toggle('is-active', el.getAttribute('data-app') === key); });
+      }
+
+      icons.forEach(function (el) {
+        el.addEventListener('click', function () {
+          stopDemo();
+          show(el.getAttribute('data-app'));
+        });
+      });
+
+      show('whatsapp');
+
+      /* Demo: la manito recorre los íconos hasta que el usuario toma el control. */
+      var timer = 0;
+      var running = false;
+      var turn = 0;
+
+      function place(el, instant) {
+        if (!hand || !ring || !el) return;
+        if (instant) {
+          hand.style.transition = 'opacity 0.25s ease';
+          ring.style.transition = 'none';
+        }
+        var x = el.offsetLeft;
+        var y = el.offsetTop;
+        ring.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+        hand.style.transform = 'translate(' + (x + 2) + 'px,' + (y + 11) + 'px)';
+        if (instant) {
+          void hand.offsetWidth;
+          hand.style.transition = '';
+          ring.style.transition = '';
+        }
+      }
+
+      function step() {
+        if (!running) return;
+        var key = ORDER[turn % ORDER.length];
+        var el = iconFor(key);
+        turn += 1;
+        place(el, false);
+        timer = setTimeout(function () {
+          if (!running) return;
+          ring.classList.remove('is-tap');
+          void ring.offsetWidth;
+          ring.classList.add('is-tap');
+          show(key);
+          timer = setTimeout(step, 1900);
+        }, 750);
+      }
+
+      function startDemo() {
+        if (running || !hand || !ring) return;
+        running = true;
+        place(iconFor(ORDER[0]), true);
+        bar.classList.add('is-demo');
+        timer = setTimeout(step, 1500);
+      }
+
+      function stopDemo() {
+        if (!running) return;
+        running = false;
+        clearTimeout(timer);
+        bar.classList.remove('is-demo');
+        if (ring) ring.classList.remove('is-tap');
+      }
+
+      bar.addEventListener('pointerenter', stopDemo);
+      bar.addEventListener('focusin', stopDemo);
+
+      if (document.body.classList.contains('is-after')) {
+        startDemo();
+      } else {
+        var mo = new MutationObserver(function () {
+          if (!document.body.classList.contains('is-after')) return;
+          mo.disconnect();
+          startDemo();
+        });
+        mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+      }
     })();
   </script>
 </body>

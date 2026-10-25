@@ -5,8 +5,8 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { shell, BrowserWindow, session, app } = require('electron');
 const { isProcessRunning, focusWindowByProcess } = require('./process-utils');
-const { partitionFromSessionId } = require('./session-partition');
-const { webMapKey } = require('./web-map-key');
+const { partitionFromSessionId, sanitizeSessionId } = require('./session-partition');
+const { webMapKey, normalizeUrlKey } = require('./web-map-key');
 const { loadAppSettings } = require('./app-settings-store');
 const {
   broadcastShortcutTitleBadge,
@@ -414,6 +414,13 @@ let lastFocusedSurfaceKind = null;
 /** Hasta esta marca, un focus espurio (minimizar el mail, etc.) no pisa la home. */
 let ignoreSurfaceUntil = 0;
 
+function getLastFocusedChromeWindow() {
+  if (!lastFocusedWebMapKey) return null;
+  const win = webWindowsByUrlKey.get(lastFocusedWebMapKey);
+  if (!win || win.isDestroyed() || !win.__usualDeskDetachedChromeHost) return null;
+  return win;
+}
+
 function setLastFocusedWebMapKey(mapKey) {
   if (!mapKey || typeof mapKey !== 'string') return;
   if (Date.now() < ignoreSurfaceUntil) return;
@@ -684,6 +691,11 @@ async function openWebShortcut(shortcut) {
     : !!shortcut.audioMuted;
   let win = webWindowsByUrlKey.get(mapKey);
   if (win && !win.isDestroyed()) {
+    try {
+      require('./embed-app-host').suspendOnHost(win);
+    } catch {
+      /* seguir a la página aunque el embebido no esté cargado */
+    }
     installWebNotificationPermissionHandlers(partition);
     win.__usualDeskWebMapKey = mapKey;
     win.__usualDeskShortcutLabel = shortcut.name || 'Web';
@@ -732,6 +744,16 @@ async function openWebShortcut(shortcut) {
 
 async function openShortcut(shortcut) {
   if (shortcut.type === 'app') {
+    if (process.platform === 'win32') {
+      try {
+        const embedded = await require('./embed-app-host').openEmbeddedApp(shortcut);
+        if (embedded) return;
+      } catch (err) {
+        const { log } = require('./logger');
+        log(`[embed-app] no se pudo embeber, se abre aparte: ${err && err.message ? err.message : err}`);
+      }
+    }
+
     const targetPath = shortcut.url;
     if (path.extname(targetPath).toLowerCase() === '.lnk') {
       await shell.openPath(targetPath);
@@ -987,6 +1009,99 @@ async function focusWebWindowFromNotification(mapKey, notification) {
   return true;
 }
 
+/**
+ * Texto pegado → URL http(s). Una frase o un token sin punto se busca en Google.
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+function resolvePastedWebUrl(raw) {
+  let target = String(raw || '').trim();
+  if (!target || target.length > 8000) return null;
+  if (/^(javascript|data|file|blob|chrome|edge|about):/i.test(target)) return null;
+  const hadScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
+  if (!hadScheme) {
+    // localhost, 127.0.0.1 y ::1 van a esa dirección (http), nunca a Google.
+    const local =
+      /^(localhost|\[::1\]|(\d{1,3}\.){3}\d{1,3})(:\d+)?([/?#].*)?$/i.test(target) ||
+      /^[a-z0-9-]+(\.[a-z0-9-]+)*\.(local|localhost)(:\d+)?([/?#].*)?$/i.test(target);
+    const publicHost = /^[a-z0-9.-]+\.[a-z]{2,}(:\d+)?([/?#].*)?$/i.test(target);
+    if (local) target = `http://${target}`;
+    else if (publicHost) target = `https://${target}`;
+    else target = `https://www.google.com/search?q=${encodeURIComponent(target)}`;
+  }
+  let url;
+  try {
+    url = new URL(target);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (!url.hostname) return null;
+  return url.href;
+}
+
+/** Sesión propia por sitio, para no mezclar cookies con los accesos guardados. */
+function pastedSessionId(hostname) {
+  const host = String(hostname || '')
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .replace(/\./g, '-');
+  return sanitizeSessionId(`paste-${host}`) || 'paste-web';
+}
+
+function pastedShortcutId(href) {
+  const s = normalizeUrlKey(href);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `paste-${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * Abre un enlace pegado. Si ya hay un acceso con esa URL, reutiliza su ventana y sesión.
+ * @param {unknown} raw
+ * @returns {Promise<{ ok: boolean, error?: string }>}
+ */
+async function openPastedUrl(raw) {
+  const href = resolvePastedWebUrl(raw);
+  if (!href) return { ok: false, error: 'Ese enlace no se puede abrir' };
+
+  const key = normalizeUrlKey(href);
+  let existing = null;
+  try {
+    const { loadShortcuts } = require('./shortcuts-store');
+    const list = loadShortcuts();
+    existing =
+      (Array.isArray(list) ? list : []).find(
+        (s) => s && s.type === 'web' && normalizeUrlKey(s.url || '') === key,
+      ) || null;
+  } catch {
+    existing = null;
+  }
+  if (existing) {
+    await openShortcut(existing);
+    return { ok: true };
+  }
+
+  let host = '';
+  try {
+    host = new URL(href).hostname;
+  } catch {
+    host = '';
+  }
+  const label = host.replace(/^www\./i, '') || 'Web';
+  await openWebShortcut({
+    id: pastedShortcutId(href),
+    name: label,
+    type: 'web',
+    url: href,
+    sessionId: pastedSessionId(host),
+  });
+  return { ok: true };
+}
+
 function closeAllDetachedWebWindows() {
   for (const win of [...webWindowsByUrlKey.values()]) {
     if (win && !win.isDestroyed()) win.close();
@@ -999,6 +1114,7 @@ function closeAllDetachedWebWindows() {
 
 module.exports = {
   openShortcut,
+  openPastedUrl,
   getOpenWebWindowKeys,
   setWebShortcutAudioMuted,
   setWebShortcutNotificationsMuted,
@@ -1012,6 +1128,7 @@ module.exports = {
   setWebWindowForMapKey,
   deleteWebWindowForMapKey,
   focusLastWebWindowFromHotkey,
+  getLastFocusedChromeWindow,
   anyWebWindowFocused,
   minimizeAllWebWindows,
   markHomeAsLastFocusedSurface,

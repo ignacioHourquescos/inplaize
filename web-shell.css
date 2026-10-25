@@ -34,7 +34,8 @@ html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
 html[data-shell-frameless='true'] .strip-add-shortcut,
 html[data-shell-frameless='true'] .shell-home-strip-btn,
-html[data-shell-frameless='true'] .shell-downloads-strip-btn {
+html[data-shell-frameless='true'] .shell-downloads-strip-btn,
+html[data-shell-frameless='true'] .open-url-slot {
   -webkit-app-region: no-drag;
 }
 
@@ -65,6 +66,12 @@ html[data-shell-frameless='true'] .shell-downloads-strip-btn {
 
 html[data-shell-frameless='true'] .shortcut-strip {
   -webkit-app-region: drag;
+}
+
+.shortcut-strip .strip-add-shortcut,
+.shortcut-strip .strip-add-shortcut:hover,
+.shortcut-strip .strip-add-shortcut:active {
+  background: var(--ud-chrome-strip-bg);
 }
 
 .shortcut-strip::-webkit-scrollbar {
@@ -112,9 +119,13 @@ html[data-usualdesk-detached-host='true'] .shell-top {
 }
 
 /* ==========================================================================
-   Sub-pestañas de la ventana web separada (links abiertos desde el servicio).
+   Pestañas de cada ventana web (la página del acceso y las que abre).
    La altura (36px) debe coincidir con DETACHED_TABSTRIP_H en main/detached-web-frame.js.
    ========================================================================== */
+.subtab-strip[hidden] {
+  display: none !important;
+}
+
 .subtab-strip {
   display: flex;
   align-items: stretch;
@@ -141,10 +152,10 @@ html[data-usualdesk-detached-host='true'] .shell-top {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 90px;
-  max-width: 220px;
+  min-width: 120px;
+  max-width: 260px;
   flex: 0 1 auto;
-  padding: 0 8px;
+  padding: 0 8px 0 4px;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 8px 8px 0 0;
@@ -160,6 +171,7 @@ html[data-usualdesk-detached-host='true'] .shell-top {
 }
 
 .subtab.is-active {
+  min-width: 176px;
   background: var(--ud-chrome-icon-active-bg);
   border-color: var(--ud-chrome-icon-active-border);
   color: var(--ud-chrome-text);
@@ -262,4 +274,8 @@ html[data-usualdesk-detached-host='true'] .shell-top {
 .subtab-nav-btn:disabled {
   color: #6e6e7c;
   cursor: default;
+}
+
+.subtab-nav-reload {
+  color: inherit;
 }

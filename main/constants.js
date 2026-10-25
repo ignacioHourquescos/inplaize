@@ -31,7 +31,7 @@ const LOOSE_NAV_DEFAULT_SHORTCUT = {
   icon: 'assets/icons/loose-nav.svg',
 };
 
-/** URL inicial al pulsar “+” en la ventana de navegación suelta. */
+/** URL al abrir el navegador si todavía no hay pestañas. El “+” pide el enlace en la pestaña. */
 const LOOSE_NAV_NEW_TAB_URL = 'https://www.google.com';
 /** Sesión persistente propia para la navegación suelta (cookies aisladas del resto). */
 const LOOSE_NAV_SESSION_ID = 'loose-nav';

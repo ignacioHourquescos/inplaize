@@ -465,7 +465,7 @@ html[data-dock-layout='modal'] .notion-block.is-menu-open {
   font-size: 14px;
 }
 
-/* Invertir colores: fondo blanco y texto negro, solo en el canvas de tareas. */
+/* Modo claro: fondo blanco y texto negro en el canvas de tareas. */
 html[data-canvas-theme='light'] #dock-home-panel[data-home-view='todos'] {
   background: #ffffff;
 }

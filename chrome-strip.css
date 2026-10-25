@@ -51,6 +51,8 @@
   cursor: pointer;
   font: inherit;
   flex: 0 0 auto;
+  appearance: none;
+  -webkit-appearance: none;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
@@ -65,6 +67,9 @@
 .shell-shortcut-item.strip-add-shortcut:hover,
 .shell-shortcut-item.strip-add-shortcut:active,
 .shell-shortcut-item.strip-add-shortcut.is-active {
+  position: sticky;
+  right: 0;
+  z-index: 2;
   flex-shrink: 0;
   align-self: center;
   background: transparent;
@@ -88,7 +93,9 @@
   display: block;
 }
 
-.shell-shortcut-item.is-active {
+.shell-shortcut-item.is-active,
+.shell-shortcut-item.is-active:hover,
+.shell-shortcut-item.is-active:active {
   background: var(--ud-chrome-icon-active-bg);
   border-color: var(--ud-chrome-icon-active-border);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
@@ -199,6 +206,122 @@
   color: #fff;
   background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+/* Pegar un enlace y abrirlo, justo después de descargas. */
+.open-url-slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  align-self: center;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+/* Tareas, descargas e internet: mismo tamaño que el resto, sin marco. */
+.dock-strip-lead .shell-shortcut-item,
+.shell-home-strip-btn,
+.shell-downloads-strip-btn,
+.open-url-btn {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.dock-strip-lead .shell-shortcut-item.file-drag-hover,
+.shell-home-strip-btn.file-drag-hover,
+.shell-downloads-strip-btn.file-drag-hover,
+.open-url-btn.file-drag-hover {
+  border-color: var(--accent, #7c5cff) !important;
+  box-shadow: 0 0 0 2px var(--accent, #7c5cff) !important;
+}
+
+/* Línea violeta después del globo: separa estos tres del resto de accesos. */
+.open-url-slot::after {
+  content: '';
+  flex: 0 0 auto;
+  align-self: center;
+  width: 2px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--ud-chrome-edit-tab);
+  pointer-events: none;
+}
+
+.open-url-icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+  box-sizing: border-box;
+  padding: 3px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.open-url-form {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: 24px;
+  background: rgba(255, 247, 247, 0.94);
+  -webkit-app-region: no-drag;
+}
+
+.open-url-form[hidden] {
+  display: none !important;
+}
+
+.open-url-card {
+  width: min(720px, calc(100vw - 72px));
+  background: #fff;
+  border: 1px solid #c9b4b8;
+  border-radius: 999px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
+.open-url-card:has(.open-url-input.is-invalid) {
+  border-color: #e11d48;
+}
+
+.open-url-input {
+  display: block;
+  width: 100%;
+  height: 56px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #1c1c1c;
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
+.open-url-input::placeholder {
+  color: #9a8b90;
+}
+
+.open-url-error {
+  margin: 0;
+  color: #be123c;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.open-url-error[hidden] {
+  display: none;
 }
 
 .shell-strip-badge {

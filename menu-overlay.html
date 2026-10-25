@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es" class="menu-overlay-host">
+<head>
+  <meta charset="UTF-8" />
+  <title>Menú</title>
+  <link rel="stylesheet" href="chrome-strip.css" />
+  <link rel="stylesheet" href="shell-home-menu.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      user-select: none;
+    }
+    /* El deslizamiento lo hace la vista nativa. Aquí el panel ya está abierto. */
+    html.menu-overlay-host .dock-home-menu-drawer {
+      transform: none !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+      transition: none !important;
+      position: absolute !important;
+      inset: 0 !important;
+      width: auto !important;
+    }
+    html.menu-overlay-host .dock-home-menu-backdrop {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <script src="shell-home-menu.js"></script>
+  <script src="menu-overlay-renderer.js"></script>
+</body>
+</html>

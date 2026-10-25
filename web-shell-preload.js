@@ -19,14 +19,25 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   },
   openDockWelcomeHome: (view) =>
     ipcRenderer.invoke('dock-open-welcome-home', view === 'downloads' ? 'downloads' : 'todos'),
+  openPastedUrl: (url) => ipcRenderer.invoke('open-pasted-url', url),
+  showUrlPrompt: () => ipcRenderer.invoke('url-prompt-show'),
+  openAppBrowser: () => ipcRenderer.invoke('app-browser-open'),
+  setUrlPromptOpen: (open) => ipcRenderer.invoke('url-prompt-open', open === true),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
+  openAppearance: () => ipcRenderer.invoke('chrome-open-appearance'),
   openSettings: () => ipcRenderer.invoke('chrome-open-settings'),
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
   closeApp: () => ipcRenderer.invoke('close-app'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-  getVersionHistory: () => ipcRenderer.invoke('get-version-history'),
-  notifyShellMenuDrawer: (open) => ipcRenderer.invoke('shell-menu-drawer-state', open === true),
+  notifyShellMenuDrawer: (open, editMode) =>
+    ipcRenderer.invoke('shell-menu-drawer-state', {
+      open: open === true,
+      editMode: editMode === true,
+    }),
+  onMenuOverlayApply: (callback) => {
+    ipcRenderer.on('menu-overlay-apply', (_event, open) => callback(open === true));
+  },
   requestShortcutEditor: () => ipcRenderer.invoke('shell-request-shortcut-editor'),
   requestExitShortcutEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),
   onShortcutsEditModeSync: (callback) => {

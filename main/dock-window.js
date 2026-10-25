@@ -91,9 +91,61 @@ function createDockWindow(display, state) {
       /* noop */
     }
   }
-  win.on('focus', rememberHomeIfShowing);
+  /**
+   * Con el navegador embebido, apretar un icono de la franja mueve el foco
+   * entre el BrowserView y la barra. Eso dispara `blur` aunque el cursor
+   * siga sobre el dock. Si cerramos en ese instante, mantener apretado el
+   * globo apaga la página: la ventana se achica antes del mouseup y el click
+   * ya no cae en el botón.
+   * @param {Electron.BrowserWindow} target
+   */
+  function dockSurfaceHasFocus(target) {
+    if (!target || target.isDestroyed()) return false;
+    try {
+      const focused = BrowserWindow.getFocusedWindow();
+      if (focused && focused !== target) return false;
+      if (focused === target) return true;
+    } catch {
+      /* noop */
+    }
+    try {
+      if (target.isFocused()) return true;
+    } catch {
+      /* noop */
+    }
+    try {
+      const top = target.webContents;
+      if (top && !top.isDestroyed() && top.isFocused()) return true;
+    } catch {
+      /* noop */
+    }
+    try {
+      const views = typeof target.getBrowserViews === 'function' ? target.getBrowserViews() : [];
+      for (const view of views) {
+        const wc = view && view.webContents;
+        if (wc && !wc.isDestroyed() && wc.isFocused()) return true;
+      }
+    } catch {
+      /* noop */
+    }
+    return false;
+  }
+
+  let blurCollapseTimer = null;
+  function cancelBlurCollapse() {
+    if (!blurCollapseTimer) return;
+    clearTimeout(blurCollapseTimer);
+    blurCollapseTimer = null;
+  }
+
+  function onDockFocus() {
+    cancelBlurCollapse();
+    rememberHomeIfShowing();
+  }
+
+  win.on('focus', onDockFocus);
   try {
-    win.webContents.on('focus', rememberHomeIfShowing);
+    win.webContents.on('focus', onDockFocus);
   } catch {
     /* noop */
   }
@@ -107,13 +159,34 @@ function createDockWindow(display, state) {
     } catch {
       /* noop */
     }
+    if (state.gestureCoachOpen) return;
     if (state.dockBlurIgnoreUntil && Date.now() < state.dockBlurIgnoreUntil) return;
-    if (state.isExpanded) {
+    if (!state.isExpanded) return;
+    cancelBlurCollapse();
+    blurCollapseTimer = setTimeout(() => {
+      blurCollapseTimer = null;
+      if (!win || win.isDestroyed() || !state.isExpanded) return;
+      try {
+        if (require('./downloads-manager').isNativeDragActive()) return;
+      } catch {
+        /* noop */
+      }
+      if (state.gestureCoachOpen) return;
+      if (state.dockBlurIgnoreUntil && Date.now() < state.dockBlurIgnoreUntil) return;
+      if (dockSurfaceHasFocus(win)) return;
       state.isExpanded = false;
       applyDockWindowBounds(win, false);
-      win.setIgnoreMouseEvents(true, { forward: true });
-      win.webContents.send('sidebar-state', false);
-    }
+      try {
+        win.setIgnoreMouseEvents(true, { forward: true });
+      } catch {
+        /* noop */
+      }
+      try {
+        win.webContents.send('sidebar-state', false);
+      } catch {
+        /* noop */
+      }
+    }, 180);
   });
 
   state.mainWindow = win;

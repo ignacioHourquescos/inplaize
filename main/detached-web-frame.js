@@ -6,6 +6,8 @@ const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 const { webMapKey } = require('./web-map-key');
 const { loadShortcuts } = require('./shortcuts-store');
 const { lockWindowZoom } = require('./lock-window-zoom');
+const { setEmbeddedPageBackground } = require('./embedded-page-background');
+const { loadWebContentsUrl } = require('./load-web-url');
 const {
   navSnapshot,
   goBack,
@@ -168,6 +170,23 @@ function navigateHost(host, dir) {
   return ok;
 }
 
+function reloadHostTab(host, tabId) {
+  const state = tabStateOf(host);
+  if (!state) return false;
+  const id = tabId && state.tabs.has(String(tabId)) ? String(tabId) : state.activeId;
+  if (!id) return false;
+  const tab = state.tabs.get(id);
+  if (!tab || !tab.view) return false;
+  const wc = tab.view.webContents;
+  if (!wc || wc.isDestroyed()) return false;
+  try {
+    wc.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Historial propio de cada pestaña (principal o sub-pestaña). */
 function bindHostPageNav(host, tab) {
   if (!host || !tab || !tab.view) return;
@@ -188,37 +207,56 @@ function bindHostPageNav(host, tab) {
 
 function chromeHeightFor(host) {
   const state = tabStateOf(host);
-  const showTabStrip = !!state && state.tabs.size > 1;
+  const covered = !!(host && host.__usualDeskEmbeddedDesktop);
+  // Una sola página no es una pestaña: la fila solo aparece cuando hay otra.
+  const showTabStrip = !!state && state.tabs.size > 1 && !covered;
   return DETACHED_CHROME_H + (showTabStrip ? DETACHED_TABSTRIP_H : 0);
 }
 
-/** Ancho del drawer; debe coincidir con shell-home-menu.css (.dock-home-menu-drawer { width }). */
-const MENU_DRAWER_W = 240;
+function setHostUrlPromptOpen(host, open) {
+  if (!host || host.isDestroyed()) return;
+  host.__usualDeskUrlPromptOpen = open === true;
+  if (host.__usualDeskUrlPromptOpen) {
+    const state = tabStateOf(host);
+    if (!state) return;
+    for (const tab of state.tabs.values()) detachTabView(host, tab);
+    return;
+  }
+  attachActiveTabViewOnly(host);
+}
 
 function layoutActiveTabView(host) {
+  if (host && (host.__usualDeskUrlPromptOpen || host.__usualDeskEmbeddedDesktop)) return;
   const state = tabStateOf(host);
   if (!state) return;
   const tab = state.tabs.get(state.activeId);
   if (!tab) return;
   const [w, h] = host.getContentSize();
   const top = chromeHeightFor(host);
-  const inset = host && host.__usualDeskMenuDrawerOpen ? MENU_DRAWER_W : 0;
   try {
     tab.view.setBounds({
       x: 0,
       y: top,
-      width: Math.max(0, w - inset),
+      width: Math.max(0, w),
       height: Math.max(0, h - top),
     });
   } catch {
     /* noop */
   }
+  try {
+    require('./menu-overlay').raise(host);
+  } catch {
+    /* noop */
+  }
 }
 
-function setHostMenuDrawerOpen(host, open) {
+function setHostMenuDrawerOpen(host, open, editMode) {
   if (!host || host.isDestroyed()) return;
   host.__usualDeskMenuDrawerOpen = open === true;
-  attachActiveTabViewOnly(host);
+  require('./menu-overlay').setOpen(host, open === true, {
+    editMode: editMode === true,
+    source: 'host',
+  });
 }
 
 /**
@@ -272,6 +310,14 @@ function kickTabViewResize(host, tab) {
 function attachActiveTabViewOnly(host) {
   const state = tabStateOf(host);
   if (!state) return;
+  if (host && host.__usualDeskEmbeddedDesktop) {
+    for (const tab of state.tabs.values()) detachTabView(host, tab);
+    return;
+  }
+  if (host && host.__usualDeskUrlPromptOpen) {
+    for (const tab of state.tabs.values()) detachTabView(host, tab);
+    return;
+  }
   for (const tab of state.tabs.values()) {
     if (tab.id === state.activeId) continue;
     detachTabView(host, tab);
@@ -297,7 +343,7 @@ function buildTabsPayload(host) {
       isMain: !!tab.isMain,
       isActive: tab.id === state.activeId,
     }));
-  return { tabs };
+  return { tabs, embedded: !!(host && host.__usualDeskEmbeddedDesktop) };
 }
 
 function broadcastTabsToHost(host) {
@@ -485,13 +531,7 @@ function createSubTabInHost(host, url, opts = {}) {
           },
         }
   );
-  try {
-    if (typeof view.setBackgroundColor === 'function') {
-      view.setBackgroundColor('#000000');
-    }
-  } catch {
-    /* noop */
-  }
+  setEmbeddedPageBackground(view);
 
   const tabPartition = opts.existingWebContents
     ? state.partition
@@ -578,8 +618,45 @@ function selectHostTab(host, tabId) {
   const state = tabStateOf(host);
   if (!state || !state.tabs.has(tabId)) return false;
   state.activeId = tabId;
+  try {
+    require('./embed-app-host').suspendOnHost(host);
+  } catch {
+    /* la página vuelve a verse aunque no haya una app embebida */
+  }
   refreshHostTabsUi(host);
   return true;
+}
+
+/**
+ * La ventana con la barra de inplaize donde tiene que vivir una app de escritorio.
+ * @returns {Electron.BrowserWindow | null}
+ */
+function findForegroundChromeHost() {
+  const { BrowserWindow } = require('electron');
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && !focused.isDestroyed() && focused.__usualDeskDetachedChromeHost) return focused;
+  try {
+    const last = require('./open-shortcut').getLastFocusedChromeWindow();
+    if (last && !last.isDestroyed()) return last;
+  } catch {
+    /* todavía no hay ventanas web */
+  }
+  const wins = BrowserWindow.getAllWindows().filter(
+    (win) => win && !win.isDestroyed() && win.__usualDeskDetachedChromeHost && win.isVisible(),
+  );
+  return wins.length ? wins[wins.length - 1] : null;
+}
+
+/**
+ * true: la app de escritorio ocupa el hueco de la página y la barra queda.
+ * @param {Electron.BrowserWindow} host
+ * @param {boolean} covered
+ */
+function setEmbeddedDesktopCover(host, covered) {
+  if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
+  host.__usualDeskEmbeddedDesktop = covered === true;
+  attachActiveTabViewOnly(host);
+  broadcastTabsToHost(host);
 }
 
 /**
@@ -659,6 +736,8 @@ function registerDetachedFrameIpc() {
         return navigateHost(win, 'back');
       case 'nav-forward':
         return navigateHost(win, 'forward');
+      case 'reload-tab':
+        return reloadHostTab(win, arg == null ? '' : String(arg));
       case 'nav-state':
         return navSnapshot(activeHostWebContents(win));
       case 'minimize':
@@ -672,9 +751,12 @@ function registerDetachedFrameIpc() {
       case 'close-window':
         if (!win.isDestroyed()) win.close();
         return true;
-      case 'menu-drawer':
-        setHostMenuDrawerOpen(win, arg === true);
+      case 'menu-drawer': {
+        const open = arg === true || !!(arg && arg.open === true);
+        const editMode = !!(arg && arg.editMode === true);
+        setHostMenuDrawerOpen(win, open, editMode);
         return true;
+      }
       default:
         return null;
     }
@@ -761,13 +843,7 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
       backgroundThrottling: true,
     },
   });
-  try {
-    if (typeof view.setBackgroundColor === 'function') {
-      view.setBackgroundColor('#000000');
-    }
-  } catch {
-    /* noop */
-  }
+  setEmbeddedPageBackground(view);
 
   const wc = view.webContents;
   host.__usualDeskHostedWebContents = wc;
@@ -813,6 +889,11 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
   try {
     await host.loadFile(path.join(root, 'detached-web-frame.html'));
     lockWindowZoom(host.webContents);
+    try {
+      require('./menu-overlay').preload(host);
+    } catch {
+      /* noop */
+    }
 
     attachActiveTabViewOnly(host);
 
@@ -845,7 +926,7 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
       }
     });
 
-    await wc.loadURL(shortcut.url || 'about:blank');
+    await loadWebContentsUrl(wc, shortcut.url || 'about:blank');
     if (!wc.isDestroyed()) {
       wc.setAudioMuted(!!shortcut.audioMuted);
     }
@@ -880,6 +961,7 @@ function getFocusedDetachedHostShortcutId() {
 
 module.exports = {
   createDetachedWebHostWindow,
+  setHostUrlPromptOpen,
   registerDetachedFrameIpc,
   broadcastChromeToAllDetachedHosts,
   broadcastTitleBadgeToDetachedHosts,
@@ -889,4 +971,7 @@ module.exports = {
   subTabWindowOpenResponse,
   selectHostTab,
   closeHostTab,
+  chromeHeightFor,
+  findForegroundChromeHost,
+  setEmbeddedDesktopCover,
 };

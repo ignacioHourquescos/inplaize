@@ -12,6 +12,8 @@ const {
 const { loadShortcuts } = require('./shortcuts-store');
 const { forceWindowForeground } = require('./window-focus');
 const { lockWindowZoom } = require('./lock-window-zoom');
+const { setEmbeddedPageBackground } = require('./embedded-page-background');
+const { loadWebContentsUrl } = require('./load-web-url');
 const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 const {
   navSnapshot,
@@ -41,9 +43,6 @@ const tabs = new Map();
 
 /** @type {string | null} */
 let activeMapKey = null;
-
-/** Menú lateral abierto: oculta BrowserView para que el drawer del shell sea visible. */
-let shellMenuDrawerOpen = false;
 
 function appRoot() {
   try {
@@ -167,27 +166,31 @@ function broadcastChromeToRenderer() {
   sendShellNav();
 }
 
-/** Ancho del drawer; debe coincidir con shell-home-menu.css (.dock-home-menu-drawer { width }). */
-const MENU_DRAWER_W = 240;
+let urlPromptOpen = false;
+
+function setUrlPromptOpen(open) {
+  urlPromptOpen = open === true;
+  if (urlPromptOpen) detachAllBrowserViews();
+  else attachActiveViewOnly();
+}
 
 function layoutActiveView() {
+  if (urlPromptOpen) return;
   if (!shellWin || shellWin.isDestroyed() || !activeMapKey) return;
   const tab = tabs.get(activeMapKey);
   if (!tab) return;
   const [w, h] = shellWin.getContentSize();
-  const inset = shellMenuDrawerOpen ? MENU_DRAWER_W : 0;
   tab.view.setBounds({
     x: 0,
     y: SHELL_CHROME_HEIGHT,
-    width: Math.max(0, w - inset),
+    width: Math.max(0, w),
     height: Math.max(0, h - SHELL_CHROME_HEIGHT),
   });
-}
-
-function setShellMenuDrawerOpen(open) {
-  shellMenuDrawerOpen = open === true;
-  if (!shellWin || shellWin.isDestroyed()) return;
-  attachActiveViewOnly();
+  try {
+    require('./menu-overlay').raise(shellWin);
+  } catch {
+    /* el menú sigue usable aunque la vista de la página no esté */
+  }
 }
 
 function detachAllBrowserViews() {
@@ -203,6 +206,7 @@ function detachAllBrowserViews() {
 
 function attachActiveViewOnly() {
   detachAllBrowserViews();
+  if (urlPromptOpen) return;
   if (!shellWin || shellWin.isDestroyed() || !activeMapKey) return;
   const tab = tabs.get(activeMapKey);
   if (!tab) return;
@@ -323,6 +327,11 @@ function ensureShellWindow() {
 
   shellWin.loadFile(path.join(root, 'web-shell.html'));
   lockWindowZoom(shellWin.webContents);
+  try {
+    require('./menu-overlay').preload(shellWin);
+  } catch {
+    /* noop */
+  }
 
   shellWin.webContents.once('did-finish-load', () => {
     broadcastChromeToRenderer();
@@ -412,13 +421,7 @@ async function openOrFocusTab(shortcut) {
       backgroundThrottling: true,
     },
   });
-  try {
-    if (typeof view.setBackgroundColor === 'function') {
-      view.setBackgroundColor('#000000');
-    }
-  } catch {
-    /* noop */
-  }
+  setEmbeddedPageBackground(view);
 
   const wc = view.webContents;
   wc.__usualDeskWebMapKey = mapKey;
@@ -458,7 +461,7 @@ async function openOrFocusTab(shortcut) {
     if (!wc.isDestroyed()) wc.setAudioMuted(desiredAudioMuted);
   });
 
-  await wc.loadURL(shortcut.url || 'about:blank');
+  await loadWebContentsUrl(wc, shortcut.url || 'about:blank');
 
   if (win && !win.isDestroyed()) {
     forceWindowForeground(win);
@@ -687,8 +690,14 @@ function registerShellIpc(ipcMain) {
     return true;
   });
 
-  ipcMain.handle('shell-menu-drawer-state', (_event, open) => {
-    setShellMenuDrawerOpen(open === true);
+  ipcMain.handle('shell-menu-drawer-state', (event, payload) => {
+    const { BrowserWindow } = require('electron');
+    const host = BrowserWindow.fromWebContents(event.sender);
+    const open = payload === true || !!(payload && payload.open === true);
+    const editMode = !!(payload && payload.editMode === true);
+    if (host && !host.isDestroyed()) {
+      require('./menu-overlay').setOpen(host, open, { editMode, source: 'host' });
+    }
     return true;
   });
 
@@ -726,4 +735,5 @@ module.exports = {
   closeTabByMapKey,
   getActiveShortcutId,
   getShellWindow,
+  setUrlPromptOpen,
 };

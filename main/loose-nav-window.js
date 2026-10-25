@@ -10,6 +10,7 @@ const { BrowserView, session, shell, ipcMain } = require('electron');
 const { LOOSE_NAV_NEW_TAB_URL, LOOSE_NAV_SESSION_ID } = require('./constants');
 const { partitionFromSessionId } = require('./session-partition');
 const { getDockWindow } = require('./dock-window-bridge');
+const { setEmbeddedPageBackground } = require('./embedded-page-background');
 
 /**
  * @typedef {{
@@ -123,16 +124,25 @@ function layoutActiveView() {
       width: Math.max(0, Math.round(width)),
       height: Math.max(0, Math.round(height)),
     });
+    require('./menu-overlay').raise(dock);
   } catch {
     /* noop */
   }
+}
+
+let urlPromptOpen = false;
+
+function setUrlPromptOpen(open) {
+  urlPromptOpen = open === true;
+  if (urlPromptOpen) detachAllFromDock();
+  else if (modeActive) attachActiveViewOnly();
 }
 
 function attachActiveViewOnly() {
   const dock = getDockWindow();
   if (!dock) return;
   detachAllFromDock();
-  if (!modeActive || !activeTabId) return;
+  if (urlPromptOpen || !modeActive || !activeTabId) return;
   const tab = tabs.get(activeTabId);
   if (!tab) return;
   try {
@@ -263,13 +273,7 @@ async function openTabFromUrl(url, opts = {}) {
       partition,
     },
   });
-  try {
-    if (typeof view.setBackgroundColor === 'function') {
-      view.setBackgroundColor('#1e1e24');
-    }
-  } catch {
-    /* noop */
-  }
+  setEmbeddedPageBackground(view);
 
   const id = nextTabId();
   /** @type {LooseTab} */
@@ -283,7 +287,7 @@ async function openTabFromUrl(url, opts = {}) {
     canGoBack: false,
     canGoForward: false,
   };
-  tabs.set(id, tab);
+  insertTabFirst(id, tab);
   attachTabEvents(tab);
   try {
     require('./session-router').attachLoginSessionOffer(
@@ -337,6 +341,11 @@ async function enterLooseNavMode() {
       /* noop */
     }
   }
+  try {
+    require('./menu-overlay').preload(getDockWindow());
+  } catch {
+    /* noop */
+  }
   if (tabs.size === 0) {
     await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { activateMode: false });
   } else if (modeActive) {
@@ -353,6 +362,11 @@ function exitLooseNavMode(opts = {}) {
   if (!modeActive) return;
   modeActive = false;
   detachAllFromDock();
+  try {
+    require('./menu-overlay').dismiss(getDockWindow());
+  } catch {
+    /* noop */
+  }
   broadcastState();
   if (opts.collapseDock && typeof collapseDockHook === 'function') {
     try {
@@ -401,13 +415,22 @@ function selectTab(tabId) {
   return true;
 }
 
+function insertTabFirst(id, tab) {
+  const existing = [...tabs.entries()];
+  tabs.clear();
+  tabs.set(id, tab);
+  for (const [key, value] of existing) tabs.set(key, value);
+}
+
 function closeTab(tabId) {
   if (!tabId || !tabs.has(tabId)) return false;
+  const idx = [...tabs.keys()].indexOf(tabId);
   const wasActive = activeTabId === tabId;
   destroyTabView(tabId);
 
   if (wasActive) {
-    activeTabId = tabs.size ? [...tabs.keys()][tabs.size - 1] : null;
+    const remaining = [...tabs.keys()];
+    activeTabId = remaining[idx] || remaining[idx - 1] || null;
   }
 
   if (tabs.size === 0) {
@@ -437,11 +460,9 @@ function activeTabWebContents() {
   return wc && !wc.isDestroyed() ? wc : null;
 }
 
-function navigateActiveTo(url) {
-  const wc = activeTabWebContents();
-  if (!wc) return false;
-  let target = String(url || '').trim();
-  if (!target) return false;
+function normalizeNavInput(raw) {
+  let target = String(raw || '').trim();
+  if (!target) return '';
   if (!/^[a-z][a-z0-9+.-]*:/i.test(target)) {
     if (target.includes(' ') || !target.includes('.')) {
       target = `https://www.google.com/search?q=${encodeURIComponent(target)}`;
@@ -449,6 +470,14 @@ function navigateActiveTo(url) {
       target = `https://${target}`;
     }
   }
+  return target;
+}
+
+function navigateActiveTo(url) {
+  const wc = activeTabWebContents();
+  if (!wc) return false;
+  const target = normalizeNavInput(url);
+  if (!target) return false;
   wc.loadURL(target).catch(() => {});
   return true;
 }
@@ -475,9 +504,13 @@ function goForwardActive() {
   return true;
 }
 
-function reloadActive() {
-  const wc = activeTabWebContents();
-  if (!wc) return false;
+function reloadTab(tabId) {
+  const id = tabId && tabs.has(String(tabId)) ? String(tabId) : activeTabId;
+  if (!id) return false;
+  const tab = tabs.get(id);
+  if (!tab) return false;
+  const wc = tab.view.webContents;
+  if (!wc || wc.isDestroyed()) return false;
   try {
     wc.reload();
   } catch {
@@ -549,10 +582,12 @@ function registerLooseNavIpc() {
   ipcMain.handle('loose-nav-select-tab', (_e, tabId) => selectTab(String(tabId || '')));
   ipcMain.handle('loose-nav-close-tab', (_e, tabId) => closeTab(String(tabId || '')));
   ipcMain.handle('loose-nav-new-tab', async (_e, payload) => {
-    const target =
-      payload && typeof payload === 'object' && typeof payload.url === 'string' && payload.url.trim()
+    const raw =
+      payload && typeof payload === 'object' && typeof payload.url === 'string'
         ? payload.url.trim()
-        : LOOSE_NAV_NEW_TAB_URL;
+        : '';
+    const target = raw ? normalizeNavInput(raw) : LOOSE_NAV_NEW_TAB_URL;
+    if (!target) return false;
     await openTabFromUrl(target);
     return true;
   });
@@ -564,7 +599,7 @@ function registerLooseNavIpc() {
 
   ipcMain.handle('loose-nav-back', () => goBackActive());
   ipcMain.handle('loose-nav-forward', () => goForwardActive());
-  ipcMain.handle('loose-nav-reload', () => reloadActive());
+  ipcMain.handle('loose-nav-reload', (_e, tabId) => reloadTab(tabId == null ? '' : String(tabId)));
 
   ipcMain.handle('loose-nav-open-external', async (_e, payload) => {
     const url = payload && typeof payload === 'object' ? String(payload.url || '') : String(payload || '');
@@ -596,4 +631,5 @@ module.exports = {
   closeAndClearAll,
   registerLooseNavIpc,
   configureHooks,
+  setUrlPromptOpen,
 };

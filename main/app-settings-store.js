@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const { DEFAULT_HOTKEY, normalizeDockHotkey } = require('./hotkey-accelerator');
 
 const DEFAULTS = {
   dockPosition: 'left',
@@ -18,9 +19,21 @@ const DEFAULTS = {
   /**
    * Onboarding de primera vez: cuando es false y la lista de shortcuts está
    * vacía, el renderer dispara el wizard que guía al usuario a crear su
-   * primera ventana y le enseña los gestos básicos.
+   * primera ventana y a probar el atajo.
    */
   onboardingCompleted: false,
+  /** Tres teclas del atajo global, en el orden que eligió el usuario. */
+  dockHotkey: DEFAULT_HOTKEY.slice(),
+  /**
+   * Veces que abrió y volvió a cerrar las ventanas con el atajo, ya con la app
+   * en uso. A las 10, un popup explica cómo apagar una ventana y cómo dejarla
+   * en foco. Sale la próxima vez que el atajo las trae al frente.
+   */
+  hotkeyToggleCount: 0,
+  /** Hay una apertura con el atajo esperando el cierre que completa el ciclo. */
+  hotkeyCoachAwaitingHide: false,
+  /** El popup de gestos ya se mostró (o el usuario lo cerró). */
+  gestureCoachShown: false,
 };
 
 const ALLOWED_DOCK = new Set(['left', 'center', 'right']);
@@ -51,6 +64,17 @@ function normalize(raw) {
   if (typeof merged.onboardingCompleted !== 'boolean') {
     merged.onboardingCompleted = DEFAULTS.onboardingCompleted;
   }
+  const toggleCount = Number(merged.hotkeyToggleCount);
+  merged.hotkeyToggleCount = Number.isFinite(toggleCount) && toggleCount > 0
+    ? Math.min(100000, Math.floor(toggleCount))
+    : 0;
+  if (typeof merged.hotkeyCoachAwaitingHide !== 'boolean') {
+    merged.hotkeyCoachAwaitingHide = DEFAULTS.hotkeyCoachAwaitingHide;
+  }
+  if (typeof merged.gestureCoachShown !== 'boolean') {
+    merged.gestureCoachShown = DEFAULTS.gestureCoachShown;
+  }
+  merged.dockHotkey = normalizeDockHotkey(merged.dockHotkey);
   return merged;
 }
 

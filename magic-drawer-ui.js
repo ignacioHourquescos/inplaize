@@ -7,8 +7,9 @@
  * archivo sobre una zona, el visor de imágenes muestra la lista de opciones
  * (niveles de compresión o formatos destino); al elegir una, corre ffmpeg en
  * el main y el visor muestra un loader con progreso. Al terminar, el visor
- * previsualiza el resultado (o un resumen de tamaños para video/audio) y la
- * tile nueva queda destacada en la grilla.
+ * previsualiza el resultado (imagen, PDF o video) o muestra un resumen de
+ * tamaños si el visor no puede reproducirlo, y la tile nueva queda destacada
+ * en la grilla.
  *
  * Se carga después de renderer.js y usa sus globals: openImageDrawer,
  * closeImageDrawer, downloadsRegistry, fileUrlFromPath, downloadExtLabel,
@@ -408,10 +409,66 @@
   if (api.onDownloadUpdated) api.onDownloadUpdated(onJobUpdated);
   if (api.onDownloadDone) api.onDownloadDone(onJobDone);
 
+  function magicFileFrom(file) {
+    if (!file || !file.path) return null;
+    const name = String(file.name || '');
+    return {
+      path: file.path,
+      name,
+      size: Number(file.size) || 0,
+      kind: magicFileKind(name),
+      ext: magicFileExt(name),
+    };
+  }
+
+  function clearDragHover() {
+    document.querySelectorAll('.magic-zone.is-drag-over').forEach((zone) => {
+      zone.classList.remove('is-drag-over');
+    });
+  }
+
+  /** Resalta la zona solo si ese archivo se puede soltar ahí. */
+  function hoverDragZone(zone, file) {
+    clearDragHover();
+    const meta = magicFileFrom(file);
+    if (!zone || !meta || !acceptsKind(zone, meta.kind, meta.ext)) return false;
+    zone.classList.add('is-drag-over');
+    return true;
+  }
+
+  /**
+   * Suelta un archivo del home (arrastre interno, sin drag nativo) en una zona.
+   * @returns {boolean}
+   */
+  function dropOnZone(zone, file) {
+    clearDragHover();
+    const meta = magicFileFrom(file);
+    if (!zone || !meta) return false;
+    if (!acceptsKind(zone, meta.kind, meta.ext)) {
+      rejectZone(zone);
+      return false;
+    }
+    if (state.jobId) {
+      rejectZone(zone);
+      pushDockToast({
+        id: `magic-busy-${Date.now()}`,
+        sourceName: 'Cajón mágico',
+        title: 'Ya hay una transformación en curso',
+        body: 'Esperá a que termine para lanzar otra.',
+      });
+      return false;
+    }
+    showOptionsView(zone.dataset.action, meta);
+    return true;
+  }
+
   /* Integración con renderer.js (visor y tiles destacadas). */
   window.MagicDrawerUI = {
     hideViews: hideMagicViews,
     isFreshDownload: (id) => freshDownloadIds.has(String(id)),
     clearFreshDownload: (id) => freshDownloadIds.delete(String(id)),
+    clearDragHover,
+    hoverDragZone,
+    dropOnZone,
   };
 })();

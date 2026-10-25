@@ -31,11 +31,14 @@ const {
 } = require('./todos-store');
 
 const { loadAppSettings, saveAppSettings } = require('./app-settings-store');
+const { acceleratorFromHotkey } = require('./hotkey-accelerator');
+const { reregisterDockGlobalShortcut } = require('./global-hotkey');
 
-const { getAppVersionPayload, readVersionHistory } = require('./app-version');
+const { getAppVersionPayload } = require('./app-version');
 
 const {
   openShortcut,
+  openPastedUrl,
   getOpenWebWindowKeys,
   setWebShortcutAudioMuted,
   setWebShortcutNotificationsMuted,
@@ -93,13 +96,19 @@ const IPC_CHANNELS = [
 
   'open-shortcut',
 
+  'open-pasted-url',
+
+  'url-prompt-open',
+
+  'url-prompt-show',
+
+  'app-browser-open',
+
   'close-app',
 
   'get-user-data-path',
 
   'get-app-version',
-
-  'get-version-history',
 
   'open-user-data-folder',
 
@@ -143,6 +152,12 @@ const IPC_CHANNELS = [
 
   'shell-menu-drawer-state',
 
+  'menu-overlay-ready',
+
+  'menu-overlay-set-open',
+
+  'menu-overlay-hide',
+
   'shell-request-shortcut-editor',
 
   'detached-request-shortcut-editor',
@@ -156,6 +171,8 @@ const IPC_CHANNELS = [
   'chrome-open-add-shortcut',
 
   'chrome-open-settings',
+
+  'chrome-open-appearance',
 
   'chrome-enter-shortcuts-edit-mode',
 
@@ -214,6 +231,14 @@ const IPC_CHANNELS = [
   'save-todos',
 
   'hold-dock-blur',
+
+  'gesture-coach-close',
+
+  'set-onboarding-active',
+
+  'set-onboarding-hotkey-trial',
+
+  'onboarding-move-cursor',
 
   'downloads-get-history',
 
@@ -276,6 +301,7 @@ function registerIpcHandlers(state) {
   registerShellIpc(ipcMain);
   registerDetachedFrameIpc();
   registerLooseNavIpc();
+  require('./menu-overlay').registerMenuOverlayIpc();
 
   function expandDockSidebar() {
     const dock = state.mainWindow;
@@ -331,11 +357,18 @@ function registerIpcHandlers(state) {
    */
   function broadcastShortcutsEditModeToChromeHosts(on) {
     const v = on === true;
+    let menuOverlay = null;
+    try {
+      menuOverlay = require('./menu-overlay');
+    } catch {
+      menuOverlay = null;
+    }
     try {
       const ws = require('./web-shell');
       const sw = ws.getShellWindow && ws.getShellWindow();
       if (sw && !sw.isDestroyed()) {
         sw.webContents.send('shortcuts-edit-mode-sync', v);
+        if (menuOverlay) menuOverlay.setEditMode(sw, v);
       }
     } catch {
       /* noop */
@@ -344,6 +377,7 @@ function registerIpcHandlers(state) {
       if (!win || win.isDestroyed() || !win.__usualDeskDetachedChromeHost) continue;
       try {
         win.webContents.send('shortcuts-edit-mode-sync', v);
+        if (menuOverlay) menuOverlay.setEditMode(win, v);
       } catch {
         /* noop */
       }
@@ -470,45 +504,151 @@ function registerIpcHandlers(state) {
   }
 
   /**
-   * Atajo global (Ctrl+Alt+D y Ctrl+Mayús+D).
+   * Ciclos de abrir y volver a cerrar con el atajo antes de explicar cómo
+   * apagar una ventana y cómo dejarla en foco. El popup sale al traer la app
+   * al frente, no en el momento en que el usuario acaba de esconderla.
+   */
+  const GESTURE_COACH_CYCLES = 10;
+
+  function hotkeyUseShouldCount() {
+    if (state.onboardingActive || state.gestureCoachOpen) return false;
+    const settings = loadAppSettings();
+    if (settings.gestureCoachShown) return false;
+    if (settings.onboardingCompleted) return true;
+    try {
+      const list = loadShortcuts();
+      return Array.isArray(list) && list.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /** La ventana del dock tiene que cubrir la pantalla para que el popup se lea. */
+  function holdGestureCoachSurface() {
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed()) return;
+    applyDockWindowBounds(dock, true);
+    try {
+      dock.setIgnoreMouseEvents(false);
+    } catch {
+      /* noop */
+    }
+  }
+
+  function releaseGestureCoachSurface() {
+    state.gestureCoachOpen = false;
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed()) return;
+    applyDockWindowBounds(dock, state.isExpanded === true);
+    try {
+      if (state.isExpanded) dock.setIgnoreMouseEvents(false);
+      else dock.setIgnoreMouseEvents(true, { forward: true });
+    } catch {
+      /* noop */
+    }
+  }
+
+  function presentGestureCoach() {
+    if (state.gestureCoachOpen) return;
+    const settings = loadAppSettings();
+    if (settings.gestureCoachShown) return;
+    if ((Number(settings.hotkeyToggleCount) || 0) < GESTURE_COACH_CYCLES) return;
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed()) return;
+    state.gestureCoachOpen = true;
+    holdGestureCoachSurface();
+    try {
+      raiseAlwaysOnTopWindow(dock);
+    } catch {
+      /* noop */
+    }
+    const send = () => {
+      if (!state.gestureCoachOpen) return;
+      const live = state.mainWindow;
+      if (!live || live.isDestroyed()) return;
+      try {
+        live.webContents.send('gesture-coach-show');
+      } catch {
+        /* noop */
+      }
+    };
+    send();
+    setTimeout(send, 600);
+  }
+
+  function recordHotkeyToggle(revealed) {
+    if (state.gestureCoachOpen) {
+      holdGestureCoachSurface();
+      return;
+    }
+    if (!hotkeyUseShouldCount()) return;
+    const settings = loadAppSettings();
+    let cycles = Math.floor(Number(settings.hotkeyToggleCount) || 0);
+    let awaitingHide = settings.hotkeyCoachAwaitingHide === true;
+    if (revealed) {
+      awaitingHide = true;
+    } else if (awaitingHide) {
+      awaitingHide = false;
+      cycles += 1;
+    }
+    saveAppSettings({
+      hotkeyToggleCount: cycles,
+      hotkeyCoachAwaitingHide: awaitingHide,
+    });
+    if (revealed && cycles >= GESTURE_COACH_CYCLES) presentGestureCoach();
+  }
+
+  /**
+   * Atajo global (Ctrl+Alt+D o el que haya elegido).
    * La home cuenta como una ventana: si está al frente, se oculta igual que el mail.
    * Si no hay nada de inplaize al frente, vuelve la última superficie (home o ventana web).
    * Sin ventanas, abre o cierra el panel.
    */
   function raiseAppFromGlobalHotkey() {
+    // Durante el onboarding el atajo no abre ni esconde inplaize: si no, el
+    // panel se va y no se puede seguir el tour. En el paso del atajo solo
+    // avisamos para contar la prueba.
+    if (state.onboardingActive || state.onboardingHotkeyTrial) {
+      if (state.onboardingHotkeyTrial) {
+        const dock = state.mainWindow;
+        if (dock && !dock.isDestroyed()) dock.webContents.send('onboarding-hotkey-press');
+      }
+      return;
+    }
+
+    let revealed = false;
+
     if (loadAppSettings().webHostMode === 'shell') {
-        let shellInUse = false;
-        let ws = null;
+      let shellInUse = false;
+      let ws = null;
+      try {
+        ws = require('./web-shell');
+        shellInUse = ws.shellWindowOrContentsHasFocus();
+      } catch {
+        /* noop */
+      }
+      const homeIsFront = state.isExpanded && (dockSurfaceIsFocused() || !shellInUse);
+      if (homeIsFront) {
+        markHomeAsLastFocusedSurface({ holdMs: 500 });
         try {
-          ws = require('./web-shell');
-          shellInUse = ws.shellWindowOrContentsHasFocus();
+          if (ws) ws.minimizeShellFromHotkey();
         } catch {
           /* noop */
         }
-        const homeIsFront = state.isExpanded && (dockSurfaceIsFocused() || !shellInUse);
-        if (homeIsFront) {
-          markHomeAsLastFocusedSurface({ holdMs: 500 });
-          try {
-            if (ws) ws.minimizeShellFromHotkey();
-          } catch {
-            /* noop */
-          }
-          collapseDockSidebar();
-          return;
-        }
-        if (!shellInUse && lastFocusedSurfaceIsHome()) {
-          expandDockSidebar();
-          return;
-        }
+        collapseDockSidebar();
+      } else if (!shellInUse && lastFocusedSurfaceIsHome()) {
+        expandDockSidebar();
+        revealed = true;
+      } else {
         try {
           if (ws) ws.showOrToggleShellFromHotkey();
         } catch {
           /* noop */
         }
         if (state.isExpanded) collapseDockSidebar();
-        return;
+        revealed = !shellInUse;
       }
-
+    } else {
       const dockWin = state.mainWindow;
       if (!dockWin || dockWin.isDestroyed()) return;
 
@@ -518,36 +658,37 @@ function registerIpcHandlers(state) {
         minimizeAllWebWindows();
         if (homeShowing) collapseDockSidebar();
         if (homeShowing && !webFocused) markHomeAsLastFocusedSurface({ holdMs: 500 });
-        return;
-      }
-
-      if (lastFocusedSurfaceIsHome()) {
+      } else if (lastFocusedSurfaceIsHome()) {
         expandDockSidebar();
-        return;
-      }
-
-      const focusedWeb = focusLastWebWindowFromHotkey();
-      if (focusedWeb) {
-        if (state.isExpanded) collapseDockSidebar();
-        return;
-      }
-
-      state.isExpanded = !state.isExpanded;
-      applyDockWindowBounds(dockWin, state.isExpanded);
-      try {
-        if (state.isExpanded) {
-          dockWin.setIgnoreMouseEvents(false);
+        revealed = true;
+      } else {
+        const focusedWeb = focusLastWebWindowFromHotkey();
+        if (focusedWeb) {
+          if (state.isExpanded) collapseDockSidebar();
+          revealed = true;
         } else {
-          dockWin.setIgnoreMouseEvents(true, { forward: true });
+          state.isExpanded = !state.isExpanded;
+          applyDockWindowBounds(dockWin, state.isExpanded);
+          try {
+            if (state.isExpanded) {
+              dockWin.setIgnoreMouseEvents(false);
+            } else {
+              dockWin.setIgnoreMouseEvents(true, { forward: true });
+            }
+          } catch {
+            /* noop */
+          }
+          dockWin.webContents.send('sidebar-state', state.isExpanded);
+          if (state.isExpanded) {
+            state.dockBlurIgnoreUntil = Date.now() + 500;
+            raiseAlwaysOnTopWindow(dockWin);
+          }
+          revealed = state.isExpanded === true;
         }
-      } catch {
-        /* noop */
       }
-      dockWin.webContents.send('sidebar-state', state.isExpanded);
-      if (state.isExpanded) {
-        state.dockBlurIgnoreUntil = Date.now() + 500;
-        raiseAlwaysOnTopWindow(dockWin);
-      }
+    }
+
+    recordHotkeyToggle(revealed);
   }
 
   ipcMain.handle('collapse-sidebar', () => {
@@ -640,6 +781,11 @@ function registerIpcHandlers(state) {
     const sender = BrowserWindow.fromWebContents(event.sender);
     if (!dock || dock.isDestroyed() || !sender || sender.id !== dock.id) return false;
     broadcastShortcutsEditModeToChromeHosts(on === true);
+    try {
+      require('./menu-overlay').setEditMode(dock, on === true);
+    } catch {
+      /* noop */
+    }
     return true;
   });
 
@@ -668,6 +814,15 @@ function registerIpcHandlers(state) {
     return true;
   });
 
+  ipcMain.handle('chrome-open-appearance', () => {
+    expandDockSidebar();
+    const dock = state.mainWindow;
+    if (dock && !dock.isDestroyed()) {
+      dock.webContents.send('open-appearance-modal');
+    }
+    return true;
+  });
+
   ipcMain.handle('chrome-enter-shortcuts-edit-mode', () => {
     openShortcutEditorOnDock(null);
     return true;
@@ -676,6 +831,8 @@ function registerIpcHandlers(state) {
 
 
   ipcMain.handle('set-ignore-mouse', (event, ignore) => {
+
+    if (state.gestureCoachOpen && ignore) return;
 
     try {
       if (require('./downloads-manager').isPassthroughFrozen()) return;
@@ -757,6 +914,49 @@ function registerIpcHandlers(state) {
 
   });
 
+  ipcMain.handle('open-pasted-url', async (_event, raw) => {
+    try {
+      return await openPastedUrl(raw);
+    } catch {
+      return { ok: false, error: 'No se pudo abrir el enlace' };
+    }
+  });
+
+  ipcMain.handle('url-prompt-show', (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    require('./url-prompt').showUrlPrompt(win && !win.isDestroyed() ? win : null);
+    return true;
+  });
+
+  ipcMain.handle('app-browser-open', async () => {
+    await require('./loose-nav-window').enterLooseNavMode();
+    return true;
+  });
+
+  ipcMain.handle('url-prompt-open', (event, open) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const show = open === true;
+    if (win && !win.isDestroyed() && win.__usualDeskDetachedChromeHost) {
+      require('./detached-web-frame').setHostUrlPromptOpen(win, show);
+      return true;
+    }
+    try {
+      const shell = require('./web-shell');
+      if (win && shell.getShellWindow() === win) {
+        shell.setUrlPromptOpen(show);
+        return true;
+      }
+    } catch {
+      /* noop */
+    }
+    try {
+      require('./loose-nav-window').setUrlPromptOpen(show);
+    } catch {
+      /* noop */
+    }
+    return true;
+  });
+
 
 
   ipcMain.handle('get-open-web-window-keys', () => getOpenWebWindowKeys());
@@ -820,8 +1020,6 @@ function registerIpcHandlers(state) {
 
 
   ipcMain.handle('get-app-version', () => getAppVersionPayload());
-
-  ipcMain.handle('get-version-history', () => readVersionHistory());
 
 
 
@@ -894,7 +1092,20 @@ function registerIpcHandlers(state) {
 
     const prev = loadAppSettings();
 
+    if (Object.prototype.hasOwnProperty.call(p, 'dockHotkey') && !acceleratorFromHotkey(p.dockHotkey)) {
+      return Object.assign({}, prev, { dockHotkeyRejected: true });
+    }
+
     const next = saveAppSettings(p);
+
+    if (Object.prototype.hasOwnProperty.call(p, 'dockHotkey')) {
+      const registered = reregisterDockGlobalShortcut();
+      if (!registered) {
+        const reverted = saveAppSettings({ dockHotkey: prev.dockHotkey });
+        reregisterDockGlobalShortcut();
+        return Object.assign({}, reverted, { dockHotkeyRejected: true });
+      }
+    }
 
     if (
       Object.prototype.hasOwnProperty.call(p, 'webHostMode') &&
@@ -1209,6 +1420,52 @@ function registerIpcHandlers(state) {
   ipcMain.handle('hold-dock-blur', (_event, ms) => {
     const n = Math.max(0, Math.min(60000, Math.round(Number(ms) || 0)));
     state.dockBlurIgnoreUntil = Date.now() + n;
+    return true;
+  });
+
+  ipcMain.handle('set-onboarding-active', (_event, on) => {
+    state.onboardingActive = on === true;
+    if (!state.onboardingActive) state.onboardingHotkeyTrial = false;
+    return true;
+  });
+
+  /** Paso del atajo del onboarding: el atajo global solo avisa, no toca el dock ni las ventanas. */
+  ipcMain.handle('set-onboarding-hotkey-trial', (_event, on) => {
+    state.onboardingHotkeyTrial = on === true && state.onboardingActive === true;
+    return true;
+  });
+
+  /**
+   * Onboarding: lleva el mouse real hasta un punto de la ventana (coordenadas
+   * del contenido, en px CSS). Solo Windows y mientras dura el onboarding. No pide
+   * foco: la ventana del onboarding puede estar a la vista sin tenerlo.
+   */
+  ipcMain.handle('onboarding-move-cursor', (event, point) => {
+    if (process.platform !== 'win32' || !state.onboardingActive) return false;
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win || win.isDestroyed() || !win.isVisible()) return false;
+      const x = Number(point && point.x);
+      const y = Number(point && point.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+      const { screen } = require('electron');
+      const zoom = event.sender.getZoomFactor() || 1;
+      const bounds = win.getContentBounds();
+      const target = screen.dipToScreenPoint({
+        x: bounds.x + x * zoom,
+        y: bounds.y + y * zoom,
+      });
+      require('./win32-window').glideCursorTo(target.x, target.y, point && point.ms);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('gesture-coach-close', (_event, opts) => {
+    const defer = !!(opts && opts.defer);
+    if (!defer) saveAppSettings({ gestureCoachShown: true });
+    releaseGestureCoachSurface();
     return true;
   });
 
