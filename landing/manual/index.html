@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual de inplaize</title>
+  <meta
+    name="description"
+    content="Manual de inplaize: la barra de accesos, el atajo global, el Modo Foco, las ventanas web, las descargas y el resto de funciones."
+  />
+  <meta name="theme-color" content="#ffffff" />
+  <meta property="og:title" content="Manual de inplaize" />
+  <meta property="og:description" content="Guía de funciones de inplaize, el escritorio donde cada cosa queda en su lugar." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%236d28d9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='56' fill='url(%23g)'/%3E%3Crect x='74' y='74' width='108' height='108' rx='30' fill='rgba(255,255,255,0.95)'/%3E%3Ccircle cx='128' cy='128' r='20' fill='%238b5cf6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #fff;
+      --ink: #202124;
+      --ink-soft: #5f6368;
+      --blue: #1a73e8;
+      --blue-hover: #1967d2;
+      --bar: #d2e3fc;
+      --line: #e8eaed;
+      --pill: #f1f3f4;
+      --card: #f8f9fa;
+      --header-h: 60px;
+      --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Courier New", monospace;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: calc(var(--header-h) + 24px);
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 3px;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* ---------- Cabecera (idéntica a la de la landing) ---------- */
+
+    .site-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid #e8eaed;
+      backdrop-filter: blur(8px);
+    }
+
+    .sh-inner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 1120px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .sh-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 18px;
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      text-decoration: none;
+    }
+
+    .sh-brand:hover {
+      text-decoration: none;
+    }
+
+    .sh-mark {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+    }
+
+    .sh-mark::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.95);
+      transform: translate(-50%, -50%);
+    }
+
+    .sh-mark::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #8b5cf6;
+      transform: translate(-50%, -50%);
+    }
+
+    .sh-nav {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .sh-nav a {
+      padding: 6px 14px;
+      border-radius: 8px;
+      color: var(--ink-soft);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .sh-nav a:hover {
+      background: #f1f3f4;
+      color: var(--ink);
+    }
+
+    .sh-nav a[aria-current="page"] {
+      background: #f1f3f4;
+      color: var(--ink);
+    }
+
+    .sh-spacer {
+      flex: 1;
+    }
+
+    .sh-cta {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 20px;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .sh-cta:hover {
+      background: var(--blue-hover);
+      text-decoration: none;
+    }
+
+    .menu-toggle {
+      display: none;
+      align-items: center;
+      min-height: 36px;
+      margin-right: 6px;
+      padding: 0 16px;
+      border: 1px solid #dadce0;
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .menu-toggle:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    /* ---------- Estructura ---------- */
+
+    .layout {
+      display: grid;
+      grid-template-columns: 208px minmax(0, 1fr);
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: calc(var(--header-h) + 32px) 24px 0;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: calc(var(--header-h) + 20px);
+      align-self: start;
+      max-height: calc(100vh - var(--header-h) - 40px);
+      overflow-y: auto;
+      padding-right: 16px;
+      scrollbar-width: thin;
+    }
+
+    .sidebar ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .sidebar li + li {
+      margin-top: 2px;
+    }
+
+    .sidebar a {
+      display: block;
+      padding: 6px 12px;
+      border-radius: 8px;
+      color: var(--ink-soft);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.4;
+      text-decoration: none;
+    }
+
+    .sidebar a:hover {
+      background: var(--pill);
+      color: var(--ink);
+    }
+
+    .sidebar a.is-active {
+      background: var(--pill);
+      color: var(--ink);
+    }
+
+    .content {
+      min-width: 0;
+      padding: 0 0 72px 48px;
+      border-left: 1px solid var(--line);
+    }
+
+    .content-inner {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ---------- Texto ---------- */
+
+    section {
+      padding-bottom: 28px;
+    }
+
+    h2,
+    h3 {
+      color: var(--ink);
+      line-height: 1.25;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 26px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+    }
+
+    h3 {
+      margin: 20px 0 6px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--ink-soft);
+    }
+
+    strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    em {
+      color: var(--ink);
+      font-style: normal;
+      font-weight: 500;
+    }
+
+    ul.list {
+      margin: 0 0 12px;
+      padding-left: 20px;
+      color: var(--ink-soft);
+    }
+
+    ul.list li {
+      margin-bottom: 6px;
+    }
+
+    ul.list li::marker {
+      color: #9aa0a6;
+    }
+
+    code,
+    kbd {
+      font-family: var(--mono);
+      font-size: 12.5px;
+    }
+
+    code {
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: var(--pill);
+      color: var(--ink);
+    }
+
+    kbd {
+      display: inline-block;
+      min-width: 24px;
+      padding: 0 7px;
+      border: 1px solid #dadce0;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .steps {
+      margin: 0 0 12px;
+      padding: 0;
+      list-style: none;
+      counter-reset: step;
+      color: var(--ink-soft);
+    }
+
+    .steps li {
+      position: relative;
+      margin-bottom: 8px;
+      padding-left: 34px;
+      counter-increment: step;
+    }
+
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 0;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #e8f0fe;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .table-card {
+      margin: 0 0 14px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(32, 33, 36, 0.04);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink-soft);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      background: var(--card);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    td:first-child {
+      width: 40%;
+      color: var(--ink);
+    }
+
+    .faq {
+      margin: 0;
+    }
+
+    .faq dt {
+      margin: 14px 0 2px;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .faq dd {
+      margin: 0;
+      color: var(--ink-soft);
+    }
+
+    .page-footer {
+      margin-top: 8px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      color: var(--ink-soft);
+      font-size: 13px;
+    }
+
+    /* ---------- Pantallas chicas ---------- */
+
+    @media (max-width: 860px) {
+      .menu-toggle {
+        display: inline-flex;
+      }
+
+      .layout {
+        display: block;
+        padding-top: calc(var(--header-h) + 20px);
+      }
+
+      .sidebar {
+        position: fixed;
+        top: var(--header-h);
+        left: 0;
+        right: 0;
+        z-index: 25;
+        display: none;
+        max-height: calc(100vh - var(--header-h));
+        padding: 12px 20px 20px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+
+      body.menu-open .sidebar {
+        display: block;
+      }
+
+      .content {
+        padding: 0;
+        border-left: 0;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .sh-inner {
+        padding: 0 14px;
+      }
+
+      .sh-brand {
+        margin-right: 6px;
+      }
+
+      .sh-brand span:last-child {
+        display: none;
+      }
+
+      .sh-nav a {
+        padding: 6px 10px;
+      }
+
+      .menu-toggle {
+        padding: 0 12px;
+      }
+
+      .sh-cta {
+        padding: 0 14px;
+      }
+
+      .layout {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+
+      h2 {
+        font-size: 23px;
+      }
+
+      td:first-child {
+        width: auto;
+      }
+
+      th,
+      td {
+        padding: 9px 12px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="sh-inner">
+      <a class="sh-brand" href="../" aria-label="inplaize, inicio">
+        <span class="sh-mark" aria-hidden="true"></span>
+        <span>inplaize</span>
+      </a>
+      <nav class="sh-nav" aria-label="Principal">
+        <a href="../">Inicio</a>
+        <a href="./" aria-current="page">Manual</a>
+        <a href="../historia/">Acerca</a>
+      </nav>
+      <span class="sh-spacer"></span>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="sidebar">Índice</button>
+      <a
+        class="sh-cta"
+        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.3.2/inplaize.Setup.1.3.2.exe"
+      >Descargar</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar" aria-label="Índice del manual">
+      <ul>
+        <li><a href="#bienvenida">Bienvenida</a></li>
+        <li><a href="#primeros-pasos">Primeros pasos</a></li>
+        <li><a href="#barra">La barra de accesos</a></li>
+        <li><a href="#atajo">El atajo global</a></li>
+        <li><a href="#gestos">Gestos y Modo Foco</a></li>
+        <li><a href="#ventanas-web">Ventanas web</a></li>
+        <li><a href="#sesiones">Sesiones de inicio</a></li>
+        <li><a href="#inicio">Pantalla de inicio</a></li>
+        <li><a href="#archivos">Descargas y archivos</a></li>
+        <li><a href="#ajustes">Apariencia y ajustes</a></li>
+        <li><a href="#referencia">Referencia rápida</a></li>
+        <li><a href="#faq">Preguntas frecuentes</a></li>
+      </ul>
+    </aside>
+
+    <main class="content">
+      <div class="content-inner">
+
+        <section id="bienvenida">
+          <h2>Bienvenido a inplaize</h2>
+          <p>
+            inplaize es una aplicación para Windows que reúne en una barra los sitios web y los programas de uso
+            diario, y abre cada uno en su propia ventana. Cada acceso conserva su sesión, sus avisos y su audio por
+            separado, y un atajo de teclado muestra u oculta todo el conjunto.
+          </p>
+          <ul class="list">
+            <li><strong>Acceso:</strong> un icono de la barra, que apunta a una página web o a un programa.</li>
+            <li><strong>Ventana propia:</strong> cada acceso web se abre maximizado, con su entrada en <kbd>Alt</kbd> + <kbd>Tab</kbd>. Cerrar una ventana no afecta a las demás.</li>
+            <li><strong>Sesión aislada:</strong> cada acceso guarda sus cookies por separado, de modo que pueden convivir dos cuentas del mismo servicio.</li>
+          </ul>
+        </section>
+
+        <section id="primeros-pasos">
+          <h2>Primeros pasos</h2>
+          <p>
+            Se instala con <code>inplaize.Setup.exe</code>, disponible en la
+            <a href="https://github.com/ignacioHourquescos/inplaize/releases">página de versiones</a>. Al abrirla por
+            primera vez, una guía de cuatro pasos acompaña la configuración:
+          </p>
+          <ol class="steps">
+            <li><strong>Bienvenida:</strong> presenta la propuesta.</li>
+            <li><strong>Armado de la barra:</strong> se eligen apps entre Gmail, WhatsApp, Drive, Calendar, LinkedIn, ChatGPT, YouTube y Notion (al menos una).</li>
+            <li><strong>Atajo mágico:</strong> se practica <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>D</kbd> y se pueden elegir otras teclas.</li>
+            <li><strong>Sesiones:</strong> se copian las sesiones ya iniciadas en Chrome.</li>
+          </ol>
+          <p>La guía puede repetirse desde <em>Internal</em> con <em>Ver tutorial otra vez</em>.</p>
+        </section>
+
+        <section id="barra">
+          <h2>La barra de accesos</h2>
+          <p>
+            Muestra un icono por acceso. Su menú lateral ofrece <em>Añadir acceso</em>, <em>Modo edición</em>,
+            <em>Configuración</em>, <em>Internal</em> y <em>Cerrar aplicación</em>.
+          </p>
+          <ul class="list">
+            <li><strong>Añadir:</strong> se elige el tipo (<em>Página web</em> o <em>Programa</em>), un nombre y la dirección o el archivo <code>.exe</code> / <code>.lnk</code>. El icono es opcional: si se omite, se toma el del sitio.</li>
+            <li><strong>Editar:</strong> el <em>Modo edición</em> permite modificar un acceso, reordenarlo con <em>Subir</em> y <em>Bajar</em>, o eliminarlo.</li>
+            <li><strong>Vista:</strong> en <em>Internal</em> se alterna entre <em>Normal</em> (icono y nombre) y <em>Minimalista</em> (solo iconos).</li>
+          </ul>
+        </section>
+
+        <section id="atajo">
+          <h2>El atajo global</h2>
+          <p>
+            Por defecto es <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>D</kbd> y funciona desde cualquier programa.
+          </p>
+          <ul class="list">
+            <li>Con ventanas de inplaize al frente, las <strong>oculta</strong>.</li>
+            <li>Sin ninguna al frente, <strong>recupera</strong> la última usada (inicio o ventana web).</li>
+            <li>Sin ventanas abiertas, abre o cierra el panel.</li>
+          </ul>
+          <p>
+            Para cambiar las teclas se repite el tutorial desde <em>Internal</em> y se elige <em>Quiero cambiar las
+            teclas del atajo</em>. Deben ser tres e incluir <kbd>Ctrl</kbd>, <kbd>Alt</kbd> o <kbd>Shift</kbd> y una
+            letra. Si la combinación ya está en uso, inplaize conserva la anterior.
+          </p>
+        </section>
+
+        <section id="gestos">
+          <h2>Gestos y Modo Foco</h2>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>Gesto sobre un icono</th><th>Resultado</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Clic izquierdo</td><td>Abre el acceso o lo trae al frente.</td></tr>
+                <tr><td>Mantener clic izquierdo</td><td>Aparece <em>× Cerrar</em> y se apaga solo esa ventana.</td></tr>
+                <tr><td>Clic derecho</td><td>Añade o quita el acceso del Modo Foco.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            El <strong>Modo Foco</strong> mantiene el audio y los avisos de los accesos elegidos y silencia y
+            bloquea todo lo demás. Un clic derecho sobre un icono lo suma al grupo (si estaba cerrado, se abre); otro
+            lo retira. El modo termina cuando el grupo queda vacío o con un clic izquierdo sobre cualquier icono, y
+            cada acceso recupera su configuración previa. No se guarda al cerrar la aplicación.
+          </p>
+        </section>
+
+        <section id="ventanas-web">
+          <h2>Ventanas web</h2>
+          <p>
+            Cada ventana incluye una franja superior con los accesos, para pasar de una a otra sin volver al inicio.
+          </p>
+          <ul class="list">
+            <li><strong>Subpestañas:</strong> <kbd>Ctrl</kbd> + clic, o un enlace que pida pestaña nueva, abre otra subpestaña en la misma ventana.</li>
+            <li><strong>Navegación:</strong> atrás y adelante con los botones de la franja, <kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd> o los botones laterales del mouse.</li>
+            <li><strong>Avisos:</strong> los mensajes pendientes se muestran como insignia numérica sobre el icono. En <em>Internal</em> se elige si las notificaciones aparecen como tarjetas en el panel o como avisos de Windows.</li>
+            <li><strong>Por acceso:</strong> al crear o editar un acceso web se pueden desactivar sus notificaciones y silenciar su audio.</li>
+            <li><strong>Navegación suelta:</strong> el icono de Internet abre un navegador integrado, con pestañas bajo la franja y una sesión propia, para páginas puntuales que no merecen un acceso.</li>
+            <li><strong>Programas:</strong> un acceso de tipo <em>Programa</em> abre el ejecutable o, si ya está abierto, lo trae al frente.</li>
+          </ul>
+        </section>
+
+        <section id="sesiones">
+          <h2>Sesiones de inicio</h2>
+          <p>
+            El inicio de sesión se hace una sola vez por sitio. Para evitar repetirlo, <em>Importar desde Chrome</em>
+            (último paso del tutorial y <em>Internal</em>) copia las sesiones de Chrome hacia los accesos elegidos.
+            Chrome debe estar cerrado, se puede elegir el perfil, y WhatsApp no se importa: siempre pide el QR del
+            teléfono.
+          </p>
+          <p>
+            Además, si una ventana abre un enlace a un sitio donde ya hay sesión en otro acceso, inplaize usa esa
+            sesión; si hay varias, pregunta cuál y permite recordar la elección.
+          </p>
+        </section>
+
+        <section id="inicio">
+          <h2>Pantalla de inicio</h2>
+          <p>Un lienzo para notas, tareas y documentos. Todo se guarda automáticamente en el equipo.</p>
+          <ul class="list">
+            <li><strong>Notas adhesivas:</strong> un clic en un área vacía crea una nota. Mantenerla pulsada la arruga y la deja caer como un bollo; un clic sobre el bollo la recupera.</li>
+            <li><strong>Renglones:</strong> de cuatro tipos (texto, tarea, viñeta y documento), en hasta treinta columnas. <kbd>/</kbd> elige el tipo, <kbd>Enter</kbd> crea otro igual (en uno vacío, lo vuelve texto) y <kbd>Tab</kbd> sangra.</li>
+            <li><strong>Mover:</strong> se arrastran desde cualquier parte. Arrastrar en un espacio vacío, o <kbd>Shift</kbd> + clic, selecciona varios. Soltarlos sobre un documento los guarda dentro.</li>
+            <li><strong>Deshacer:</strong> <kbd>Ctrl</kbd> + <kbd>Z</kbd> y <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> (o <kbd>Ctrl</kbd> + <kbd>Y</kbd>), durante la sesión.</li>
+            <li><strong>Documentos:</strong> un renglón documento abre un editor superpuesto, con título, descripción y cuerpo. Con <kbd>/</kbd> se insertan encabezados, listas, tareas, citas, separadores, enlaces (<kbd>Ctrl</kbd> + <kbd>K</kbd>) e imágenes.</li>
+          </ul>
+        </section>
+
+        <section id="archivos">
+          <h2>Descargas y archivos</h2>
+          <h3>Descargas</h3>
+          <p>
+            Las descargas de todas las ventanas se guardan directo en la carpeta Descargas, sin diálogo y sin
+            sobrescribir (si el nombre existe, se añade <code>(1)</code>). La pantalla de inicio también lista lo que
+            aparece en Descargas o en el Escritorio, genera miniaturas de PDF y planillas (XLSX, XLS, CSV) y
+            previsualiza imágenes, PDF y videos. El historial se conserva solo mientras la aplicación está abierta.
+          </p>
+          <h3>Desde el teléfono</h3>
+          <p>
+            La primera celda de la zona de descargas muestra un código QR. Con el teléfono en la misma red Wi-Fi, se
+            escanea y se eligen los archivos para enviarlos a la computadora. La primera vez hay que aceptar la
+            advertencia de seguridad del navegador (certificado propio). Instalada como aplicación, inplaize aparece
+            también en el menú <em>Compartir</em> de Android.
+          </p>
+          <h3>Cajón mágico</h3>
+          <p>
+            Arrastrando un archivo sobre la zona correspondiente se puede <strong>comprimir</strong> una imagen o un
+            video (nivel ligero, medio o máximo) o <strong>convertirlo</strong> a PNG, JPG, WebP, MP4, WebM, GIF, MP3
+            o WAV, según su tipo. Incluye su propio conversor, muestra el progreso y compara los tamaños al terminar.
+          </p>
+        </section>
+
+        <section id="ajustes">
+          <h2>Apariencia y ajustes</h2>
+          <ul class="list">
+            <li><strong>Configuración:</strong> tema del lienzo, oscuro o claro.</li>
+            <li><strong>Internal:</strong> posición del panel (izquierda, centro o derecha), vista de los accesos, destino de los avisos, importación desde Chrome y repetición del tutorial.</li>
+          </ul>
+          <p>Los accesos, notas y ajustes se guardan localmente. La versión instalada figura al pie del menú.</p>
+        </section>
+
+        <section id="referencia">
+          <h2>Referencia rápida</h2>
+          <div class="table-card">
+            <table>
+              <thead>
+                <tr><th>Acción</th><th>Cómo</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Mostrar u ocultar todo</td><td><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>D</kbd> (configurable)</td></tr>
+                <tr><td>Abrir / cerrar un acceso</td><td>Clic / mantener clic izquierdo</td></tr>
+                <tr><td>Modo Foco</td><td>Clic derecho sobre el icono</td></tr>
+                <tr><td>Cambiar de ventana</td><td><kbd>Alt</kbd> + <kbd>Tab</kbd></td></tr>
+                <tr><td>Atrás / adelante</td><td><kbd>Alt</kbd> + <kbd>←</kbd> / <kbd>→</kbd></td></tr>
+                <tr><td>Enlace en subpestaña</td><td><kbd>Ctrl</kbd> + clic</td></tr>
+                <tr><td>Tipo de renglón / bloque</td><td><kbd>/</kbd></td></tr>
+                <tr><td>Deshacer / rehacer</td><td><kbd>Ctrl</kbd> + <kbd>Z</kbd> / <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="faq">
+          <h2>Preguntas frecuentes</h2>
+          <dl class="faq">
+            <dt>¿Reemplaza a mi navegador?</dt>
+            <dd>No. Es un complemento para los sitios y programas de uso diario.</dd>
+
+            <dt>El atajo no responde.</dt>
+            <dd>Otro programa puede estar usando esa combinación. Repetir el tutorial desde <em>Internal</em> y elegir otras teclas.</dd>
+
+            <dt>No puedo importar mis sesiones de Chrome.</dt>
+            <dd>Comprobar que Chrome esté totalmente cerrado y que se haya elegido el perfil correcto. WhatsApp siempre requiere el QR.</dd>
+
+            <dt>¿Dónde se guardan mis datos?</dt>
+            <dd>En el propio equipo. Los archivos descargados van a la carpeta Descargas del sistema.</dd>
+          </dl>
+        </section>
+
+        <footer class="page-footer">
+          inplaize 1.3.2 · <a href="../">Volver al inicio</a> ·
+          <a href="https://github.com/ignacioHourquescos/inplaize/releases">Todas las versiones</a>
+        </footer>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      /* ---------- Índice móvil ---------- */
+      var toggle = document.getElementById('menu-toggle');
+      var sidebar = document.getElementById('sidebar');
+      function setMenu(open) {
+        document.body.classList.toggle('menu-open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      toggle.addEventListener('click', function () {
+        setMenu(!document.body.classList.contains('menu-open'));
+      });
+      sidebar.addEventListener('click', function (event) {
+        if (event.target.closest('a')) setMenu(false);
+      });
+
+      /* ---------- Sección activa en el índice ---------- */
+      var links = Array.prototype.slice.call(sidebar.querySelectorAll('a'));
+      var byId = {};
+      links.forEach(function (a) {
+        byId[a.getAttribute('href').slice(1)] = a;
+      });
+      var sections = Array.prototype.slice.call(document.querySelectorAll('.content section[id]'));
+
+      function setActive(id) {
+        links.forEach(function (a) {
+          a.classList.toggle('is-active', a === byId[id]);
+        });
+      }
+
+      function pickActive() {
+        var line = 60 + 48;
+        var chosen = sections[0];
+        for (var i = 0; i < sections.length; i++) {
+          if (sections[i].getBoundingClientRect().top - line <= 0) chosen = sections[i];
+        }
+        if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) {
+          chosen = sections[sections.length - 1];
+        }
+        if (chosen) setActive(chosen.id);
+      }
+
+      window.addEventListener('scroll', pickActive, { passive: true });
+      window.addEventListener('resize', pickActive);
+      pickActive();
+    })();
+  </script>
+</body>
+</html>

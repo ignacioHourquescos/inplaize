@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Por qué hice inplaize</title>
+  <meta
+    name="description"
+    content="La historia de inplaize: una app que nació de tener demasiadas ventanas abiertas, sesiones de WhatsApp que no se podían separar y ganas de poder hacer foco."
+  />
+  <meta name="theme-color" content="#ffffff" />
+  <meta property="og:title" content="Por qué hice inplaize" />
+  <meta property="og:description" content="Cómo nació inplaize: un experimento con IA que terminó siendo mi escritorio de todos los días." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%236d28d9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='56' fill='url(%23g)'/%3E%3Crect x='74' y='74' width='108' height='108' rx='30' fill='rgba(255,255,255,0.95)'/%3E%3Ccircle cx='128' cy='128' r='20' fill='%238b5cf6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #fff;
+      --ink: #202124;
+      --ink-soft: #5f6368;
+      --blue: #1a73e8;
+      --blue-hover: #1967d2;
+      --line: #e8eaed;
+      --pill: #f1f3f4;
+      --header-h: 60px;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 3px;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* ---------- Cabecera (idéntica a la de la landing) ---------- */
+
+    .site-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 30;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.92);
+      border-bottom: 1px solid #e8eaed;
+      backdrop-filter: blur(8px);
+    }
+
+    .sh-inner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 1120px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .sh-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 18px;
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      text-decoration: none;
+    }
+
+    .sh-brand:hover {
+      text-decoration: none;
+    }
+
+    .sh-mark {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 auto;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+    }
+
+    .sh-mark::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.95);
+      transform: translate(-50%, -50%);
+    }
+
+    .sh-mark::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #8b5cf6;
+      transform: translate(-50%, -50%);
+    }
+
+    .sh-nav {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .sh-nav a {
+      padding: 6px 14px;
+      border-radius: 8px;
+      color: var(--ink-soft);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .sh-nav a:hover {
+      background: #f1f3f4;
+      color: var(--ink);
+    }
+
+    .sh-nav a[aria-current="page"] {
+      background: #f1f3f4;
+      color: var(--ink);
+    }
+
+    .sh-spacer {
+      flex: 1;
+    }
+
+    .sh-cta {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 20px;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .sh-cta:hover {
+      background: var(--blue-hover);
+      text-decoration: none;
+    }
+
+    /* ---------- Historia ---------- */
+
+    /* Misma estructura que el manual: columna vacía donde allá va el índice */
+    .story {
+      display: grid;
+      grid-template-columns: 208px minmax(0, 1fr);
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: calc(var(--header-h) + 32px) 24px 0;
+    }
+
+    .story-content {
+      min-width: 0;
+      padding: 0 0 72px 48px;
+      border-left: 1px solid transparent;
+    }
+
+    .story-inner {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .eyebrow {
+      margin: 0 0 14px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.24em;
+    }
+
+    h1 {
+      margin: 0 0 28px;
+      font-size: clamp(38px, 6vw, 56px);
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      line-height: 1.08;
+    }
+
+    h2 {
+      margin: 44px 0 10px;
+      font-size: 24px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: var(--ink-soft);
+    }
+
+    .moments {
+      margin: 0 0 16px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .moments li {
+      margin-bottom: 14px;
+      padding: 16px 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--ink-soft);
+      box-shadow: 0 1px 2px rgba(32, 33, 36, 0.04);
+    }
+
+    .moments strong {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .signature {
+      margin-top: 40px;
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 18px;
+      margin-top: 40px;
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: 0 28px;
+      border-radius: 999px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .cta:hover {
+      background: var(--blue-hover);
+      text-decoration: none;
+    }
+
+    .quiet {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    @media (max-width: 640px) {
+      .sh-inner {
+        padding: 0 14px;
+      }
+
+      .sh-brand {
+        margin-right: 6px;
+      }
+
+      .sh-brand span:last-child {
+        display: none;
+      }
+
+      .sh-nav a {
+        padding: 6px 10px;
+      }
+
+      .sh-cta {
+        padding: 0 14px;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .story {
+        display: block;
+        padding-top: calc(var(--header-h) + 20px);
+      }
+
+      .story-content {
+        padding: 0;
+        border-left: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="sh-inner">
+      <a class="sh-brand" href="../" aria-label="inplaize, inicio">
+        <span class="sh-mark" aria-hidden="true"></span>
+        <span>inplaize</span>
+      </a>
+      <nav class="sh-nav" aria-label="Principal">
+        <a href="../">Inicio</a>
+        <a href="../manual/">Manual</a>
+        <a href="./" aria-current="page">Acerca</a>
+      </nav>
+      <span class="sh-spacer"></span>
+      <a
+        class="sh-cta"
+        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.3.2/inplaize.Setup.1.3.2.exe"
+      >Descargar</a>
+    </div>
+  </header>
+
+  <main class="story">
+    <div aria-hidden="true"></div>
+    <div class="story-content"><div class="story-inner">
+    <p class="eyebrow">ACERCA</p>
+    <p>
+      A principios de 2026, por una eventualidad laboral, me tocó gestionar tres WhatsApps a la vez (además del mío
+      personal), y era muy difícil llevarlos de manera ordenada.
+    </p>
+
+    <p>
+      Todo empezó con pestañas de incógnito, la única forma que encontré de abrir sesiones distintas. Pero las
+      ventanas se fueron multiplicando y alargando, y quise tener acceso rápido a toda esa colección.
+    </p>
+
+    <p>
+      Así nació esta app: experimentando, y de paso para ver hasta dónde podía llegar con IA en desarrollo y diseño.
+      La idea fue un solo lugar, ordenado y a un clic, con cada cuenta en su propia ventana, sin depender de Chrome.
+    </p>
+
+    <p>
+      Y poder saber siempre de dónde viene cada sonido, y esconder todo el ruido con un atajo cuando necesito
+      concentrarme. Hoy la uso todos los días, y si te pasa algo parecido, ojalá te sirva tanto como a mí.
+    </p>
+
+    <div class="actions">
+      <a
+        class="cta"
+        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.3.2/inplaize.Setup.1.3.2.exe"
+      >Descargar</a>
+      <a class="quiet" href="../manual/">Leer el manual</a>
+    </div>
+    </div></div>
+  </main>
+</body>
+</html>
