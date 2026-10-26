@@ -57,8 +57,16 @@
   background: #16161c;
 }
 
+.doc-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .doc-modal-close,
-.doc-modal-retry {
+.doc-modal-retry,
+.doc-modal-export {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -75,6 +83,21 @@
   cursor: pointer;
 }
 
+.doc-modal-export {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.doc-modal-export.is-copied {
+  color: #ddd6fe;
+  border-color: rgba(167, 139, 250, 0.55);
+  background: rgba(167, 139, 250, 0.14);
+}
+
 .doc-modal-close svg {
   width: 18px;
   height: 18px;
@@ -84,10 +107,19 @@
 .doc-modal-close:hover,
 .doc-modal-close:focus-visible,
 .doc-modal-retry:hover,
-.doc-modal-retry:focus-visible {
+.doc-modal-retry:focus-visible,
+.doc-modal-export:hover,
+.doc-modal-export:focus-visible {
   background: rgba(255, 255, 255, 0.06);
   color: #f4f4f8;
   outline: none;
+}
+
+.doc-modal-export:hover,
+.doc-modal-export:focus-visible,
+.doc-modal-export.is-copied:hover,
+.doc-modal-export.is-copied:focus-visible {
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .doc-modal-status-wrap {
@@ -115,6 +147,10 @@
 .doc-modal-status.is-error,
 .doc-modal-note {
   color: #f0a8a8;
+}
+
+.doc-modal-note.is-info {
+  color: #c4b5fd;
 }
 
 .doc-modal-scroll {
@@ -473,16 +509,34 @@ html[data-canvas-theme='light'] .doc-modal-bar {
 }
 
 html[data-canvas-theme='light'] .doc-modal-close,
-html[data-canvas-theme='light'] .doc-modal-retry {
+html[data-canvas-theme='light'] .doc-modal-retry,
+html[data-canvas-theme='light'] .doc-modal-export {
   color: #3f3f46;
+}
+
+html[data-canvas-theme='light'] .doc-modal-export {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+html[data-canvas-theme='light'] .doc-modal-export.is-copied {
+  color: #5b21b6;
+  border-color: rgba(109, 40, 217, 0.35);
+  background: rgba(109, 40, 217, 0.08);
 }
 
 html[data-canvas-theme='light'] .doc-modal-close:hover,
 html[data-canvas-theme='light'] .doc-modal-close:focus-visible,
 html[data-canvas-theme='light'] .doc-modal-retry:hover,
-html[data-canvas-theme='light'] .doc-modal-retry:focus-visible {
+html[data-canvas-theme='light'] .doc-modal-retry:focus-visible,
+html[data-canvas-theme='light'] .doc-modal-export:hover,
+html[data-canvas-theme='light'] .doc-modal-export:focus-visible {
   background: rgba(0, 0, 0, 0.05);
   color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-modal-note.is-info {
+  color: #6d28d9;
 }
 
 html[data-canvas-theme='light'] .doc-modal-title {

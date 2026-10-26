@@ -135,5 +135,116 @@ assert.strictEqual(legacy.columns[0].blocks[0].doc, undefined);
 const loaded = loadTodos();
 assert.strictEqual(loaded.columns[0].blocks[0].text, 'Comprar pan');
 
+const { documentToMarkdown } = require('../document-markdown');
+
+const markdown = documentToMarkdown({
+  title: 'Bitácora *uno*',
+  description: 'Notas del día',
+  content: {
+    type: 'doc',
+    content: [
+      { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Hecho' }] },
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'ver ', marks: [{ type: 'bold' }] },
+          { type: 'text', text: 'sitio', marks: [{ type: 'italic' }, { type: 'link', attrs: { href: 'https://example.com/a' } }] },
+          { type: 'hardBreak' },
+          { type: 'text', text: 'línea', marks: [{ type: 'underline' }] },
+        ],
+      },
+      {
+        type: 'taskList',
+        content: [
+          {
+            type: 'taskItem',
+            attrs: { checked: false },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'pendiente' }] }],
+          },
+          {
+            type: 'taskItem',
+            attrs: { checked: true },
+            content: [
+              { type: 'paragraph', content: [{ type: 'text', text: 'listo' }] },
+              {
+                type: 'taskList',
+                content: [{
+                  type: 'taskItem',
+                  attrs: { checked: false },
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'detalle' }] }],
+                }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'orderedList',
+        attrs: { start: 3 },
+        content: [{
+          type: 'listItem',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'tercero' }] }],
+        }],
+      },
+      {
+        type: 'blockquote',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'cita' }] }],
+      },
+      { type: 'horizontalRule' },
+      { type: 'image', attrs: { src: tinyImage(), alt: 'foto' } },
+      { type: 'paragraph' },
+    ],
+  },
+});
+
+assert.strictEqual(markdown, [
+  '# Bitácora \\*uno\\*',
+  '',
+  'Notas del día',
+  '',
+  '## Hecho',
+  '',
+  '**ver **[*sitio*](https://example.com/a)  ',
+  '<u>línea</u>',
+  '',
+  '- [ ] pendiente',
+  '- [x] listo',
+  '      - [ ] detalle',
+  '',
+  '3. tercero',
+  '',
+  '> cita',
+  '',
+  '---',
+  '',
+  '![foto](imagen)',
+  '',
+].join('\n'));
+
+assert.strictEqual(documentToMarkdown({ title: '   ', description: '', content: { type: 'doc', content: [{ type: 'paragraph' }] } }), '');
+assert.strictEqual(documentToMarkdown({
+  title: '',
+  description: '',
+  content: {
+    type: 'doc',
+    content: [{
+      type: 'bulletList',
+      content: [{
+        type: 'listItem',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: 'padre' }] },
+          {
+            type: 'bulletList',
+            content: [{
+              type: 'listItem',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'hijo' }] }],
+            }],
+          },
+        ],
+      }],
+    }],
+  },
+}), '- padre\n  - hijo\n');
+
 fs.rmSync(userData, { recursive: true, force: true });
 console.log('document-content ok');

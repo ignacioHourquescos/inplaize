@@ -51,7 +51,19 @@
   statusWrap.className = 'doc-modal-status-wrap';
   statusWrap.append(statusEl, retryBtn, noteEl);
 
-  bar.append(closeBtn, statusWrap);
+  const exportBtn = document.createElement('button');
+  exportBtn.type = 'button';
+  exportBtn.className = 'doc-modal-export';
+  exportBtn.textContent = 'Exportar en markdown';
+  exportBtn.setAttribute('aria-label', 'Exportar en markdown');
+  exportBtn.setAttribute('data-tooltip', 'Copia este documento en markdown para pegarlo en un agente');
+  exportBtn.setAttribute('data-tooltip-placement', 'bottom');
+
+  const actions = document.createElement('div');
+  actions.className = 'doc-modal-actions';
+  actions.append(closeBtn, exportBtn);
+
+  bar.append(actions, statusWrap);
 
   const scrollEl = document.createElement('div');
   scrollEl.className = 'doc-modal-scroll';
@@ -104,9 +116,11 @@
   let timer = null;
   let noteTimer = null;
   let hideTimer = null;
+  let exportTimer = null;
   let generation = 0;
   let closing = false;
   let pickToken = 0;
+  let exporting = false;
 
   function emptyContent() {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -225,8 +239,9 @@
     }
   }
 
-  function notify(message) {
+  function notify(message, tone) {
     clearTimeout(noteTimer);
+    noteEl.classList.remove('is-info');
     if (!message) {
       noteEl.hidden = true;
       noteEl.textContent = '';
@@ -234,10 +249,87 @@
     }
     noteEl.hidden = false;
     noteEl.textContent = message;
+    if (tone === 'info') noteEl.classList.add('is-info');
     noteTimer = setTimeout(() => {
       noteEl.hidden = true;
       noteEl.textContent = '';
+      noteEl.classList.remove('is-info');
     }, 4200);
+  }
+
+  function resetExportLabel() {
+    clearTimeout(exportTimer);
+    exportTimer = null;
+    exportBtn.classList.remove('is-copied');
+    exportBtn.textContent = 'Exportar en markdown';
+  }
+
+  function flashCopied() {
+    clearTimeout(exportTimer);
+    exportBtn.classList.add('is-copied');
+    exportBtn.textContent = 'Copiado';
+    exportTimer = setTimeout(resetExportLabel, 1800);
+  }
+
+  function fallbackCopy(text) {
+    const previous = document.activeElement;
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.top = '0';
+    area.style.left = '0';
+    area.style.opacity = '0';
+    area.style.pointerEvents = 'none';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch {
+      ok = false;
+    }
+    area.remove();
+    if (previous && typeof previous.focus === 'function' && document.contains(previous)) previous.focus();
+    return ok;
+  }
+
+  function copyText(text) {
+    const legacy = fallbackCopy(text);
+    const clipboard = navigator.clipboard;
+    if (!clipboard || typeof clipboard.writeText !== 'function') return Promise.resolve(legacy);
+    return clipboard.writeText(text).then(() => true, () => legacy);
+  }
+
+  async function exportMarkdown() {
+    if (exporting) return;
+    exporting = true;
+    try {
+      const api = window.InplaizeDocumentMarkdown;
+      if (!api || typeof api.documentToMarkdown !== 'function') {
+        notify('No se pudo exportar el markdown.');
+        return;
+      }
+      const markdown = api.documentToMarkdown({
+        title: readField(titleEl, TITLE_MAX),
+        description: readField(descriptionEl, DESCRIPTION_MAX),
+        content: editorApi ? editorApi.getJSON() : contentFallback,
+      });
+      if (!markdown.trim()) {
+        notify('No hay contenido para exportar.', 'info');
+        return;
+      }
+      const copied = await copyText(markdown);
+      if (copied) {
+        notify('');
+        flashCopied();
+        return;
+      }
+      notify('No se pudo copiar el markdown.');
+    } finally {
+      exporting = false;
+    }
   }
 
   function applyNow() {
@@ -354,6 +446,7 @@
     writeField(descriptionEl, descriptionValue);
     card.setAttribute('aria-label', titleValue.trim() || 'Documento sin título');
     notify('');
+    resetExportLabel();
     mountEditor(block);
     rev = 0;
     savedRev = 0;
@@ -540,6 +633,7 @@
   }
 
   closeBtn.addEventListener('click', () => { requestClose(); });
+  exportBtn.addEventListener('click', () => { exportMarkdown(); });
   retryBtn.addEventListener('click', () => { flush(); });
   overlay.addEventListener('pointerdown', (event) => {
     if (event.target !== overlay) return;
