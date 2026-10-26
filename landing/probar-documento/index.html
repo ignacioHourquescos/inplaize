@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es" data-canvas-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Probar documento</title>
+  <link rel="stylesheet" href="vendor/document-modal.css" />
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #0c0c10;
+      color: #ececf1;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .preview-home {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .preview-card {
+      width: min(440px, 100%);
+      text-align: center;
+    }
+    .preview-card h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+    }
+    .preview-card p {
+      margin: 0 0 18px;
+      color: #b9b9c6;
+      line-height: 1.45;
+    }
+    .preview-open {
+      min-height: 40px;
+      padding: 8px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #f4f4f8;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .preview-open:hover,
+    .preview-open:focus-visible {
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+  <main class="preview-home">
+    <div class="preview-card">
+      <h1>Documento de prueba</h1>
+      <p>Abrí el documento y tocá <strong>Exportar en markdown</strong>. El texto queda copiado para pegarlo donde quieras.</p>
+      <button type="button" id="open-doc" class="preview-open">Abrir documento</button>
+    </div>
+  </main>
+  <script src="vendor/ui-tooltip.js"></script>
+  <script src="vendor/document-editor.bundle.js"></script>
+  <script src="vendor/document-markdown.js"></script>
+  <script src="vendor/document-modal.js"></script>
+  <script>
+    const block = {
+      id: 'preview',
+      doc: {
+        title: 'AFTERDATA',
+        description: 'Notas para pasar a un agente',
+        content: {
+          type: 'doc',
+          content: [
+            { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'AFTERDATA' }] },
+            {
+              type: 'taskList',
+              content: [
+                {
+                  type: 'taskItem',
+                  attrs: { checked: false },
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Revisar el acceso de admin' }] }],
+                },
+                {
+                  type: 'taskItem',
+                  attrs: { checked: true },
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Anotar lo que hay que corregir' }] }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const modal = window.InplaizeDocumentModal;
+    modal.bind({
+      getBlock() { return block; },
+      apply(_id, doc) {
+        block.doc.title = doc.title;
+        block.doc.description = doc.description;
+        block.doc.content = doc.content;
+        return true;
+      },
+      persist() { return Promise.resolve(true); },
+    });
+
+    document.getElementById('open-doc').addEventListener('click', () => modal.open(block.id));
+    modal.open(block.id);
+  </script>
+</body>
+</html>

@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+landing/probar-documento/vendor/
 out/
 release/
 release-*/

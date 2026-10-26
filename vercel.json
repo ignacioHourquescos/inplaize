@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "echo skip",
-  "buildCommand": "echo skip",
+  "buildCommand": "node scripts/copy-document-preview.js",
   "outputDirectory": "landing",
   "redirects": [
     {
