@@ -137,10 +137,9 @@
       transform: translate(-50%, -50%);
     }
 
+    /* Por ahora no se muestran las subpáginas (Inicio, Manual, Acerca). */
     .sh-nav {
-      display: flex;
-      align-items: center;
-      gap: 2px;
+      display: none;
     }
 
     .sh-nav a {
@@ -337,7 +336,8 @@
         <span class="sh-mark" aria-hidden="true"></span>
         <span>inplaize</span>
       </a>
-      <nav class="sh-nav" aria-label="Principal">
+      <!-- Subpáginas ocultas por ahora: Inicio, Manual, Acerca. -->
+      <nav class="sh-nav" aria-label="Principal" hidden>
         <a href="../">Inicio</a>
         <a href="../manual/">Manual</a>
         <a href="./" aria-current="page">Acerca</a>
