@@ -111,7 +111,14 @@ function sanitizeAttrs(type, raw) {
     const level = out.level;
     out.level = level === 2 || level === 3 ? level : 1;
   }
-  if (type === 'image' && !out.src) return null;
+  if (type === 'image') {
+    if (!out.src) return null;
+    ['width', 'height'].forEach((key) => {
+      const n = Math.round(Number(out[key]));
+      if (!Number.isFinite(n) || n < 16 || n > 4000) delete out[key];
+      else out[key] = n;
+    });
+  }
   if (type === 'link' && !out.href) return null;
   return Object.keys(out).length ? out : null;
 }

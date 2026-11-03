@@ -208,7 +208,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
-/* Pegar un enlace y abrirlo, justo después de descargas. */
+/* Pegar un enlace y abrirlo: el primero de la franja. */
 .open-url-slot {
   display: flex;
   align-items: center;
@@ -237,9 +237,8 @@
   box-shadow: 0 0 0 2px var(--accent, #7c5cff) !important;
 }
 
-/* Línea violeta después del globo: separa estos tres del resto de accesos. */
-.open-url-slot::after {
-  content: '';
+/* Línea violeta después del globo: separa internet de tareas, descargas y los accesos. */
+.strip-lead-sep {
   flex: 0 0 auto;
   align-self: center;
   width: 2px;
@@ -249,6 +248,7 @@
   pointer-events: none;
 }
 
+/* Internet invertido respecto de tareas y descargas: fondo blanco, globo violeta. */
 .open-url-icon {
   width: 26px;
   height: 26px;
@@ -256,9 +256,23 @@
   box-sizing: border-box;
   padding: 3px;
   border-radius: 8px;
-  color: #fff;
-  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #6d28d9;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(109, 40, 217, 0.18);
+  transition: background-color 120ms ease;
+}
+
+.open-url-btn:hover .open-url-icon {
+  background: #f1ecff;
+}
+
+.open-url-btn:active .open-url-icon {
+  background: #e4dbff;
+}
+
+.open-url-btn:focus-visible {
+  outline: 2px solid var(--ud-chrome-edit-tab);
+  outline-offset: 2px;
 }
 
 .open-url-form {

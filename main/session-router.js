@@ -674,4 +674,6 @@ module.exports = {
   mayRouteToOtherSession,
   loadDomainChoices,
   saveDomainChoice,
+  googleEmailsForPartition,
+  fetchPartitionText,
 };

@@ -3252,8 +3252,8 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
 /* ==========================================================================
    Navegación suelta: fila de pestañas bajo la franja de iconos.
    Misma pieza que las sub-pestañas del mail: atrás/adelante viven en la
-   pestaña activa. El “+” queda fijo al inicio. El enlace de una pestaña
-   nueva se tipea donde irían el favicon y el nombre.
+   pestaña activa. El “+” va pegado a la última pestaña. El enlace de una
+   pestaña nueva se tipea donde irían el favicon y el nombre.
    ========================================================================== */
 
 .loose-nav-bar {
@@ -3292,6 +3292,11 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   overflow: hidden;
 }
 
+/* Con el riel de cuentas visible, la primera pestaña arranca donde empieza la página. */
+html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
+  padding-left: var(--loose-nav-rail-w);
+}
+
 .loose-nav-new-tab {
   display: flex;
   align-items: center;
@@ -3314,8 +3319,9 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   background: var(--ud-chrome-icon-bg-hover);
 }
 
+/* Ocupa lo que necesitan las pestañas: el "+" queda pegado a la última, como en Chrome. */
 .loose-nav-tabs-strip {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: row;
@@ -3479,6 +3485,53 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   color: #8d8d9c;
 }
 
+.loose-nav-tab.is-composing {
+  padding-left: 4px;
+}
+
+.loose-nav-profile-chip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: hsl(var(--loose-nav-profile-hue, 220) 55% 45%);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-profile-chip.has-avatar {
+  background-color: transparent;
+  background-size: cover;
+  background-position: center;
+}
+
+.loose-nav-profile-chip:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 0 2px hsl(var(--loose-nav-profile-hue, 220) 55% 45% / 0.35);
+}
+
+.loose-nav-tab.has-profile::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: hsl(var(--loose-nav-profile-hue, 220) 60% 55%);
+  pointer-events: none;
+}
+
 .loose-nav-tab-close {
   flex-shrink: 0;
   display: flex;
@@ -3523,6 +3576,105 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
 
 .loose-nav-surface.hidden {
   display: none !important;
+}
+
+/* Riel de cuentas a la izquierda de la página (el BrowserView arranca después).
+   Mide lo mismo que margen + globo + espacio + línea violeta de la franja de arriba. */
+:root {
+  --loose-nav-rail-w: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) + 2px);
+}
+
+.loose-nav-accounts {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: var(--loose-nav-rail-w);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  overflow-y: auto;
+  background: var(--ud-chrome-canvas, #16161c);
+  border-right: 1px solid var(--ud-chrome-icon-active-border, rgba(255, 255, 255, 0.08));
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-accounts.hidden {
+  display: none !important;
+}
+
+.loose-nav-account {
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 120ms ease, box-shadow 120ms ease;
+}
+
+.loose-nav-account:hover {
+  opacity: 1;
+}
+
+.loose-nav-account.is-active {
+  opacity: 1;
+  box-shadow: 0 0 0 2px var(--ud-chrome-canvas, #16161c), 0 0 0 4px #8b5cf6;
+}
+
+.loose-nav-account.is-busy {
+  opacity: 0.45;
+  cursor: progress;
+}
+
+.loose-nav-account img,
+.loose-nav-account-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+.loose-nav-account-letter {
+  background: hsl(var(--loose-nav-profile-hue, 220) 55% 45%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.loose-nav-account-count {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  border: 2px solid var(--ud-chrome-canvas, #16161c);
+  background: #8b5cf6;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.loose-nav-accounts-sep {
+  flex-shrink: 0;
+  width: 20px;
+  height: 1px;
+  background: var(--ud-chrome-icon-active-border, rgba(255, 255, 255, 0.12));
 }
 
 /* Navegación suelta: el BrowserView tapa el HTML, así que el menú visible

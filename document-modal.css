@@ -23,6 +23,13 @@
   pointer-events: auto;
 }
 
+.doc-modal-overlay.is-open.is-away {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: none;
+}
+
 .doc-modal-card {
   position: relative;
   z-index: 1;
@@ -113,6 +120,11 @@
   background: rgba(255, 255, 255, 0.06);
   color: #f4f4f8;
   outline: none;
+}
+
+.doc-modal-export:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 .doc-modal-export:hover,
@@ -283,12 +295,43 @@
   cursor: text;
 }
 
-.doc-editor .ProseMirror img {
+.doc-editor .ProseMirror img,
+.doc-editor [data-resize-container] img {
   display: block;
   max-width: 100%;
   height: auto;
   margin: 0.8em 0;
   border-radius: 10px;
+}
+
+.doc-editor [data-resize-container] {
+  max-width: 100%;
+  margin: 0.8em 0;
+}
+
+.doc-editor [data-resize-container] img {
+  margin: 0;
+}
+
+.doc-editor [data-resize-handle] {
+  width: 12px;
+  height: 12px;
+  margin: -6px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 2px solid #7c3aed;
+  border-radius: 3px;
+  z-index: 3;
+}
+
+.doc-editor [data-resize-handle='top-left'],
+.doc-editor [data-resize-handle='bottom-right'] {
+  cursor: nwse-resize;
+}
+
+.doc-editor [data-resize-handle='top-right'],
+.doc-editor [data-resize-handle='bottom-left'] {
+  cursor: nesw-resize;
 }
 
 .doc-editor .ProseMirror .ProseMirror-selectednode {

@@ -126,7 +126,7 @@ function isChromeRunning() {
   }
 }
 
-/** Lee `Local State` y devuelve [{ directory, name, userName }]. */
+/** Lee `Local State` y devuelve [{ directory, name, userName, picturePath }]. */
 function listChromeProfiles() {
   const userDataDir = defaultChromeUserDataDir();
   if (!userDataDir) return [];
@@ -138,10 +138,16 @@ function listChromeProfiles() {
     return Object.entries(cache)
       .map(([directory, info]) => {
         const i = info && typeof info === 'object' ? info : {};
+        const pictureFile =
+          typeof i.gaia_picture_file_name === 'string' && i.gaia_picture_file_name
+            ? i.gaia_picture_file_name
+            : 'Google Profile Picture.png';
+        const picturePath = path.join(userDataDir, directory, pictureFile);
         return {
           directory,
           name: typeof i.name === 'string' && i.name ? i.name : directory,
           userName: typeof i.user_name === 'string' ? i.user_name : '',
+          picturePath: fs.existsSync(picturePath) ? picturePath : '',
         };
       })
       .sort((a, b) => {

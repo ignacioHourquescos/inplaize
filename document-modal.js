@@ -47,10 +47,6 @@
   noteEl.className = 'doc-modal-note';
   noteEl.hidden = true;
 
-  const statusWrap = document.createElement('div');
-  statusWrap.className = 'doc-modal-status-wrap';
-  statusWrap.append(statusEl, retryBtn, noteEl);
-
   const exportBtn = document.createElement('button');
   exportBtn.type = 'button';
   exportBtn.className = 'doc-modal-export';
@@ -59,10 +55,21 @@
   exportBtn.setAttribute('data-tooltip', 'Copia este documento en markdown para pegarlo en un agente');
   exportBtn.setAttribute('data-tooltip-placement', 'bottom');
 
+  const pdfBtn = document.createElement('button');
+  pdfBtn.type = 'button';
+  pdfBtn.className = 'doc-modal-export';
+  pdfBtn.textContent = 'Exportar en PDF';
+  pdfBtn.setAttribute('aria-label', 'Exportar en PDF');
+  pdfBtn.setAttribute('data-tooltip', 'Guarda este documento como PDF, con las imágenes');
+  pdfBtn.setAttribute('data-tooltip-placement', 'bottom');
+
+  const statusWrap = document.createElement('div');
+  statusWrap.className = 'doc-modal-status-wrap';
+  statusWrap.append(exportBtn, pdfBtn, statusEl, retryBtn, noteEl);
+
   const actions = document.createElement('div');
   actions.className = 'doc-modal-actions';
-  actions.append(closeBtn, exportBtn);
-
+  actions.append(closeBtn);
   bar.append(actions, statusWrap);
 
   const scrollEl = document.createElement('div');
@@ -121,6 +128,7 @@
   let closing = false;
   let pickToken = 0;
   let exporting = false;
+  let exportingPdf = false;
 
   function emptyContent() {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -332,6 +340,36 @@
     }
   }
 
+  async function exportPdf() {
+    if (exportingPdf) return;
+    const md = window.InplaizeDocumentMarkdown;
+    const desk = window.usualDesk;
+    if (!md || typeof md.documentToHtml !== 'function' || !desk || typeof desk.exportDocumentPdf !== 'function') {
+      notify('No se pudo exportar el PDF.');
+      return;
+    }
+    exportingPdf = true;
+    pdfBtn.disabled = true;
+    pdfBtn.textContent = 'Generando PDF...';
+    try {
+      const title = readField(titleEl, TITLE_MAX);
+      const html = md.documentToHtml({
+        title,
+        description: readField(descriptionEl, DESCRIPTION_MAX),
+        content: editorApi ? editorApi.getJSON() : contentFallback,
+      });
+      const result = await desk.exportDocumentPdf({ title: title.trim(), html });
+      if (result && result.ok) notify('PDF guardado.', 'info');
+      else if (!(result && result.canceled)) notify('No se pudo exportar el PDF.');
+    } catch {
+      notify('No se pudo exportar el PDF.');
+    } finally {
+      exportingPdf = false;
+      pdfBtn.disabled = false;
+      pdfBtn.textContent = 'Exportar en PDF';
+    }
+  }
+
   function applyNow() {
     if (!hooks || !currentId) return false;
     const content = editorApi ? editorApi.getJSON() : contentFallback;
@@ -436,6 +474,25 @@
     }
   }
 
+  function syncModalPresence(open) {
+    const api = window.usualDesk;
+    if (api && typeof api.setDocModalOpen === 'function') api.setDocModalOpen(open === true);
+  }
+
+  function setModalAway(away) {
+    const on = away === true && overlay.classList.contains('is-open');
+    overlay.classList.toggle('is-away', on);
+    document.documentElement.classList.toggle('doc-modal-away', on);
+    if (typeof window.__dockSchedulePointerPassthrough === 'function') {
+      window.__dockSchedulePointerPassthrough();
+    }
+  }
+
+  function sidebarIsOpen() {
+    const sidebar = document.getElementById('sidebar');
+    return !!(sidebar && sidebar.classList.contains('open'));
+  }
+
   function show(block) {
     generation += 1;
     clearTimeout(hideTimer);
@@ -458,6 +515,8 @@
     overlay.setAttribute('aria-hidden', 'false');
     overlay.inert = false;
     document.documentElement.classList.add('doc-modal-open');
+    setModalAway(false);
+    syncModalPresence(true);
     document.dispatchEvent(new CustomEvent('inplaize-doc-modal'));
     focusInitial(block);
   }
@@ -475,6 +534,8 @@
     overlay.setAttribute('aria-hidden', 'true');
     overlay.inert = true;
     document.documentElement.classList.remove('doc-modal-open');
+    setModalAway(false);
+    syncModalPresence(false);
     document.dispatchEvent(new CustomEvent('inplaize-doc-modal'));
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => {
@@ -634,6 +695,7 @@
 
   closeBtn.addEventListener('click', () => { requestClose(); });
   exportBtn.addEventListener('click', () => { exportMarkdown(); });
+  pdfBtn.addEventListener('click', () => { exportPdf(); });
   retryBtn.addEventListener('click', () => { flush(); });
   overlay.addEventListener('pointerdown', (event) => {
     if (event.target !== overlay) return;
@@ -654,10 +716,29 @@
     focusEditor('end');
   });
 
+  window.addEventListener('blur', () => {
+    if (!overlay.classList.contains('is-open')) return;
+    setModalAway(true);
+  });
+  window.addEventListener('focus', () => {
+    if (!overlay.classList.contains('is-open')) return;
+    window.setTimeout(() => {
+      if (!overlay.classList.contains('is-open') || !document.hasFocus() || !sidebarIsOpen()) return;
+      setModalAway(false);
+    }, 60);
+  });
+  if (window.usualDesk && typeof window.usualDesk.onSidebarState === 'function') {
+    window.usualDesk.onSidebarState((expanded) => {
+      if (!overlay.classList.contains('is-open')) return;
+      setModalAway(expanded !== true);
+    });
+  }
+
   window.InplaizeDocumentModal = {
     bind(api) { hooks = api; },
     open,
     isOpen() { return overlay.classList.contains('is-open'); },
     flush,
+    compressImage,
   };
 })();

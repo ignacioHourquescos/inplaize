@@ -47,11 +47,12 @@ const {
   refreshWebNotificationPatches,
   closeAllDetachedWebWindows,
   focusLastWebWindowFromHotkey,
-  anyWebWindowFocused,
   minimizeAllWebWindows,
   closeWebWindowByMapKey,
   markHomeAsLastFocusedSurface,
   lastFocusedSurfaceIsHome,
+  pinWebSurface,
+  focusedWebMapKey,
 } = require('./open-shortcut');
 const { webMapKey } = require('./web-map-key');
 const focusMode = require('./focus-mode');
@@ -208,6 +209,10 @@ const IPC_CHANNELS = [
 
   'loose-nav-set-viewport-bounds',
 
+  'loose-nav-pick-profile',
+
+  'loose-nav-use-account',
+
   'focus-mode-toggle-member',
 
   'focus-mode-exit',
@@ -231,6 +236,8 @@ const IPC_CHANNELS = [
   'save-todos',
 
   'hold-dock-blur',
+
+  'export-document-pdf',
 
   'gesture-coach-close',
 
@@ -306,6 +313,7 @@ function registerIpcHandlers(state) {
   function expandDockSidebar() {
     const dock = state.mainWindow;
     if (!dock || dock.isDestroyed()) return;
+    state.reopenHomeOnFocus = false;
     // El foco viene de la ventana web: un blur espurio cerraría el panel al toque.
     state.dockBlurIgnoreUntil = Date.now() + 500;
     if (state.isExpanded) {
@@ -323,6 +331,8 @@ function registerIpcHandlers(state) {
     dock.webContents.send('sidebar-state', true);
     raiseAlwaysOnTopWindow(dock);
   }
+
+  state.expandDock = expandDockSidebar;
 
   function collapseDockSidebar() {
     state.isExpanded = false;
@@ -602,9 +612,11 @@ function registerIpcHandlers(state) {
    * Atajo global (Ctrl+Alt+D o el que haya elegido).
    * La home cuenta como una ventana: si está al frente, se oculta igual que el mail.
    * Si no hay nada de inplaize al frente, vuelve la última superficie (home o ventana web).
+   * `front` es la foto tomada al pulsar, antes de que el foco se mueva.
    * Sin ventanas, abre o cierra el panel.
+   * @param {{ kind: 'web', mapKey: string } | { kind: 'home' } | null} [front]
    */
-  function raiseAppFromGlobalHotkey() {
+  function raiseAppFromGlobalHotkey(front) {
     // Durante el onboarding el atajo no abre ni esconde inplaize: si no, el
     // panel se va y no se puede seguir el tour. En el paso del atajo solo
     // avisamos para contar la prueba.
@@ -652,19 +664,28 @@ function registerIpcHandlers(state) {
       const dockWin = state.mainWindow;
       if (!dockWin || dockWin.isDestroyed()) return;
 
-      const webFocused = anyWebWindowFocused();
+      const rememberedWebKey = front && front.kind === 'web' && typeof front.mapKey === 'string' ? front.mapKey : '';
+      const webKey = rememberedWebKey || focusedWebMapKey() || '';
       const homeShowing = state.isExpanded === true;
-      if (webFocused || homeShowing) {
+      const homeInFront = !webKey && (homeShowing || (front && front.kind === 'home'));
+      if (webKey || homeInFront) {
+        // Se guarda la ventana en la que el usuario está parado, no la que reciba el foco al ocultar.
+        if (webKey) pinWebSurface(webKey, { holdMs: 700 });
+        else markHomeAsLastFocusedSurface({ holdMs: 700 });
+        state.reopenHomeOnFocus = false;
+        state.suppressHomeReopenUntil = Date.now() + 700;
         minimizeAllWebWindows();
         if (homeShowing) collapseDockSidebar();
-        if (homeShowing && !webFocused) markHomeAsLastFocusedSurface({ holdMs: 500 });
       } else if (lastFocusedSurfaceIsHome()) {
+        state.reopenHomeOnFocus = false;
         expandDockSidebar();
         revealed = true;
       } else {
+        state.reopenHomeOnFocus = false;
+        state.suppressHomeReopenUntil = Date.now() + 700;
+        if (state.isExpanded) collapseDockSidebar();
         const focusedWeb = focusLastWebWindowFromHotkey();
         if (focusedWeb) {
-          if (state.isExpanded) collapseDockSidebar();
           revealed = true;
         } else {
           state.isExpanded = !state.isExpanded;
@@ -1409,12 +1430,82 @@ function registerIpcHandlers(state) {
     return saved;
   });
 
+  ipcMain.removeAllListeners('doc-modal-open');
+  ipcMain.on('doc-modal-open', (event, open) => {
+    const dock = state.mainWindow;
+    if (!dock || dock.isDestroyed() || event.sender !== dock.webContents) return;
+    state.docModalOpen = open === true;
+    try {
+      if (state.docModalOpen) dock.setAlwaysOnTop(false);
+      else if (state.isExpanded && dock.isFocused()) raiseAlwaysOnTopWindow(dock);
+    } catch {
+      /* noop */
+    }
+  });
+
   ipcMain.handle('get-todos', () => loadTodos());
 
   ipcMain.handle('save-todos', (event, payload) => {
     const saved = saveTodos(payload);
     broadcastTodosChanged(event.sender);
     return saved;
+  });
+
+  ipcMain.handle('export-document-pdf', async (event, payload) => {
+    const body = payload && typeof payload === 'object' ? payload : {};
+    const html = typeof body.html === 'string' ? body.html : '';
+    if (!html || html.length > 80 * 1024 * 1024) return { ok: false, error: 'EMPTY' };
+    const baseName = String(body.title || '')
+      .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120) || 'Documento';
+
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    // El diálogo le quita el foco al dock: sin esto el panel se cierra con el modal abierto.
+    state.dockBlurIgnoreUntil = Date.now() + 120000;
+    let target = '';
+    try {
+      const { canceled, filePath } = await dialog.showSaveDialog(parent || undefined, {
+        title: 'Exportar como PDF',
+        defaultPath: path.join(app.getPath('documents'), `${baseName}.pdf`),
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (canceled || !filePath) return { ok: false, canceled: true };
+      target = filePath;
+    } finally {
+      state.dockBlurIgnoreUntil = Date.now() + 500;
+    }
+
+    const tmpHtml = path.join(app.getPath('temp'), `inplaize-doc-${process.pid}-${Date.now()}.html`);
+    let printer = null;
+    try {
+      fs.writeFileSync(tmpHtml, html, 'utf8');
+      printer = new BrowserWindow({
+        show: false,
+        width: 900,
+        height: 1200,
+        webPreferences: {
+          javascript: false,
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+        },
+      });
+      await printer.loadFile(tmpHtml);
+      const pdf = await printer.webContents.printToPDF({
+        pageSize: 'A4',
+        printBackground: true,
+        preferCSSPageSize: true,
+      });
+      fs.writeFileSync(target, pdf);
+      return { ok: true, path: target };
+    } catch (err) {
+      return { ok: false, error: String((err && err.message) || err) };
+    } finally {
+      if (printer && !printer.isDestroyed()) printer.destroy();
+      fs.rm(tmpHtml, { force: true }, () => {});
+    }
   });
 
   ipcMain.handle('hold-dock-blur', (_event, ms) => {

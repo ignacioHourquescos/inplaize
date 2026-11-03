@@ -47,7 +47,7 @@ function createDockWindow(display, state) {
     alwaysOnTop: true,
     resizable: false,
     hasShadow: false,
-    skipTaskbar: true,
+    skipTaskbar: false,
     webPreferences: {
       preload: path.join(root, 'preload.js'),
       contextIsolation: true,
@@ -62,7 +62,9 @@ function createDockWindow(display, state) {
   });
 
   brandWindow(win);
-  win.setSkipTaskbar(true);
+  // La home entra en la barra y en Alt+Tab. Si no, al volver Windows
+  // activa otra ventana de inplaize.
+  win.setSkipTaskbar(false);
 
   if (process.platform === 'win32') {
     try {
@@ -138,9 +140,43 @@ function createDockWindow(display, state) {
     blurCollapseTimer = null;
   }
 
+  function restoreDockLayer() {
+    if (!win || win.isDestroyed() || !state.isExpanded || state.docModalOpen) return;
+    try {
+      if (process.platform === 'win32') win.setAlwaysOnTop(true, 'screen-saver');
+      else win.setAlwaysOnTop(true);
+    } catch {
+      try {
+        win.setAlwaysOnTop(true);
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
   function onDockFocus() {
     cancelBlurCollapse();
+    if (state.reopenHomeOnFocus && Date.now() < (state.reopenHomeAfter || 0)) return;
+    const reopen = state.reopenHomeOnFocus === true;
+    state.reopenHomeOnFocus = false;
+    if (reopen && !state.isExpanded && typeof state.expandDock === 'function') {
+      // Al minimizar el mail el dock recibe el foco. Eso no es volver a la home.
+      let frozenWeb = false;
+      try {
+        const surfaces = require('./open-shortcut');
+        frozenWeb = surfaces.surfaceFocusIsFrozen() && !surfaces.lastFocusedSurfaceIsHome();
+      } catch {
+        frozenWeb = false;
+      }
+      if (frozenWeb) {
+        state.reopenHomeOnFocus = false;
+      } else {
+        state.expandDock();
+        return;
+      }
+    }
     rememberHomeIfShowing();
+    restoreDockLayer();
   }
 
   win.on('focus', onDockFocus);
@@ -151,6 +187,15 @@ function createDockWindow(display, state) {
   }
 
   win.on('blur', () => {
+    // La ventana ocupa toda la pantalla y es transparente. Con always-on-top,
+    // el modal de un documento queda pintado encima de las otras apps.
+    if (state.isExpanded || state.docModalOpen) {
+      try {
+        win.setAlwaysOnTop(false);
+      } catch {
+        /* noop */
+      }
+    }
     // Durante el drag nativo de un archivo, soltar sobre WhatsApp/mail enfoca
     // esa ventana. Si cerramos el panel acá, el HWND fullscreen se reacomoda
     // en medio de DoDragDrop y el drop se pierde.
@@ -174,6 +219,13 @@ function createDockWindow(display, state) {
       if (state.gestureCoachOpen) return;
       if (state.dockBlurIgnoreUntil && Date.now() < state.dockBlurIgnoreUntil) return;
       if (dockSurfaceHasFocus(win)) return;
+      const suppressReopen = state.suppressHomeReopenUntil && Date.now() < state.suppressHomeReopenUntil;
+      if (suppressReopen) {
+        state.reopenHomeOnFocus = false;
+      } else {
+        state.reopenHomeOnFocus = true;
+        state.reopenHomeAfter = Date.now() + 280;
+      }
       state.isExpanded = false;
       applyDockWindowBounds(win, false);
       try {

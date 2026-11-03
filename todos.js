@@ -3,8 +3,9 @@
 /**
  * Página del icono de inplaize.
  * Renglones (texto, checkbox, viñeta, documento), columnas y arrastre.
- * Arrastrá un renglón desde cualquier parte para moverlo. En el espacio vacío,
- * el arrastre selecciona varios; Shift+clic también. Se sueltan juntos en otro lugar,
+ * Cada renglón se arrastra desde la manija de seis puntos que aparece a su izquierda;
+ * un clic en la manija abre sus opciones. En el espacio vacío, el arrastre
+ * selecciona varios; Shift+clic también. Se sueltan juntos en otro lugar,
  * justo antes de un documento, o encima de él para meterlos en esa página.
  * Enter en un checkbox o una viñeta abre otro igual. En uno vacío, pasa a texto.
  * "/" elige el tipo. Tab sangra.
@@ -34,6 +35,7 @@
   const state = {
     title: 'Tareas',
     columns: [],
+    archive: [],
   };
 
   let saveTimer = null;
@@ -52,6 +54,7 @@
   let selectionAnchorId = null;
   let blockGesture = null;
   let swallowClick = false;
+  const openArchiveIds = new Set();
 
   const layerParent = document.getElementById('sidebar') || document.body;
   const dropLine = document.createElement('div');
@@ -60,6 +63,25 @@
   const marqueeEl = document.createElement('div');
   marqueeEl.className = 'notion-marquee';
   layerParent.appendChild(marqueeEl);
+  const ghostEl = document.createElement('div');
+  ghostEl.className = 'notion-drag-ghost';
+  layerParent.appendChild(ghostEl);
+
+  const trashBtn = document.createElement('button');
+  trashBtn.type = 'button';
+  trashBtn.className = 'notion-trash';
+  trashBtn.setAttribute('data-mouse-hit', '');
+  trashBtn.setAttribute('aria-label', 'Archivo');
+  trashBtn.dataset.tooltip = 'Arrastrá algo acá para archivarlo';
+  trashBtn.dataset.tooltipPlacement = 'top';
+  trashBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 7l.8 12.2A1.5 1.5 0 0 0 9.3 20.5h5.4a1.5 1.5 0 0 0 1.5-1.3L17 7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="notion-trash-count" hidden></span>';
+  const archiveEl = document.createElement('div');
+  archiveEl.className = 'notion-archive';
+  archiveEl.hidden = true;
+  archiveEl.setAttribute('data-mouse-hit', '');
+  archiveEl.setAttribute('role', 'dialog');
+  archiveEl.setAttribute('aria-label', 'Archivo');
+  homeEl.append(trashBtn, archiveEl);
 
   function getApi() {
     return (typeof window !== 'undefined' && window.usualDesk) || null;
@@ -192,6 +214,17 @@
                 },
               };
             }
+            if (block.type === 'image') {
+              return {
+                id: block.id,
+                type: 'image',
+                text: '',
+                done: false,
+                indent: 0,
+                src: block.src || '',
+                width: block.width || 0,
+              };
+            }
             return {
               id: block.id,
               type: block.type,
@@ -203,6 +236,23 @@
         };
         if (column.width >= MIN_COL_WIDTH) entry.width = clampWidth(column.width);
         return entry;
+      }),
+      archive: state.archive.map((block) => {
+        const copy = {
+          id: block.id,
+          type: block.type,
+          text: block.text || '',
+          done: block.done === true,
+          indent: block.indent || 0,
+          archivedAt: block.archivedAt,
+        };
+        if (block.type === 'document' && block.doc) copy.doc = block.doc;
+        if (block.type === 'image') {
+          copy.src = block.src || '';
+          copy.text = '';
+          if (block.width) copy.width = block.width;
+        }
+        return copy;
       }),
     };
   }
@@ -665,7 +715,9 @@
       { type: 'text', label: 'Texto', ico: 'T' },
       { type: 'document', label: 'Documento', ico: documentIcon() },
     ];
-    for (const item of types) {
+    // Pasar un documento o una imagen a renglón perdería su contenido.
+    const convertible = block.type !== 'document' && block.type !== 'image';
+    for (const item of convertible ? types : []) {
       menu.appendChild(menuButton(item.ico, item.label, () => {
         const found = findBlock(block.id);
         if (!found) return;
@@ -693,14 +745,14 @@
     }
 
     if (mode !== 'slash') {
-      menu.appendChild(sep());
+      if (convertible) menu.appendChild(sep());
+      const host = state.columns.find((column) => column.blocks.some((b) => b.id === block.id));
       if (state.columns.length < MAX_COLUMNS) {
         menu.appendChild(menuButton('+', 'Agregar columna', () => {
           closeMenu();
-          addColumn();
+          addColumn(host && host.id);
         }));
       }
-      const host = state.columns.find((column) => column.blocks.some((b) => b.id === block.id));
       if (state.columns.length > 1 && host) {
         menu.appendChild(menuButton('–', 'Quitar columna', () => {
           closeMenu();
@@ -789,6 +841,7 @@
   }
 
   function blockHasText(block) {
+    if (block && block.type === 'image') return !!(block.src);
     if (block && block.type === 'document') {
       if (((block.doc && block.doc.title) || block.text || '').trim()) return true;
       if (((block.doc && block.doc.description) || '').trim()) return true;
@@ -862,10 +915,12 @@
     return block;
   }
 
-  function addColumn() {
+  function addColumn(afterColumnId) {
     if (state.columns.length >= MAX_COLUMNS) return;
-    const column = { id: makeId('c'), blocks: [emptyBlock('todo')] };
-    state.columns.push(column);
+    const column = { id: makeId('c'), blocks: [emptyBlock('text')] };
+    const after = state.columns.findIndex((item) => item.id === afterColumnId);
+    if (after >= 0) state.columns.splice(after + 1, 0, column);
+    else state.columns.push(column);
     render({ id: column.blocks[0].id, offset: 0 });
     scheduleSave();
   }
@@ -946,6 +1001,43 @@
     return true;
   }
 
+  function moveBlocksToNewColumn(ids, besideColumnId, side) {
+    const idSet = new Set(ids);
+    const beside = state.columns.find((column) => column.id === besideColumnId);
+    if (!beside || !idSet.size) return false;
+    if (state.columns.length >= MAX_COLUMNS) {
+      const freesOne = state.columns.some((column) => column.blocks.length && column.blocks.every((block) => idSet.has(block.id)));
+      if (!freesOne) return false;
+    }
+    const moving = blocksInOrder(idSet);
+    if (!moving.length) return false;
+    const stays = beside.blocks.filter((block) => !idSet.has(block.id));
+    const onlyFromBeside = moving.every((block) => beside.blocks.includes(block));
+    if (onlyFromBeside && stays.every((block) => !blockHasText(block))) return false;
+    const besideIndex = state.columns.indexOf(beside);
+    state.columns.forEach((column) => {
+      column.blocks = column.blocks.filter((block) => !idSet.has(block.id));
+    });
+    state.columns.slice().forEach((column) => {
+      if (column.blocks.length) return;
+      if (state.columns.length < 2) {
+        column.blocks = [emptyBlock('text')];
+        return;
+      }
+      const index = state.columns.indexOf(column);
+      if (index >= 0) state.columns.splice(index, 1);
+    });
+    let index = state.columns.indexOf(beside);
+    if (index < 0) index = Math.max(0, Math.min(besideIndex, state.columns.length));
+    else if (side === 'after') index += 1;
+    state.columns.splice(index, 0, {
+      id: makeId('c'),
+      width: DEFAULT_COL_WIDTH,
+      blocks: moving,
+    });
+    return true;
+  }
+
   function plainBlockText(value) {
     return String(value || '')
       .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
@@ -998,6 +1090,11 @@
     if (block.type === 'bullet') {
       if (!plainBlockText(block.text).trim()) return [];
       return [{ type: 'listItem', content: [paragraphNode(block.text)] }];
+    }
+    if (block.type === 'image' && block.src) {
+      const attrs = { src: block.src, alt: '' };
+      if (block.width >= 48) attrs.width = block.width;
+      return [{ type: 'image', attrs }];
     }
     if (!plainBlockText(block.text).trim()) return [];
     return [paragraphNode(block.text)];
@@ -1085,11 +1182,45 @@
 
   function hideDrop() {
     dropTarget = null;
-    dropLine.classList.remove('is-on');
+    dropLine.classList.remove('is-on', 'is-column');
+    dropLine.style.height = '2px';
+    trashBtn.classList.remove('is-hot');
     clearDropInto();
   }
 
+  function overTrash(x, y) {
+    const rect = trashBtn.getBoundingClientRect();
+    const pad = 16;
+    return x >= rect.left - pad && x <= rect.right + pad && y >= rect.top - pad && y <= rect.bottom + pad;
+  }
+
+  function sideDrop(x, y) {
+    let best = null;
+    let bestDist = 36;
+    rootEl.querySelectorAll('.notion-column').forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      if (y < rect.top || y > rect.bottom) return;
+      const zone = Math.min(42, Math.max(22, rect.width * 0.18));
+      const leftDist = Math.abs(x - rect.left);
+      const rightDist = Math.abs(x - rect.right);
+      if (x <= rect.left + zone && leftDist < bestDist) {
+        bestDist = leftDist;
+        best = { kind: 'new-column', columnId: el.dataset.columnId, side: 'before', top: rect.top, left: rect.left, height: rect.height };
+      }
+      if (x >= rect.right - zone && rightDist < bestDist) {
+        bestDist = rightDist;
+        best = { kind: 'new-column', columnId: el.dataset.columnId, side: 'after', top: rect.top, left: rect.right, height: rect.height };
+      }
+    });
+    return best;
+  }
+
   function hitTest(x, y) {
+    if (press && press.dragging && overTrash(x, y)) return { kind: 'archive' };
+    if (press && press.dragging) {
+      const beside = sideDrop(x, y);
+      if (beside) return beside;
+    }
     const columns = [...rootEl.querySelectorAll('.notion-column')];
     if (!columns.length) return null;
     let columnEl = null;
@@ -1148,15 +1279,37 @@
     return Math.max(32, Math.round(last.height) + 2);
   }
 
-  function placeDropLine(top, left, width) {
+  function placeDropLine(target) {
     const origin = layerParent.getBoundingClientRect();
-    dropLine.style.top = `${top - origin.top}px`;
-    dropLine.style.left = `${left - origin.left}px`;
-    dropLine.style.width = `${Math.max(40, width)}px`;
+    if (target.kind === 'new-column') {
+      dropLine.classList.add('is-column');
+      dropLine.style.top = `${target.top - origin.top}px`;
+      dropLine.style.left = `${target.left - origin.left - 1}px`;
+      dropLine.style.width = '2px';
+      dropLine.style.height = `${Math.max(48, target.height)}px`;
+      return;
+    }
+    dropLine.classList.remove('is-column');
+    dropLine.style.height = '2px';
+    dropLine.style.top = `${target.top - origin.top - 1}px`;
+    dropLine.style.left = `${target.left - origin.left}px`;
+    dropLine.style.width = `${Math.max(40, target.width)}px`;
   }
 
   function showDrop(target) {
     clearDropInto();
+    trashBtn.classList.toggle('is-hot', !!(target && target.kind === 'archive'));
+    if (target && target.kind === 'archive') {
+      dropTarget = target;
+      dropLine.classList.remove('is-on');
+      return;
+    }
+    if (target && target.kind === 'new-column') {
+      dropTarget = target;
+      dropLine.classList.add('is-on');
+      placeDropLine(target);
+      return;
+    }
     if (target && target.kind === 'into-document') {
       dropTarget = target;
       dropLine.classList.remove('is-on');
@@ -1178,7 +1331,7 @@
       return;
     }
     dropLine.classList.add('is-on');
-    placeDropLine(target.top - 1, target.left, target.width);
+    placeDropLine(target);
   }
 
   function autoScroll(y) {
@@ -1201,10 +1354,32 @@
     if (press && press.dragging) scrollPump = requestAnimationFrame(pumpDragScroll);
   }
 
+  function showGhost(ids) {
+    const blocks = blocksInOrder(new Set(ids));
+    if (!blocks.length) return;
+    const first = blocks[0];
+    let label = first.type === 'image' ? 'Imagen' : (first.text || '').trim();
+    if (!label) label = first.type === 'document' ? 'Documento sin título' : 'Renglón vacío';
+    ghostEl.textContent = blocks.length > 1 ? `${label}  +${blocks.length - 1}` : label;
+    ghostEl.classList.add('is-on');
+  }
+
+  function placeGhost(x, y) {
+    if (!ghostEl.classList.contains('is-on')) return;
+    const origin = layerParent.getBoundingClientRect();
+    ghostEl.style.left = `${x - origin.left + 14}px`;
+    ghostEl.style.top = `${y - origin.top + 10}px`;
+  }
+
+  function hideGhost() {
+    ghostEl.classList.remove('is-on');
+  }
+
   function trackDragPointer(x, y) {
     if (!press) return;
     press.lastX = x;
     press.lastY = y;
+    placeGhost(x, y);
     autoScroll(y);
     showDrop(hitTest(x, y));
     if (!scrollPump) scrollPump = requestAnimationFrame(pumpDragScroll);
@@ -1224,9 +1399,34 @@
     const moved = press && press.dragging;
     press = null;
     hideDrop();
+    hideGhost();
     document.body.classList.remove('notion-dragging');
     if (!moved || !ids.length || !target) {
       markDragging(ids, false);
+      return;
+    }
+    if (target.kind === 'archive') {
+      const archived = archiveBlocks(ids);
+      if (!archived) {
+        markDragging(ids, false);
+        return;
+      }
+      selectedIds = new Set();
+      selectionAnchorId = null;
+      render({ skipFocus: true });
+      scheduleSave();
+      return;
+    }
+    if (target.kind === 'new-column') {
+      const created = moveBlocksToNewColumn(ids, target.columnId, target.side);
+      if (!created) {
+        markDragging(ids, false);
+        return;
+      }
+      selectedIds = new Set(ids);
+      selectionAnchorId = ids[0] || null;
+      render({ skipFocus: true, keepSelection: true });
+      scheduleSave();
       return;
     }
     if (target.kind === 'into-document') {
@@ -1394,6 +1594,7 @@
     closeMenu();
     document.body.classList.add('notion-dragging');
     markDragging(ids, true);
+    showGhost(ids);
     try { homeEl.setPointerCapture(e.pointerId); } catch { /* ya capturado */ }
     trackDragPointer(e.clientX, e.clientY);
   }
@@ -1411,6 +1612,11 @@
     if (!blockGesture || blockGesture.pointerId !== e.pointerId) return;
     const dx = e.clientX - blockGesture.x;
     const dy = e.clientY - blockGesture.y;
+    if (blockGesture.mode === 'pending-text') {
+      if (!blockGesture.wasSelected || Math.hypot(dx, dy) <= 6) return;
+      startGroupMove(blockGesture, e);
+      return;
+    }
     if (blockGesture.mode === 'pending-move') {
       if (Math.hypot(dx, dy) <= 6) return;
       startGroupMove(blockGesture, e);
@@ -1454,7 +1660,21 @@
       document.body.classList.remove('notion-selecting');
       return;
     }
+    if (gesture.mode === 'pending-text') {
+      if (gesture.wasSelected) {
+        const id = gesture.blockId;
+        clearBlockSelection();
+        focusBlock(id, null);
+      }
+      return;
+    }
     if (gesture.mode === 'pending-move') {
+      if (gesture.onGrip) {
+        const grip = rootEl.querySelector(`[data-block-id="${CSS.escape(gesture.blockId)}"] .notion-grip`);
+        const found = findBlock(gesture.blockId);
+        if (grip && found) openMenu(grip, found.block, 'block');
+        return;
+      }
       if (gesture.onDoc) {
         armSwallowClick();
         clearBlockSelection();
@@ -1495,6 +1715,7 @@
       const ids = (press && press.blockIds) || [];
       press = null;
       hideDrop();
+      hideGhost();
       markDragging(ids, false);
       document.body.classList.remove('notion-dragging');
     }
@@ -1503,6 +1724,174 @@
   function editingText() {
     const active = document.activeElement;
     return !!(active && active.classList && active.classList.contains('notion-content') && active.isContentEditable);
+  }
+
+  function cloneBlock(block) {
+    return JSON.parse(JSON.stringify(block));
+  }
+
+  function archiveBlocks(ids) {
+    const idSet = new Set(ids);
+    const moving = blocksInOrder(idSet).filter((block) => (
+      block.type === 'document' || block.type === 'image' || blockHasText(block)
+    ));
+    if (!moving.length) return false;
+    const now = new Date().toISOString();
+    moving.slice().reverse().forEach((block) => {
+      const copy = cloneBlock(block);
+      copy.archivedAt = now;
+      state.archive.unshift(copy);
+    });
+    if (state.archive.length > 200) state.archive.length = 200;
+    const doomed = [];
+    state.columns.forEach((column) => {
+      const removedHadText = column.blocks.some((block) => idSet.has(block.id) && blockHasText(block));
+      column.blocks = column.blocks.filter((block) => !idSet.has(block.id));
+      if (columnEmptiedByDelete(column, removedHadText)) doomed.push(column);
+      else if (!column.blocks.length) column.blocks.push(emptyBlock('text'));
+    });
+    doomed.forEach((column) => {
+      if (state.columns.length < 2) {
+        column.blocks = [emptyBlock('text')];
+        return;
+      }
+      const index = state.columns.indexOf(column);
+      if (index >= 0) state.columns.splice(index, 1);
+    });
+    return true;
+  }
+
+  function formatWhen(iso) {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('es-AR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function archiveLabel(block) {
+    if (!block) return 'Nota';
+    if (block.type === 'image') return 'Imagen';
+    if (block.type === 'document') return (block.text || '').trim() || 'Documento sin título';
+    const text = (block.text || '').trim();
+    return text || 'Nota vacía';
+  }
+
+  function paintArchive() {
+    archiveEl.replaceChildren();
+    const title = document.createElement('p');
+    title.className = 'notion-archive-title';
+    title.textContent = 'Archivo';
+    archiveEl.appendChild(title);
+    if (!state.archive.length) {
+      const empty = document.createElement('p');
+      empty.className = 'notion-archive-empty';
+      empty.textContent = 'Nada archivado.';
+      archiveEl.appendChild(empty);
+      return;
+    }
+    state.archive.forEach((block) => {
+      const open = openArchiveIds.has(block.id);
+      const row = document.createElement('div');
+      row.className = 'notion-archive-item' + (open ? ' is-open' : '');
+      const head = document.createElement('div');
+      head.className = 'notion-archive-head';
+      const peek = document.createElement('button');
+      peek.type = 'button';
+      peek.className = 'notion-archive-peek';
+      peek.setAttribute('aria-expanded', open ? 'true' : 'false');
+      const name = document.createElement('span');
+      name.className = 'notion-archive-name';
+      name.textContent = archiveLabel(block);
+      const when = document.createElement('span');
+      when.className = 'notion-archive-when';
+      when.textContent = formatWhen(block.archivedAt);
+      peek.append(name, when);
+      peek.addEventListener('click', () => {
+        if (openArchiveIds.has(block.id)) openArchiveIds.delete(block.id);
+        else openArchiveIds.add(block.id);
+        paintArchive();
+      });
+      const restore = document.createElement('button');
+      restore.type = 'button';
+      restore.className = 'notion-archive-restore';
+      restore.textContent = 'Restaurar';
+      restore.addEventListener('click', () => restoreArchived(block.id));
+      head.append(peek, restore);
+      row.appendChild(head);
+      if (open) row.appendChild(archivePreview(block));
+      archiveEl.appendChild(row);
+    });
+  }
+
+  function archivePreview(block) {
+    const box = document.createElement('div');
+    box.className = 'notion-archive-preview';
+    if (block.type === 'image') {
+      if (block.src) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.draggable = false;
+        img.src = block.src;
+        box.appendChild(img);
+      }
+      return box;
+    }
+    let text = '';
+    if (block.type === 'document') {
+      const toMarkdown = window.InplaizeDocumentMarkdown && window.InplaizeDocumentMarkdown.documentToMarkdown;
+      text = toMarkdown && block.doc ? toMarkdown(block.doc).trim() : '';
+      if (!text) text = 'Documento vacío.';
+    } else if (block.type === 'todo') {
+      text = `${block.done ? '☑' : '☐'} ${block.text || ''}`;
+    } else if (block.type === 'bullet') {
+      text = `• ${block.text || ''}`;
+    } else {
+      text = block.text || 'Nota vacía.';
+    }
+    box.textContent = text;
+    return box;
+  }
+
+  function toggleArchive(force) {
+    const open = typeof force === 'boolean' ? force : archiveEl.hidden;
+    archiveEl.hidden = !open;
+    trashBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) paintArchive();
+  }
+
+  function restoreArchived(id) {
+    const index = state.archive.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const [item] = state.archive.splice(index, 1);
+    openArchiveIds.delete(item.id);
+    delete item.archivedAt;
+    if (findBlock(item.id)) {
+      item.id = makeId('b');
+      if (item.doc) item.doc.id = item.id;
+    }
+    ensureShape();
+    const column = state.columns[0];
+    const onlyEmpty = column.blocks.length === 1 && !blockHasText(column.blocks[0]);
+    if (onlyEmpty) column.blocks = [item];
+    else column.blocks.unshift(item);
+    if (item.type === 'document') ensureDoc(item, column.id);
+    render({ id: item.id, skipFocus: item.type === 'document' || item.type === 'image' });
+    scheduleSave();
+  }
+
+  function syncTrash() {
+    const count = state.archive.length;
+    const badge = trashBtn.querySelector('.notion-trash-count');
+    if (badge) {
+      badge.hidden = count < 1;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    }
+    if (!archiveEl.hidden) paintArchive();
   }
 
   function deleteSelected() {
@@ -1612,10 +2001,11 @@
       scheduleSave();
       return;
     }
-    if (e.key === 'Backspace') {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
       const parts = selectionParts(content);
       if (!parts.collapsed) return;
-      if (parts.atStart && (block.indent || 0) > 0 && !(e.metaKey || e.ctrlKey)) {
+      const forward = e.key === 'Delete';
+      if (!forward && parts.atStart && (block.indent || 0) > 0 && !(e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         block.indent -= 1;
         const row = content.closest('.notion-block');
@@ -1623,23 +2013,34 @@
         scheduleSave();
         return;
       }
-      if (parts.atStart) {
+      if (!block.text && (forward || parts.atStart)) {
+        e.preventDefault();
+        deleteBlock(block.id);
+        return;
+      }
+      if (!forward && parts.atStart) {
         e.preventDefault();
         const found = findBlock(block.id);
         if (!found) return;
         const prev = neighbor(found.column, found.index, -1);
-        if (!prev) {
-          if (!block.text) return;
-          return;
-        }
-        if (!block.text) {
-          deleteBlock(block.id);
-          return;
-        }
+        if (!prev || prev.block.type === 'image') return;
         const joinAt = (prev.block.text || '').length;
         prev.block.text = (prev.block.text || '') + (block.text || '');
         found.column.blocks.splice(found.index, 1);
         render({ id: prev.block.id, offset: joinAt });
+        scheduleSave();
+        return;
+      }
+      if (forward && parts.atEnd) {
+        const found = findBlock(block.id);
+        if (!found) return;
+        const next = neighbor(found.column, found.index, 1);
+        if (!next || next.block.type === 'image' || next.block.type === 'document') return;
+        e.preventDefault();
+        const joinAt = (block.text || '').length;
+        block.text = (block.text || '') + (next.block.text || '');
+        found.column.blocks.splice(next.index, 1);
+        render({ id: block.id, offset: joinAt });
         scheduleSave();
       }
       return;
@@ -1721,7 +2122,80 @@
     else if (menuEl && menuBlockId === block.id) closeMenu();
   }
 
+  function imageFilesFrom(data) {
+    if (!data || !data.files || !data.files.length) return [];
+    return [...data.files].filter((file) => file && /^image\/(?:png|jpe?g|gif|webp)$/i.test(file.type));
+  }
+
+  function bindImageResize(handle, block, img) {
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startW = img.getBoundingClientRect().width || block.width || 240;
+      const onMove = (ev) => {
+        const next = Math.max(64, Math.min(1600, Math.round(startW + ev.clientX - startX)));
+        block.width = next;
+        img.style.width = `${next}px`;
+      };
+      const onUp = () => {
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        scheduleSave(`image:${block.id}`);
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+      try { handle.setPointerCapture(event.pointerId); } catch { /* el puntero sintético no siempre deja capturar */ }
+    });
+  }
+
+  async function insertPastedImages(files, afterBlock) {
+    const compress = window.InplaizeDocumentModal && window.InplaizeDocumentModal.compressImage;
+    if (typeof compress !== 'function') return;
+    let anchor = afterBlock;
+    let replacedEmpty = false;
+    for (const file of files) {
+      if (countBlocks() >= MAX_BLOCKS) break;
+      let result = null;
+      try {
+        result = await compress(file);
+      } catch {
+        result = null;
+      }
+      if (!result || !result.src) continue;
+      const host = findBlock(anchor.id);
+      if (!host) return;
+      if (!replacedEmpty && host.block.type === 'text' && !blockHasText(host.block)) {
+        host.block.type = 'image';
+        host.block.src = result.src;
+        host.block.text = '';
+        host.block.width = 0;
+        anchor = host.block;
+        replacedEmpty = true;
+        continue;
+      }
+      const image = emptyBlock('text');
+      image.type = 'image';
+      image.src = result.src;
+      image.text = '';
+      host.column.blocks.splice(host.index + 1, 0, image);
+      anchor = image;
+      replacedEmpty = true;
+    }
+    render({ id: anchor.id, skipFocus: true });
+    scheduleSave();
+  }
+
   function onPaste(e, block, content) {
+    const imageList = imageFilesFrom(e.clipboardData);
+    if (imageList.length) {
+      e.preventDefault();
+      insertPastedImages(imageList, block);
+      return;
+    }
     e.preventDefault();
     const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
     const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
@@ -1817,10 +2291,23 @@
       columnsEl.appendChild(columnEl);
     });
 
+    if (state.columns.length < MAX_COLUMNS) {
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'notion-col-add';
+      add.setAttribute('aria-label', 'Agregar columna');
+      add.dataset.tooltip = 'Agregar columna';
+      add.dataset.tooltipPlacement = 'bottom';
+      add.textContent = '+';
+      add.addEventListener('click', () => addColumn());
+      columnsEl.appendChild(add);
+    }
+
     sheet.appendChild(columnsEl);
     rootEl.appendChild(sheet);
     applySelectionClasses();
     stretchColumns();
+    syncTrash();
 
     if (focus && focus.id && !focus.skipFocus) {
       const focusId = focus.id;
@@ -1850,7 +2337,7 @@
   }
 
   function columnIsEmpty(column) {
-    return column.blocks.every((item) => !(item.text || '').trim());
+    return column.blocks.every((item) => !blockHasText(item));
   }
 
   /** Primera línea de una columna vacía: invita a escribir, sin tener que hacer clic. */
@@ -1872,12 +2359,38 @@
     applyEmptyHint(content, columnIsEmpty(column));
   }
 
+  function gripButton() {
+    const grip = document.createElement('button');
+    grip.type = 'button';
+    grip.className = 'notion-grip';
+    grip.tabIndex = -1;
+    grip.setAttribute('aria-label', 'Arrastrar para mover, clic para opciones');
+    grip.dataset.tooltip = 'Arrastrá para mover · Clic para opciones';
+    grip.dataset.tooltipPlacement = 'left';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 10 16');
+    svg.setAttribute('aria-hidden', 'true');
+    for (const cy of [3, 8, 13]) {
+      for (const cx of [2.5, 7.5]) {
+        const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        dot.setAttribute('cx', String(cx));
+        dot.setAttribute('cy', String(cy));
+        dot.setAttribute('r', '1.5');
+        dot.setAttribute('fill', 'currentColor');
+        svg.appendChild(dot);
+      }
+    }
+    grip.appendChild(svg);
+    return grip;
+  }
+
   function renderBlock(column, block) {
     const row = document.createElement('div');
     row.className = 'notion-block' + (block.type === 'todo' && block.done ? ' is-done' : '');
     row.dataset.blockId = block.id;
     row.dataset.columnId = column.id;
     row.style.setProperty('--indent', String(block.indent || 0));
+    row.appendChild(gripButton());
 
     if (block.type === 'document') {
       row.classList.add('notion-block-document');
@@ -1906,6 +2419,34 @@
       });
       open.addEventListener('keydown', (event) => onDocKeydown(event, block));
       row.appendChild(open);
+      return row;
+    }
+
+    if (block.type === 'image' && block.src) {
+      row.classList.add('notion-block-image');
+      const frame = document.createElement('div');
+      frame.className = 'notion-image-frame';
+      frame.tabIndex = 0;
+      frame.setAttribute('role', 'img');
+      frame.setAttribute('aria-label', 'Imagen');
+      const img = document.createElement('img');
+      img.className = 'notion-image';
+      img.alt = '';
+      img.draggable = false;
+      img.src = block.src;
+      if (block.width >= 48) img.style.width = `${block.width}px`;
+      const handle = document.createElement('div');
+      handle.className = 'notion-image-resize';
+      handle.title = 'Cambiar tamaño';
+      bindImageResize(handle, block, img);
+      frame.append(img, handle);
+      frame.addEventListener('keydown', (event) => {
+        if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+        event.preventDefault();
+        event.stopPropagation();
+        deleteBlock(block.id);
+      });
+      row.appendChild(frame);
       return row;
     }
 
@@ -1946,8 +2487,17 @@
     return row;
   }
 
+  trashBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleArchive();
+  });
+
   document.addEventListener('pointerdown', (e) => {
     const target = e.target instanceof Node ? e.target : null;
+    if (!archiveEl.hidden && target instanceof Element && !archiveEl.contains(target) && !trashBtn.contains(target)) {
+      toggleArchive(false);
+    }
     if (selectedIds.size && target && !homeEl.contains(target) && !(target instanceof Element && target.closest('.notion-menu'))) {
       clearBlockSelection();
     }
@@ -1974,6 +2524,11 @@
     }
     if (e.key !== 'Escape') return;
     if (document.documentElement.classList.contains('doc-modal-open')) return;
+    if (!archiveEl.hidden) {
+      e.preventDefault();
+      toggleArchive(false);
+      return;
+    }
     if (menuEl) {
       closeMenu();
       return;
@@ -2015,12 +2570,27 @@
     if (e.button !== 0 || blockGesture || (press && press.dragging)) return;
     const origin = eventElement(e);
     if (!origin || !homeEl.contains(origin)) return;
-    if (origin.closest('.notion-col-resize, .notion-col-remove, .notion-menu')) return;
+    if (origin.closest('.notion-col-resize, .notion-col-remove, .notion-col-add, .notion-menu')) return;
 
     const row = origin.closest('.notion-block');
+    if (row && origin.closest('.notion-grip')) {
+      e.preventDefault();
+      blockGesture = {
+        mode: 'pending-move',
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        blockId: row.dataset.blockId,
+        onGrip: true,
+        wasSelected: selectedIds.has(row.dataset.blockId),
+      };
+      return;
+    }
     const onContent = !!origin.closest('.notion-content');
     const onDoc = !!origin.closest('.notion-block-document');
     const onCheck = !!origin.closest('.notion-check');
+
+    if (origin.closest('.notion-trash, .notion-archive, .notion-image-resize')) return;
 
     if (e.shiftKey && row) {
       e.preventDefault();
@@ -2035,7 +2605,18 @@
         fromContent: onContent,
         fromDoc: onDoc,
       };
-      try { homeEl.setPointerCapture(e.pointerId); } catch { /* el puntero sintético no siempre deja capturar */ }
+      return;
+    }
+
+    if (row && onContent && !onDoc && !onCheck) {
+      blockGesture = {
+        mode: 'pending-text',
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        blockId: row.dataset.blockId,
+        wasSelected: selectedIds.has(row.dataset.blockId),
+      };
       return;
     }
 
@@ -2048,12 +2629,11 @@
         x: e.clientX,
         y: e.clientY,
         blockId: row.dataset.blockId,
-        onContent: onContent && !onDoc,
+        onContent: false,
         onDoc,
         onCheck,
         wasSelected,
       };
-      try { homeEl.setPointerCapture(e.pointerId); } catch { /* el puntero sintético no siempre deja capturar */ }
       return;
     }
 
@@ -2067,7 +2647,6 @@
       y: e.clientY,
       blockId: row ? row.dataset.blockId : null,
     };
-    try { homeEl.setPointerCapture(e.pointerId); } catch { /* el puntero sintético no siempre deja capturar */ }
   });
 
   async function loadFromDisk() {
@@ -2081,6 +2660,7 @@
 
     const api = getApi();
     if (!api || typeof api.getTodos !== 'function') {
+      state.archive = [];
       ensureShape();
       render(null);
       seedHistory();
@@ -2091,9 +2671,11 @@
       const payload = await api.getTodos();
       state.title = typeof payload?.title === 'string' ? payload.title : 'Tareas';
       state.columns = Array.isArray(payload?.columns) ? payload.columns : [];
+      state.archive = Array.isArray(payload?.archive) ? payload.archive : [];
     } catch {
       state.title = 'Tareas';
       state.columns = [];
+      state.archive = [];
     }
     ensureShape();
     render(null);

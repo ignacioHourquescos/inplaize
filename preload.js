@@ -90,7 +90,22 @@ contextBridge.exposeInMainWorld('usualDesk', {
   looseNavClose: () => ipcRenderer.invoke('loose-nav-close'),
   looseNavSelectTab: (tabId) => ipcRenderer.invoke('loose-nav-select-tab', tabId),
   looseNavCloseTab: (tabId) => ipcRenderer.invoke('loose-nav-close-tab', tabId),
-  looseNavNewTab: (url) => ipcRenderer.invoke('loose-nav-new-tab', url ? { url } : {}),
+  looseNavNewTab: (url, profile) =>
+    ipcRenderer.invoke('loose-nav-new-tab', {
+      ...(url ? { url } : {}),
+      ...(profile && profile.partition
+        ? { partition: String(profile.partition) }
+        : {}),
+    }),
+  looseNavPickProfile: () => ipcRenderer.invoke('loose-nav-pick-profile'),
+  looseNavUseAccount: (target) =>
+    ipcRenderer.invoke('loose-nav-use-account', {
+      partition: target && target.partition ? String(target.partition) : '',
+      chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
+    }),
+  onLooseNavShortcut: (callback) => {
+    ipcRenderer.on('loose-nav-shortcut', (_event, action) => callback(String(action || '')));
+  },
   looseNavNavigate: (url) => ipcRenderer.invoke('loose-nav-navigate', { url }),
   looseNavBack: () => ipcRenderer.invoke('loose-nav-back'),
   looseNavForward: () => ipcRenderer.invoke('loose-nav-forward'),
@@ -170,6 +185,8 @@ contextBridge.exposeInMainWorld('usualDesk', {
   getTodos: () => ipcRenderer.invoke('get-todos'),
   saveTodos: (payload) => ipcRenderer.invoke('save-todos', payload),
   holdDockBlur: (ms) => ipcRenderer.invoke('hold-dock-blur', ms),
+  setDocModalOpen: (open) => ipcRenderer.send('doc-modal-open', open === true),
+  exportDocumentPdf: (payload) => ipcRenderer.invoke('export-document-pdf', payload),
   onGestureCoachShow: (callback) => {
     ipcRenderer.on('gesture-coach-show', () => callback());
   },

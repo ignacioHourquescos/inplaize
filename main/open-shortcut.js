@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
-const { shell, BrowserWindow, session, app } = require('electron');
+const { shell, BrowserWindow, session, app, webContents } = require('electron');
 const { isProcessRunning, focusWindowByProcess } = require('./process-utils');
 const { partitionFromSessionId, sanitizeSessionId } = require('./session-partition');
 const { webMapKey, normalizeUrlKey } = require('./web-map-key');
@@ -323,7 +323,7 @@ function attachWebWindowTitleBadge(win, shortcutId) {
 /**
  * Web embebido en la ventana shell (BrowserView).
  * @param {Electron.WebContents} webContents
- * @param {{ id?: string, name?: string, url?: string }} shortcut
+ * @param {{ id?: string, name?: string, url?: string, sessionId?: string }} shortcut
  * @param {string} mapKey
  */
 function attachWebShortcutEmbeddedWebContents(webContents, shortcut, mapKey) {
@@ -353,7 +353,7 @@ function attachWebShortcutEmbeddedWebContents(webContents, shortcut, mapKey) {
     setImmediate(() => {
       try {
         require('./loose-nav-window')
-          .openTabFromUrl(url, { background })
+          .openTabFromUrl(url, { background, partition: partitionFromSessionId(shortcut.sessionId) })
           .catch(() => {
             try {
               shell.openExternal(url);
@@ -429,11 +429,95 @@ function setLastFocusedWebMapKey(mapKey) {
 }
 
 /**
- * @param {{ holdMs?: number }} [opts] holdMs bloquea que otra ventana pise la home al ocultar.
+ * La ventana web que tiene el foco ahora, si es de inplaize.
+ * @returns {string | null}
+ */
+function focusedWebMapKey() {
+  let focusedWc = null;
+  try {
+    focusedWc = webContents.getFocusedWebContents();
+  } catch {
+    focusedWc = null;
+  }
+  if (focusedWc && !focusedWc.isDestroyed()) {
+    for (const [mapKey, win] of webWindowsByUrlKey) {
+      if (!win || win.isDestroyed()) continue;
+      try {
+        if (win.webContents === focusedWc) return mapKey;
+      } catch {
+        /* noop */
+      }
+      if (getHostedWebContents(win) === focusedWc) return mapKey;
+    }
+  }
+  let focusedWin = null;
+  try {
+    focusedWin = BrowserWindow.getFocusedWindow();
+  } catch {
+    focusedWin = null;
+  }
+  if (focusedWin && !focusedWin.isDestroyed()) {
+    for (const [mapKey, win] of webWindowsByUrlKey) {
+      if (win === focusedWin) return mapKey;
+    }
+  }
+  for (const [mapKey, win] of webWindowsByUrlKey) {
+    if (!win || win.isDestroyed()) continue;
+    try {
+      if (win.isFocused()) return mapKey;
+    } catch {
+      /* noop */
+    }
+    const wc = getHostedWebContents(win) || win.webContents;
+    try {
+      if (wc && !wc.isDestroyed() && wc.isFocused()) return mapKey;
+    } catch {
+      /* noop */
+    }
+  }
+  return null;
+}
+
+/**
+ * Foto de lo que el usuario está mirando, tomada al pulsar el atajo
+ * (antes de que minimizar mueva el foco).
+ * @param {Electron.BrowserWindow | null | undefined} dockWin
+ * @param {boolean} homeExpanded
+ * @returns {{ kind: 'web', mapKey: string } | { kind: 'home' } | null}
+ */
+function captureFrontInplaizeSurface(dockWin, homeExpanded) {
+  const mapKey = focusedWebMapKey();
+  if (mapKey) return { kind: 'web', mapKey };
+  if (!homeExpanded || !dockWin || dockWin.isDestroyed()) return null;
+  return { kind: 'home' };
+}
+
+/**
+ * El atajo acaba de ocultar esta ventana web: queda como la que hay que
+ * restaurar, y el foco que cae en la home al minimizar no la pisa.
+ * @param {string} mapKey
+ * @param {{ holdMs?: number }} [opts]
+ */
+function pinWebSurface(mapKey, opts) {
+  if (!mapKey || typeof mapKey !== 'string') return;
+  lastFocusedWebMapKey = mapKey;
+  lastFocusedSurfaceKind = 'web';
+  const holdMs = opts && typeof opts.holdMs === 'number' ? opts.holdMs : 0;
+  if (holdMs > 0) ignoreSurfaceUntil = Date.now() + holdMs;
+}
+
+function surfaceFocusIsFrozen() {
+  return Date.now() < ignoreSurfaceUntil;
+}
+
+/**
+ * @param {{ holdMs?: number }} [opts] holdMs bloquea que otra ventana pise esta elección al ocultar.
  */
 function markHomeAsLastFocusedSurface(opts) {
-  lastFocusedSurfaceKind = 'home';
   const holdMs = opts && typeof opts.holdMs === 'number' ? opts.holdMs : 0;
+  // Un focus de la home disparado al minimizar el mail no puede borrar la ventana fijada.
+  if (holdMs <= 0 && Date.now() < ignoreSurfaceUntil) return;
+  lastFocusedSurfaceKind = 'home';
   if (holdMs > 0) ignoreSurfaceUntil = Date.now() + holdMs;
 }
 
@@ -559,6 +643,7 @@ function installWebNotificationPermissionHandlers(partition) {
   if (webPartitionsWithNotificationHandlers.has(partition)) return;
   webPartitionsWithNotificationHandlers.add(partition);
   const ses = session.fromPartition(partition);
+  require('./chrome-identity').applyChromeIdentity(ses);
 
   function notificationsMutedForContents(webContents) {
     if (!webContents || webContents.isDestroyed()) return false;
@@ -1134,4 +1219,8 @@ module.exports = {
   markHomeAsLastFocusedSurface,
   markShellAsLastFocusedSurface,
   lastFocusedSurfaceIsHome,
+  captureFrontInplaizeSurface,
+  pinWebSurface,
+  surfaceFocusIsFrozen,
+  focusedWebMapKey,
 };

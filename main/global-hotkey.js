@@ -61,12 +61,22 @@ function registerDockGlobalShortcut(state, onAccelerator, ensureDockWindow) {
   }
 
   const run = () => {
+    // El foco se lee ya: 20 ms después, al minimizar, Windows se lo pasa a otra ventana.
+    let front = null;
+    try {
+      front = require('./open-shortcut').captureFrontInplaizeSurface(
+        ctx.state.mainWindow,
+        ctx.state.isExpanded === true,
+      );
+    } catch {
+      front = null;
+    }
     setTimeout(() => {
       if (!ctx.state.mainWindow || ctx.state.mainWindow.isDestroyed()) {
         ctx.ensureDockWindow();
       }
       if (!ctx.state.mainWindow || ctx.state.mainWindow.isDestroyed()) return;
-      ctx.onAccelerator();
+      ctx.onAccelerator(front);
     }, 20);
   };
 

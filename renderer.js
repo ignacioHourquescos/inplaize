@@ -136,7 +136,8 @@ function syncPointerPassthrough(clientX, clientY) {
   const modalOpen =
     !modalOverlay.classList.contains('hidden') ||
     inlineShortcutFormOpen ||
-    document.documentElement.classList.contains('doc-modal-open') ||
+    (document.documentElement.classList.contains('doc-modal-open') &&
+      !document.documentElement.classList.contains('doc-modal-away')) ||
     document.documentElement.classList.contains('gesture-coach-open') ||
     !!(settingsModalOverlay && !settingsModalOverlay.classList.contains('hidden')) ||
     !!(appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden'));
@@ -741,9 +742,48 @@ function pointerOutsideOpenDock(ev) {
   );
 }
 
+/** Acceso web bajo el puntero (WhatsApp, mail…) al que se le puede soltar el archivo. */
+function springCardAt(x, y) {
+  for (let el = document.elementFromPoint(x, y); el; el = el.parentElement) {
+    if (fileDragSpringShortcuts.has(el)) return el;
+  }
+  return null;
+}
+
+function clearInternalDragSpring(session) {
+  if (!session) return;
+  if (session.springTimer) clearTimeout(session.springTimer);
+  session.springTimer = null;
+  session.springCard?.classList.remove('file-drag-hover');
+  session.springCard = null;
+}
+
+/**
+ * El drag interno no dispara dragenter en los iconos: el spring-loading se
+ * resuelve acá y después pasa a drag nativo para soltar dentro de la página.
+ */
+function updateInternalDragSpring(session, x, y) {
+  const card = springCardAt(x, y);
+  if (card === session.springCard) return;
+  clearInternalDragSpring(session);
+  if (!card) return;
+  session.springCard = card;
+  card.classList.add('file-drag-hover');
+  session.springTimer = setTimeout(() => {
+    session.springTimer = null;
+    if (internalFileDrag !== session || session.handedOff) return;
+    const shortcut = fileDragSpringShortcuts.get(card);
+    clearInternalDragSpring(session);
+    if (!shortcut) return;
+    springLoadShortcutForFileDrag(shortcut);
+    handoffInternalFileDrag({ keepDockShape: false });
+  }, FILE_DRAG_SPRING_DELAY_MS);
+}
+
 function endInternalFileDrag() {
   const session = internalFileDrag;
   if (!session) return;
+  clearInternalDragSpring(session);
   session.ghost.remove();
   document.removeEventListener('keydown', session.onKey, true);
   document.documentElement.classList.remove('is-internal-file-drag');
@@ -757,6 +797,7 @@ function moveInternalFileDrag(ev) {
   session.ghost.style.left = `${ev.clientX}px`;
   session.ghost.style.top = `${ev.clientY}px`;
   window.MagicDrawerUI?.hoverDragZone?.(magicZoneAt(ev.clientX, ev.clientY), session.file);
+  updateInternalDragSpring(session, ev.clientX, ev.clientY);
 }
 
 function beginInternalFileDrag(tile, id) {
@@ -784,6 +825,8 @@ function beginInternalFileDrag(tile, id) {
     onKey,
     handedOff: false,
     pointerId: null,
+    springCard: null,
+    springTimer: null,
   };
   return internalFileDrag;
 }
@@ -791,12 +834,16 @@ function beginInternalFileDrag(tile, id) {
 /**
  * Suelta el arrastre interno y pasa a un drag nativo para dejar el archivo
  * en otra app. Recorta la ventana: solo tiene sentido ya fuera del panel.
+ * Con keepDockShape en false el dock queda sin región visible (el panel ya
+ * se cerró para mostrar la ventana del acceso).
+ * @param {{ keepDockShape?: boolean }} [opts]
  */
-function handoffInternalFileDrag() {
+function handoffInternalFileDrag(opts) {
   const session = internalFileDrag;
   if (!session || session.handedOff) return;
   session.handedOff = true;
-  const { id, anchor, tile, pointerId } = session;
+  const { id, tile, pointerId } = session;
+  const anchor = opts && opts.keepDockShape === false ? null : session.anchor;
   try {
     if (pointerId != null && tile.hasPointerCapture?.(pointerId)) {
       tile.releasePointerCapture(pointerId);
@@ -2520,9 +2567,13 @@ async function springLoadShortcutForFileDrag(shortcut) {
 
 const FILE_DRAG_SPRING_DELAY_MS = 300;
 
+/** @type {WeakMap<HTMLElement, object>} card de acceso web → su shortcut */
+const fileDragSpringShortcuts = new WeakMap();
+
 /** Engancha el spring-loading de archivos sobre un card de acceso web. */
 function bindFileDragSpringTarget(card, shortcut) {
   if (shortcut.type !== 'web') return;
+  fileDragSpringShortcuts.set(card, shortcut);
   let springTimer = null;
 
   const cancel = () => {
@@ -3783,6 +3834,7 @@ const looseNavTabsStrip = document.getElementById('loose-nav-tabs-strip');
 const looseNavNewTabBtn = document.getElementById('loose-nav-new-tab-btn');
 const dockViewport = document.getElementById('dock-viewport');
 const looseNavSurface = document.getElementById('loose-nav-surface');
+const looseNavAccountsRail = document.getElementById('loose-nav-accounts');
 
 /** Último estado recibido del main. */
 let looseNavState = {
@@ -3824,11 +3876,14 @@ function findLooseShortcut() {
 function computeViewportBoundsPayload() {
   if (!dockViewport) return null;
   const r = dockViewport.getBoundingClientRect();
-  const w = Math.max(0, Math.round(r.width));
+  const rail = looseNavAccountsRail && !looseNavAccountsRail.classList.contains('hidden')
+    ? Math.round(looseNavAccountsRail.getBoundingClientRect().width)
+    : 0;
+  const w = Math.max(0, Math.round(r.width) - rail);
   const h = Math.max(0, Math.round(r.height));
   if (w <= 0 || h <= 0) return null;
   return {
-    x: Math.max(0, Math.round(r.left)),
+    x: Math.max(0, Math.round(r.left) + rail),
     y: Math.max(0, Math.round(r.top)),
     width: w,
     height: h,
@@ -3940,28 +3995,88 @@ function appendLooseNavClose(el, label, onClose) {
   el.appendChild(closeEl);
 }
 
+function looseNavProfileHue(partition) {
+  let h = 0;
+  for (const ch of String(partition || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 360;
+}
+
+function paintLooseNavProfileChip(chip, profile) {
+  const label = (profile && profile.label) || 'Perfil';
+  const avatar = profile && typeof profile.avatar === 'string' && profile.avatar.startsWith('data:image/')
+    ? profile.avatar
+    : '';
+  chip.textContent = avatar ? '' : label.trim().charAt(0).toUpperCase() || '?';
+  chip.style.backgroundImage = avatar ? `url("${avatar}")` : '';
+  chip.classList.toggle('has-avatar', !!avatar);
+  chip.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(profile && profile.partition)));
+  const tip = profile && profile.email && profile.email !== label ? `${label} (${profile.email})` : label;
+  chip.setAttribute('aria-label', `Perfil: ${tip}. Cambiar perfil`);
+  chip.dataset.tooltip = `Perfil: ${tip}`;
+}
+
+async function pickLooseNavComposerProfile(chip, input) {
+  if (!looseNavComposer) return;
+  looseNavComposer.picking = true;
+  let picked = null;
+  try {
+    picked = await window.usualDesk.looseNavPickProfile();
+  } catch {
+    picked = null;
+  }
+  if (!looseNavComposer) return;
+  looseNavComposer.picking = false;
+  if (picked && picked.partition) {
+    looseNavComposer.profile = picked;
+    paintLooseNavProfileChip(chip, picked);
+  }
+  if (input.isConnected) input.focus();
+}
+
 function buildLooseNavComposer() {
   const el = document.createElement('div');
   el.className = 'loose-nav-tab is-composing';
+  const editing = looseNavComposer?.mode === 'edit';
 
   const input = document.createElement('input');
+
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'loose-nav-profile-chip';
+  chip.dataset.tooltipPlacement = 'bottom';
+  paintLooseNavProfileChip(chip, looseNavComposer?.profile);
+  chip.addEventListener('mousedown', (ev) => ev.preventDefault());
+  chip.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    pickLooseNavComposerProfile(chip, input);
+  });
+  el.appendChild(chip);
+
   input.type = 'text';
   input.className = 'loose-nav-tab-url';
-  input.placeholder = 'Escribí un enlace';
+  input.placeholder = 'Buscá en Google o escribí un enlace';
   input.spellcheck = false;
   input.autocomplete = 'off';
-  input.setAttribute('aria-label', 'Enlace de la pestaña nueva');
+  input.setAttribute('aria-label', editing ? 'Dirección de esta pestaña' : 'Búsqueda o enlace de la pestaña nueva');
   input.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape') {
       ev.preventDefault();
       cancelLooseNavComposer();
     } else if (ev.key === 'Enter') {
       ev.preventDefault();
-      commitLooseNavComposer(input.value);
+      commitLooseNavComposer(input.value, { forceNewTab: ev.altKey });
     }
   });
+  input.addEventListener('blur', () => {
+    if (!editing) return;
+    setTimeout(() => {
+      if (looseNavComposer?.mode === 'edit' && !looseNavComposer.picking && document.activeElement !== input) {
+        cancelLooseNavComposer();
+      }
+    }, 120);
+  });
   el.appendChild(input);
-  appendLooseNavClose(el, 'Cancelar pestaña', () => cancelLooseNavComposer());
+  appendLooseNavClose(el, editing ? 'Cancelar edición' : 'Cancelar pestaña', () => cancelLooseNavComposer());
   return el;
 }
 
@@ -3973,19 +4088,41 @@ function focusLooseNavComposerInput(input, justOpened, selStart, selEnd) {
     if (!justOpened && selStart != null && selEnd != null) {
       try { input.setSelectionRange(selStart, selEnd); } catch { /* noop */ }
     } else if (justOpened && input.value) {
-      const end = input.value.length;
-      try { input.setSelectionRange(end, end); } catch { /* noop */ }
+      if (looseNavComposer?.mode === 'edit') {
+        input.select();
+      } else {
+        const end = input.value.length;
+        try { input.setSelectionRange(end, end); } catch { /* noop */ }
+      }
     }
   });
 }
 
-function openLooseNavComposer() {
+/**
+ * `new`: pestaña nueva con el perfil elegido en el chip.
+ * `edit`: reemplaza la pestaña activa por su dirección para buscar o navegar ahí mismo.
+ * @param {'new' | 'edit'} [mode]
+ */
+function openLooseNavComposer(mode = 'new') {
   if (!looseNavState.active) return;
-  if (looseNavComposer) {
-    looseNavTabsStrip?.querySelector('.loose-nav-tab-url')?.focus();
+  const active = looseNavState.tabs.find((t) => t.isActive);
+  const wantEdit = mode === 'edit' && !!active;
+  if (looseNavComposer && (looseNavComposer.mode === 'edit') === wantEdit) {
+    const input = looseNavTabsStrip?.querySelector('.loose-nav-tab-url');
+    input?.focus();
+    input?.select();
     return;
   }
-  looseNavComposer = { focus: true };
+  const sessionProfile = looseNavState.activeProfile || looseNavState.defaultProfile || null;
+  looseNavComposer = wantEdit
+    ? {
+        focus: true,
+        mode: 'edit',
+        value: active.url || '',
+        profile: { partition: active.partition, label: active.profileLabel, avatar: active.profileAvatar },
+      }
+    : { focus: true, mode: 'new', profile: sessionProfile };
+  looseNavTabsStrip?.querySelector('.loose-nav-tab.is-composing')?.remove();
   renderLooseNavTabs(looseNavState);
 }
 
@@ -3996,16 +4133,25 @@ function cancelLooseNavComposer() {
   renderLooseNavTabs(looseNavState);
 }
 
-async function commitLooseNavComposer(raw) {
+async function commitLooseNavComposer(raw, opts = {}) {
   const val = String(raw || '').trim();
-  if (!val) return;
+  if (!val || !looseNavComposer) return;
+  const composer = looseNavComposer;
+  const active = looseNavState.tabs.find((t) => t.isActive);
+  const sameProfileAsActive =
+    !!active && (!composer.profile || composer.profile.partition === active.partition);
+  const navigateInPlace = composer.mode === 'edit' && sameProfileAsActive && !opts.forceNewTab;
   looseNavComposer = null;
   looseNavComposerFocusGen += 1;
   renderLooseNavTabs(looseNavState);
   try {
-    await window.usualDesk.looseNavNewTab(val);
+    if (navigateInPlace) {
+      await window.usualDesk.looseNavNavigate(val);
+    } else {
+      await window.usualDesk.looseNavNewTab(val, { partition: composer.profile?.partition });
+    }
   } catch {
-    looseNavComposer = { focus: true, value: val };
+    looseNavComposer = { ...composer, focus: true, value: val };
     renderLooseNavTabs(looseNavState);
   }
 }
@@ -4022,6 +4168,7 @@ function renderLooseNavTabs(state) {
 
   looseNavTabsStrip.innerHTML = '';
 
+  const editingActive = looseNavComposer?.mode === 'edit' && state.tabs.some((t) => t.isActive);
   if (looseNavComposer) {
     const node = previousComposer || buildLooseNavComposer();
     looseNavTabsStrip.appendChild(node);
@@ -4034,10 +4181,15 @@ function renderLooseNavTabs(state) {
     if (input && (justOpened || composerWasFocused)) {
       focusLooseNavComposerInput(input, justOpened, composerSelStart, composerSelEnd);
     }
-    looseNavTabsStrip.scrollLeft = 0;
   }
+  const composerNode = looseNavTabsStrip.querySelector('.loose-nav-tab.is-composing');
 
-  for (const tab of state.tabs) {
+  const sessionTabs = state.tabs.filter((t) => !state.activePartition || t.partition === state.activePartition);
+  for (const tab of sessionTabs) {
+    if (composerNode && editingActive && tab.isActive) {
+      looseNavTabsStrip.appendChild(composerNode);
+      continue;
+    }
     const el = document.createElement('div');
     el.className = 'loose-nav-tab';
     el.setAttribute('role', 'tab');
@@ -4045,7 +4197,15 @@ function renderLooseNavTabs(state) {
     el.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
     if (tab.isActive) el.classList.add('is-active');
     if (tab.loading) el.classList.add('is-loading');
-    el.setAttribute('data-tooltip', tab.title || tab.url || 'Pestaña');
+    const tabTip = tab.title || tab.url || 'Pestaña';
+    el.setAttribute(
+      'data-tooltip',
+      tab.isDefaultProfile ? tabTip : `${tabTip} · Perfil: ${tab.profileLabel || ''}`
+    );
+    if (!tab.isDefaultProfile) {
+      el.classList.add('has-profile');
+      el.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(tab.partition)));
+    }
 
     appendLooseNavControls(el, tab);
 
@@ -4078,7 +4238,10 @@ function renderLooseNavTabs(state) {
     });
 
     el.addEventListener('click', () => {
-      if (tab.isActive) return;
+      if (tab.isActive) {
+        openLooseNavComposer('edit');
+        return;
+      }
       if (looseNavComposer) cancelLooseNavComposer();
       window.usualDesk.looseNavSelectTab(tab.id).catch(() => {});
     });
@@ -4090,6 +4253,118 @@ function renderLooseNavTabs(state) {
     });
 
     looseNavTabsStrip.appendChild(el);
+  }
+
+  if (composerNode && !editingActive) {
+    looseNavTabsStrip.appendChild(composerNode);
+    looseNavTabsStrip.scrollLeft = looseNavTabsStrip.scrollWidth;
+  } else {
+    looseNavTabsStrip
+      .querySelector('.loose-nav-tab.is-active, .loose-nav-tab.is-composing')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+
+let looseNavAccountBusy = '';
+let looseNavAccountsSig = '';
+
+function looseNavAccountButton({ key, label, tooltip, avatar, seed, active, count = 0, onClick }) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'loose-nav-account';
+  btn.title = tooltip;
+  btn.setAttribute('aria-label', tooltip);
+  btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  if (active) btn.classList.add('is-active');
+  if (looseNavAccountBusy === key) btn.classList.add('is-busy');
+  if (avatar && avatar.startsWith('data:image/')) {
+    const img = document.createElement('img');
+    img.src = avatar;
+    img.alt = '';
+    btn.appendChild(img);
+  } else {
+    const letter = document.createElement('span');
+    letter.className = 'loose-nav-account-letter';
+    letter.textContent = (label || '?').trim().charAt(0).toUpperCase() || '?';
+    letter.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(seed)));
+    btn.appendChild(letter);
+  }
+  if (count > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'loose-nav-account-count';
+    badge.setAttribute('aria-hidden', 'true');
+    badge.textContent = count > 99 ? '99+' : String(count);
+    btn.appendChild(badge);
+  }
+  btn.addEventListener('click', async () => {
+    if (looseNavAccountBusy) return;
+    looseNavAccountBusy = key;
+    btn.classList.add('is-busy');
+    try {
+      await onClick();
+    } catch {
+      /* el main muestra el error si no pudo traer la cuenta */
+    } finally {
+      looseNavAccountBusy = '';
+      renderLooseNavAccounts(looseNavState);
+    }
+  });
+  return btn;
+}
+
+/** Riel vertical: cada sesión con sus pestañas; tocar una entra a las de esa sesión. */
+function renderLooseNavAccounts(state) {
+  if (!looseNavAccountsRail) return;
+  const accounts = (state.accounts && state.accounts.accounts) || [];
+  const chrome = (state.accounts && state.accounts.chrome) || [];
+  const counts = state.tabCounts || {};
+  const show = !!state.active && accounts.length + chrome.length > 0;
+  const wasHidden = looseNavAccountsRail.classList.contains('hidden');
+  looseNavAccountsRail.classList.toggle('hidden', !show);
+  document.documentElement.setAttribute('data-loose-nav-rail', show ? 'on' : 'off');
+  if (wasHidden === show) invalidateLooseNavViewport();
+  const sig = show
+    ? JSON.stringify([state.activePartition, looseNavAccountBusy, counts, accounts, chrome])
+    : '';
+  if (sig === looseNavAccountsSig) return;
+  looseNavAccountsSig = sig;
+  looseNavAccountsRail.innerHTML = '';
+  if (!show) return;
+
+  for (const a of accounts) {
+    const who = a.name && a.email ? `${a.name} (${a.email})` : a.email || a.name;
+    const count = counts[a.partition] || 0;
+    const tabsLabel = count === 1 ? '1 pestaña' : `${count} pestañas`;
+    looseNavAccountsRail.appendChild(looseNavAccountButton({
+      key: a.partition,
+      label: a.name || a.email,
+      tooltip: `${who} · ${tabsLabel}`,
+      avatar: a.avatar,
+      seed: a.email || a.partition,
+      active: a.partition === state.activePartition,
+      count,
+      onClick: () => window.usualDesk.looseNavUseAccount({ partition: a.partition }),
+    }));
+  }
+  if (chrome.length) {
+    if (accounts.length) {
+      const sep = document.createElement('span');
+      sep.className = 'loose-nav-accounts-sep';
+      sep.setAttribute('aria-hidden', 'true');
+      looseNavAccountsRail.appendChild(sep);
+    }
+    for (const c of chrome) {
+      const who = c.email || c.name;
+      looseNavAccountsRail.appendChild(looseNavAccountButton({
+        key: `chrome:${c.directory}`,
+        label: c.email || c.name,
+        tooltip: `${who} · traer desde Chrome`,
+        avatar: c.avatar,
+        seed: c.email || c.name,
+        active: false,
+        onClick: () => window.usualDesk.looseNavUseAccount({ chromeDirectory: c.directory }),
+      }));
+    }
   }
 }
 
@@ -4117,6 +4392,7 @@ function renderLooseNavBar(state) {
     card?.classList.add('loose-nav-active');
   }
 
+  renderLooseNavAccounts(looseNavState);
   if (show) {
     renderLooseNavTabs(looseNavState);
     scheduleLooseNavViewportSync();
@@ -4142,6 +4418,26 @@ function initLooseNavUiEvents() {
 
   looseNavNewTabBtn?.addEventListener('click', () => {
     openLooseNavComposer();
+  });
+
+  const runLooseNavShortcut = (action) => {
+    if (action === 'edit-address') openLooseNavComposer('edit');
+    else if (action === 'new-tab') openLooseNavComposer('new');
+  };
+  window.usualDesk.onLooseNavShortcut?.(runLooseNavShortcut);
+  document.addEventListener('keydown', (ev) => {
+    if (!looseNavState.active) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (target && !target.classList.contains('loose-nav-tab-url')
+      && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const mod = ev.ctrlKey || ev.metaKey;
+    const key = String(ev.key || '').toLowerCase();
+    let action = '';
+    if ((mod && key === 'l') || (ev.altKey && key === 'd') || key === 'f6') action = 'edit-address';
+    else if (mod && key === 't') action = 'new-tab';
+    if (!action) return;
+    ev.preventDefault();
+    runLooseNavShortcut(action);
   });
 
   window.addEventListener('resize', () => scheduleLooseNavViewportSync());

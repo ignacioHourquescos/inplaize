@@ -99,7 +99,13 @@ const SafeImage = Image.extend({
 }).configure({
   inline: false,
   allowBase64: true,
-  resize: false,
+  resize: {
+    enabled: true,
+    directions: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+    minWidth: 64,
+    minHeight: 48,
+    alwaysPreserveAspectRatio: true,
+  },
 });
 
 function modLabel() {

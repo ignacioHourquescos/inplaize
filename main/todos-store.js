@@ -10,8 +10,10 @@
  *     columns: Array<{ id, width?, x?, y?, blocks: Array<{ id, type, text, done, indent }> }>
  *   }
  *
- * `type` es "text" | "todo" | "bullet" | "document".
+ * `type` es "text" | "todo" | "bullet" | "document" | "image".
  * Un documento guarda título, descripción y contenido del editor en `doc`.
+ * Una imagen guarda `src` (data URL) y `width`.
+ * `archive` guarda lo que se soltó en el tacho, con `archivedAt`.
  * La versión 1 (lista plana de items) se migra a una columna de checkboxes.
  */
 
@@ -28,7 +30,9 @@ const MAX_COL_WIDTH = 4000;
 const MAX_COL_POS = 12000;
 const MAX_BLOCKS = 400;
 const MAX_INDENT = 6;
-const TYPES = new Set(['text', 'todo', 'bullet', 'document']);
+const TYPES = new Set(['text', 'todo', 'bullet', 'document', 'image']);
+const MAX_ARCHIVE = 200;
+const MAX_IMAGE_SRC = 1200000;
 
 function todosFilePath() {
   return path.join(app.getPath('userData'), 'todos.json');
@@ -56,6 +60,21 @@ function sanitizeText(value, maxLen) {
   return str.slice(0, maxLen);
 }
 
+function sanitizeImageSrc(value) {
+  if (typeof value !== 'string') return '';
+  const src = value.replace(/\s+/g, '');
+  if (src.length < 32 || src.length > MAX_IMAGE_SRC) return '';
+  if (!/^data:image\/(?:png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(src)) return '';
+  return src;
+}
+
+function validIso(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value)) return '';
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return '';
+  return new Date(time).toISOString();
+}
+
 function sanitizeBlock(raw, seen, columnId) {
   if (!raw || typeof raw !== 'object') return null;
   const id = sanitizeId(raw.id);
@@ -75,6 +94,15 @@ function sanitizeBlock(raw, seen, columnId) {
     block.doc = sanitizeDocument(source, id, columnId || '');
     block.text = block.doc.title;
     block.done = false;
+  }
+  if (type === 'image') {
+    const src = sanitizeImageSrc(raw.src);
+    if (!src) return null;
+    block.src = src;
+    block.text = '';
+    block.done = false;
+    const width = clampNumber(raw.width, 48, 1600, 0);
+    if (width >= 48) block.width = width;
   }
   return block;
 }
@@ -108,6 +136,7 @@ function emptyPayload() {
     version: FILE_VERSION,
     title: 'Tareas',
     columns: [{ id: 'col-main', blocks: [] }],
+    archive: [],
   };
 }
 
@@ -134,6 +163,7 @@ function columnFromLegacyItems(items) {
     version: FILE_VERSION,
     title: 'Tareas',
     columns: [{ id: 'col-main', blocks }],
+    archive: [],
   };
 }
 
@@ -153,10 +183,20 @@ function normalize(raw) {
   }
   if (!columns.length) return emptyPayload();
   const title = sanitizeText(raw.title, 200);
+  const archive = [];
+  const archived = Array.isArray(raw.archive) ? raw.archive : [];
+  for (const entry of archived) {
+    if (archive.length >= MAX_ARCHIVE) break;
+    const item = sanitizeBlock(entry, seen, '');
+    if (!item) continue;
+    item.archivedAt = validIso(entry && entry.archivedAt) || new Date().toISOString();
+    archive.push(item);
+  }
   return {
     version: FILE_VERSION,
     title,
     columns,
+    archive,
   };
 }
 

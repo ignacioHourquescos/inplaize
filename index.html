@@ -33,33 +33,6 @@
     <div id="sidebar" data-mouse-hit>
       <div id="sidebar-chrome">
         <div class="dock-strip-lead">
-          <button
-            type="button"
-            id="dock-home-btn"
-            class="dock-home-strip-btn shell-shortcut-item is-active"
-            data-mouse-hit
-            data-tooltip="Tareas"
-            data-tooltip-placement="bottom"
-            aria-label="Tareas"
-            aria-pressed="true"
-          >
-            <span class="dock-home-logo-mark" aria-hidden="true"></span>
-          </button>
-          <button
-            type="button"
-            id="dock-downloads-btn"
-            class="dock-home-strip-btn shell-shortcut-item"
-            data-mouse-hit
-            data-tooltip="Descargas"
-            data-tooltip-placement="bottom"
-            aria-label="Descargas"
-            aria-pressed="false"
-          >
-            <svg class="dock-downloads-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
           <div class="open-url-slot" id="open-url-slot" data-mouse-hit>
             <button
               type="button"
@@ -91,6 +64,34 @@
               <p class="open-url-error" hidden></p>
             </form>
           </div>
+          <span class="strip-lead-sep" aria-hidden="true"></span>
+          <button
+            type="button"
+            id="dock-home-btn"
+            class="dock-home-strip-btn shell-shortcut-item is-active"
+            data-mouse-hit
+            data-tooltip="Tareas"
+            data-tooltip-placement="bottom"
+            aria-label="Tareas"
+            aria-pressed="true"
+          >
+            <span class="dock-home-logo-mark" aria-hidden="true"></span>
+          </button>
+          <button
+            type="button"
+            id="dock-downloads-btn"
+            class="dock-home-strip-btn shell-shortcut-item"
+            data-mouse-hit
+            data-tooltip="Descargas"
+            data-tooltip-placement="bottom"
+            aria-label="Descargas"
+            aria-pressed="false"
+          >
+            <svg class="dock-downloads-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
         </div>
         <div id="shortcuts-container">
         <button
@@ -146,12 +147,12 @@
 
       <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegador">
         <div class="loose-nav-tabs-row">
+          <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
           <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-new-tab" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom" aria-label="Nueva pestaña">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
             </svg>
           </button>
-          <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
         </div>
       </div>
 
@@ -361,6 +362,7 @@
         </div>
         <div id="dock-inline-editor" class="dock-inline-editor hidden" data-mouse-hit></div>
         <div id="loose-nav-surface" class="loose-nav-surface hidden" aria-hidden="true"></div>
+        <nav id="loose-nav-accounts" class="loose-nav-accounts hidden" data-mouse-hit aria-label="Cuentas de Google"></nav>
       </div>
 
       <!-- Drawer de opciones (desliza desde la derecha) -->
