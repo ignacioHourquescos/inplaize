@@ -8,6 +8,9 @@
   --ud-chrome-strip-pad-x: 8px;
   --ud-chrome-strip-gap: 6px;
   --ud-chrome-icon: 40px;
+  /* Margen + "www" + espacio + línea violeta: mismo ancho que el menú lateral de WhatsApp Web. */
+  --ud-chrome-lead-w: 64px;
+  --ud-chrome-open-url-w: calc(var(--ud-chrome-lead-w) - var(--ud-chrome-strip-pad-x) - var(--ud-chrome-strip-gap) - 2px);
   --ud-chrome-action-w: 46px;
   --ud-chrome-strip-bg: #121216;
   --ud-chrome-strip-border: #33333d;
@@ -196,18 +199,6 @@
   background: #8b5cf6;
 }
 
-.dock-downloads-icon {
-  width: 26px;
-  height: 26px;
-  display: block;
-  box-sizing: border-box;
-  padding: 4px;
-  border-radius: 8px;
-  color: #fff;
-  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-
 /* Pegar un enlace y abrirlo: el primero de la franja. */
 .open-url-slot {
   display: flex;
@@ -222,40 +213,168 @@
 /* Tareas, descargas e internet: mismo tamaño que el resto, sin marco. */
 .dock-strip-lead .shell-shortcut-item,
 .shell-home-strip-btn,
-.shell-downloads-strip-btn,
 .open-url-btn {
   border-color: transparent !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
+.open-url-btn {
+  width: var(--ud-chrome-open-url-w);
+  min-width: var(--ud-chrome-open-url-w);
+  max-width: var(--ud-chrome-open-url-w);
+}
+
 .dock-strip-lead .shell-shortcut-item.file-drag-hover,
 .shell-home-strip-btn.file-drag-hover,
-.shell-downloads-strip-btn.file-drag-hover,
 .open-url-btn.file-drag-hover {
   border-color: var(--accent, #7c5cff) !important;
   box-shadow: 0 0 0 2px var(--accent, #7c5cff) !important;
 }
 
-/* Línea violeta después del globo: separa internet de tareas, descargas y los accesos. */
-.strip-lead-sep {
+/* Segmented "inplaize | www": dónde estás, la app o internet. Solo un lado encendido. */
+.strip-mode-seg {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   flex: 0 0 auto;
   align-self: center;
-  width: 2px;
-  height: 28px;
-  border-radius: 999px;
-  background: var(--ud-chrome-edit-tab);
-  pointer-events: none;
+  padding: 3px;
+  border-radius: 12px;
+  background: #1c1c22;
+  border: 1px solid var(--ud-chrome-strip-border);
+  position: relative;
+  -webkit-app-region: no-drag;
 }
 
-/* Internet invertido respecto de tareas y descargas: fondo blanco, globo violeta. */
-.open-url-icon {
-  width: 26px;
-  height: 26px;
-  display: block;
-  box-sizing: border-box;
-  padding: 3px;
+/* Pastilla que se desliza bajo el lado activo: violeta en inplaize (::before) y
+   blanca en www (::after, que aparece encima). El desplazamiento = 32px del
+   segmento + 2px de gap. */
+.strip-mode-seg::before,
+.strip-mode-seg::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
+  pointer-events: none;
+  z-index: 0;
+  transition:
+    transform 0.26s cubic-bezier(0.3, 0.7, 0.2, 1),
+    opacity 0.2s ease;
+}
+
+.strip-mode-seg::before {
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.strip-mode-seg::after {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(109, 40, 217, 0.18);
+  opacity: 0;
+}
+
+.strip-mode-seg:has(.open-url-btn.is-active)::before,
+.strip-mode-seg:has(.open-url-btn.is-active)::after {
+  transform: translateX(34px);
+}
+
+.strip-mode-seg:has(.open-url-btn.is-active)::after {
+  opacity: 1;
+}
+
+.strip-mode-seg:not(:has(.is-active))::before {
+  opacity: 0;
+}
+
+.strip-mode-seg > .shell-shortcut-item,
+.strip-mode-seg > .open-url-slot {
+  position: relative;
+  z-index: 1;
+}
+
+.strip-mode-seg .shell-shortcut-item {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
+  border-radius: 8px;
+}
+
+.strip-mode-seg .open-url-icon {
+  font-size: 10px;
+  letter-spacing: -0.03em;
+}
+
+.strip-mode-seg .open-url-icon,
+.strip-mode-seg .dock-home-logo-mark {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.2s ease, opacity 0.15s ease;
+}
+
+.strip-mode-seg .open-url-btn.is-active .open-url-icon,
+.strip-mode-seg .shell-shortcut-item.is-active .dock-home-logo-mark {
+  background: transparent;
+  box-shadow: none;
+}
+
+.strip-mode-seg .dock-home-logo-mark::before,
+.strip-mode-seg .dock-home-logo-mark::after {
+  transition: background 0.2s ease;
+}
+
+.strip-mode-seg .open-url-btn:not(.is-active) .open-url-icon {
+  background: transparent;
+  color: #8e8ea0;
+  box-shadow: none;
+}
+
+.strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark {
+  background: transparent;
+  box-shadow: none;
+}
+
+.strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark::before {
+  background: #8e8ea0;
+}
+
+.strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark::after {
+  background: #1c1c22;
+}
+
+.strip-mode-seg .open-url-btn:not(.is-active):hover .open-url-icon,
+.strip-mode-seg .shell-shortcut-item:not(.is-active):hover .dock-home-logo-mark {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.strip-mode-seg .open-url-btn:not(.is-active):hover .open-url-icon {
+  color: #e8e8ef;
+}
+
+.strip-mode-seg .shell-shortcut-item:not(.is-active):hover .dock-home-logo-mark::before {
+  background: #e8e8ef;
+}
+
+/* Internet invertido respecto de tareas y descargas: fondo blanco, "www" violeta. */
+.open-url-icon {
+  width: 100%;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
   color: #6d28d9;
   background: #fff;
   box-shadow: inset 0 0 0 1px rgba(109, 40, 217, 0.18);

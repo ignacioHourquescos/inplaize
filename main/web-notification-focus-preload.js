@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('__usualDeskOnNotificationClick', () => {
   ipcRenderer.send('web-window-notification-click');
 });
 
+contextBridge.exposeInMainWorld('__usualDeskNoteNotification', () => {
+  ipcRenderer.send('web-notification-shown');
+});
+
 contextBridge.exposeInMainWorld('__usualDeskSaveNotificationDump', (text) =>
   ipcRenderer.invoke('save-web-notification-dump', text),
 );

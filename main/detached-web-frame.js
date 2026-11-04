@@ -16,6 +16,7 @@ const {
   attachViewHistoryNav,
   attachPageHistoryNav,
 } = require('./page-history-nav');
+const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
 /** Debe coincidir con --ud-chrome-strip-h en chrome-strip.css. */
 const DETACHED_CHROME_H = 58;
 /** Debe coincidir con la altura de .subtab-strip en web-shell.css. */
@@ -170,6 +171,31 @@ function navigateHost(host, dir) {
   return ok;
 }
 
+/**
+ * @param {Electron.BrowserWindow} host
+ * @returns {import('./page-menu').PageMenuContext}
+ */
+function pageMenuContextFor(host) {
+  if (!host.__usualDeskPageMenuCtx) {
+    host.__usualDeskPageMenuCtx = {
+      host,
+      allowFullScreen: true,
+      activeWebContents: () => activeHostWebContents(host),
+      openTab: (url, opts = {}) => openSubTabInHost(host, url, opts),
+      sendToChrome: (command, payload) => {
+        if (host.isDestroyed()) return;
+        try {
+          if (command === 'find-open') host.webContents.focus();
+          host.webContents.send('detached-page-command', { command, payload: payload ?? null });
+        } catch {
+          /* noop */
+        }
+      },
+    };
+  }
+  return host.__usualDeskPageMenuCtx;
+}
+
 function reloadHostTab(host, tabId) {
   const state = tabStateOf(host);
   if (!state) return false;
@@ -310,7 +336,7 @@ function kickTabViewResize(host, tab) {
 function attachActiveTabViewOnly(host) {
   const state = tabStateOf(host);
   if (!state) return;
-  if (host && host.__usualDeskEmbeddedDesktop) {
+  if (host && (host.__usualDeskEmbeddedDesktop || host.__usualDeskHibernated)) {
     for (const tab of state.tabs.values()) detachTabView(host, tab);
     return;
   }
@@ -369,6 +395,7 @@ function refreshHostTabsUi(host) {
 function attachSubTabEvents(host, tab) {
   const wc = tab.view.webContents;
   bindHostPageNav(host, tab);
+  attachPageShortcuts(wc, pageMenuContextFor(host));
 
   wc.on('page-title-updated', (_e, title) => {
     tab.title = String(title || '');
@@ -597,13 +624,13 @@ function createSubTabInHost(host, url, opts = {}) {
 /**
  * @param {Electron.BrowserWindow} host
  * @param {string} url
- * @param {{ background?: boolean, partition?: string }} [opts]
+ * @param {{ background?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions }} [opts]
  * @returns {Promise<string>} id de la pestaña creada
  */
 async function openSubTabInHost(host, url, opts = {}) {
   const tab = createSubTabInHost(host, url, opts);
   try {
-    await tab.view.webContents.loadURL(url);
+    await tab.view.webContents.loadURL(url, opts.loadOptions);
   } catch {
     /* la página puede fallar, la pestaña queda igualmente */
   }
@@ -740,6 +767,13 @@ function registerDetachedFrameIpc() {
         return reloadHostTab(win, arg == null ? '' : String(arg));
       case 'nav-state':
         return navSnapshot(activeHostWebContents(win));
+      case 'page-menu':
+        popupPageMenu(pageMenuContextFor(win), arg && typeof arg === 'object' ? arg : {});
+        return true;
+      case 'find':
+        return findInPage(activeHostWebContents(win), arg && typeof arg === 'object' ? arg : null);
+      case 'find-stop':
+        return stopFindInPage(activeHostWebContents(win));
       case 'minimize':
         if (!win.isDestroyed()) win.minimize();
         return true;
@@ -783,13 +817,154 @@ function chromeLikeUserAgent() {
 }
 
 /**
+ * Página del acceso (pestaña principal). Se crea al abrir la ventana y de nuevo al despertarla.
+ * @param {Electron.BrowserWindow} host
+ * @param {import('./shortcuts-store').Shortcut} shortcut
+ * @param {string} mapKey
+ * @returns {DetachedTab}
+ */
+function createMainPageView(host, shortcut, mapKey) {
+  const { attachWebShortcutEmbeddedWebContents } = require('./open-shortcut');
+  const state = tabStateOf(host);
+  if (!state) throw new Error('host sin estado de pestañas');
+  const { partition } = state;
+
+  const view = new BrowserView({
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      partition,
+      preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
+      /** Acceso en segundo plano: Chromium frena timers y animaciones para no gastar CPU. */
+      backgroundThrottling: true,
+    },
+  });
+  setEmbeddedPageBackground(view);
+
+  const wc = view.webContents;
+  host.__usualDeskHostedWebContents = wc;
+
+  const prev = state.tabs.get(state.mainId);
+  /** @type {DetachedTab} */
+  const tab = {
+    id: state.mainId,
+    view,
+    title: (prev && prev.title) || shortcut.name || 'Web',
+    url: (prev && prev.url) || shortcut.url || '',
+    favicon: (prev && prev.favicon) || '',
+    loading: false,
+    isMain: true,
+  };
+  state.tabs.set(state.mainId, tab);
+  bindHostPageNav(host, tab);
+  attachPageShortcuts(wc, pageMenuContextFor(host));
+
+  attachWebShortcutEmbeddedWebContents(wc, shortcut, mapKey);
+  try {
+    require('./session-router').attachLoginSessionOffer(wc, partition, () =>
+      host && !host.isDestroyed() ? host : null
+    );
+  } catch {
+    /* el login sigue mostrándose si el aviso de usuario no se pudo enganchar */
+  }
+
+  wc.on('focus', () => {
+    host.__usualDeskLastActiveAt = Date.now();
+  });
+  return tab;
+}
+
+/**
+ * Libera el proceso de la página principal y deja una captura en su lugar.
+ * La ventana sigue abierta (dock, Alt+Tab) y la página vuelve a cargarse al enfocarla.
+ * @param {Electron.BrowserWindow} host
+ * @returns {Promise<boolean>}
+ */
+async function hibernateHost(host) {
+  const state = tabStateOf(host);
+  if (!state || host.__usualDeskHibernated || host.__usualDeskHibernating) return false;
+  const tab = state.tabs.get(state.mainId);
+  const wc = tab && tab.view ? tab.view.webContents : null;
+  if (!wc || wc.isDestroyed()) return false;
+
+  host.__usualDeskHibernating = true;
+  let snapshot = '';
+  try {
+    const image = await wc.capturePage();
+    if (!image.isEmpty()) snapshot = `data:image/jpeg;base64,${image.toJPEG(70).toString('base64')}`;
+  } catch {
+    /* sin captura queda el aviso sobre el fondo */
+  }
+  host.__usualDeskHibernating = false;
+
+  // El usuario pudo volver a la ventana mientras se tomaba la captura.
+  if (host.isDestroyed() || wc.isDestroyed() || host.isFocused() || state.tabs.size > 1) return false;
+
+  let url = '';
+  try {
+    url = wc.getURL();
+  } catch {
+    url = '';
+  }
+  host.__usualDeskHibernated = { url: url || tab.url || '' };
+  detachTabView(host, tab);
+  try {
+    wc.destroy();
+  } catch {
+    /* noop */
+  }
+  try {
+    host.webContents.send('detached-hibernated', { snapshot });
+  } catch {
+    /* noop */
+  }
+  return true;
+}
+
+/**
+ * Vuelve a crear la página hibernada en la misma dirección donde estaba.
+ * @param {Electron.BrowserWindow} host
+ * @returns {boolean}
+ */
+function wakeHost(host) {
+  if (!host || host.isDestroyed()) return false;
+  const sleeping = host.__usualDeskHibernated;
+  if (!sleeping) return false;
+  host.__usualDeskHibernated = null;
+
+  const mapKey = host.__usualDeskDetachedOwnMapKey;
+  const stored = host.__usualDeskShortcut || {};
+  const shortcut =
+    loadShortcuts().find((s) => s && String(s.id) === String(stored.id)) || stored;
+  const { audioMuted } = require('./open-shortcut').desiredWebMuteState(shortcut, mapKey);
+
+  const tab = createMainPageView(host, shortcut, mapKey);
+  const wc = tab.view.webContents;
+  wc.setAudioMuted(audioMuted);
+  wc.once('did-finish-load', () => {
+    if (!wc.isDestroyed()) wc.setAudioMuted(audioMuted);
+  });
+
+  try {
+    host.webContents.send('detached-hibernated', null);
+  } catch {
+    /* noop */
+  }
+  attachActiveTabViewOnly(host);
+  broadcastTabsToHost(host);
+  sendHostNav(host);
+  loadWebContentsUrl(wc, sleeping.url || shortcut.url || 'about:blank').catch(() => {});
+  return true;
+}
+
+/**
  * @param {import('./shortcuts-store').Shortcut} shortcut
  * @param {string} mapKey
  * @param {string} partition
  */
 async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
-  const { attachWebShortcutEmbeddedWebContents, setWebWindowForMapKey, deleteWebWindowForMapKey } =
-    require('./open-shortcut');
+  const { setWebWindowForMapKey, deleteWebWindowForMapKey } = require('./open-shortcut');
 
   if (isWhatsAppWeb(shortcut.url)) {
     session.fromPartition(partition).setUserAgent(chromeLikeUserAgent());
@@ -832,21 +1007,9 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
     }
   }
 
-  const view = new BrowserView({
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      partition,
-      preload: WEB_NOTIFICATION_FOCUS_PRELOAD,
-      /** Acceso en segundo plano: Chromium frena timers y animaciones para no gastar CPU. */
-      backgroundThrottling: true,
-    },
-  });
-  setEmbeddedPageBackground(view);
-
-  const wc = view.webContents;
-  host.__usualDeskHostedWebContents = wc;
+  host.__usualDeskShortcut = shortcut;
+  host.__usualDeskLastActiveAt = Date.now();
+  if (isWhatsAppWeb(shortcut.url)) host.__usualDeskPageNotifies = true;
 
   /** @type {DetachedTabState} */
   const tabState = {
@@ -856,31 +1019,23 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
     activeId: 'main',
     mainId: 'main',
   };
-  tabState.tabs.set('main', {
-    id: 'main',
-    view,
-    title: shortcut.name || 'Web',
-    url: shortcut.url || '',
-    favicon: '',
-    loading: false,
-    isMain: true,
-  });
   host.__usualDeskTabState = tabState;
-  bindHostPageNav(host, tabState.tabs.get('main'));
-
-  attachWebShortcutEmbeddedWebContents(wc, shortcut, mapKey);
-  try {
-    require('./session-router').attachLoginSessionOffer(wc, partition, () =>
-      host && !host.isDestroyed() ? host : null
-    );
-  } catch {
-    /* el login sigue mostrándose si el aviso de usuario no se pudo enganchar */
-  }
+  const wc = createMainPageView(host, shortcut, mapKey).view.webContents;
 
   wc.setAudioMuted(!!shortcut.audioMuted);
 
   const onResize = () => layoutActiveTabView(host);
   host.on('resize', onResize);
+
+  const onUse = () => {
+    host.__usualDeskLastActiveAt = Date.now();
+    wakeHost(host);
+  };
+  host.on('focus', onUse);
+  host.on('blur', () => {
+    host.__usualDeskLastActiveAt = Date.now();
+  });
+  host.on('restore', onUse);
 
   host.on('close', () => {
     destroyAllHostTabs(host);
@@ -889,11 +1044,6 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
   try {
     await host.loadFile(path.join(root, 'detached-web-frame.html'));
     lockWindowZoom(host.webContents);
-    try {
-      require('./menu-overlay').preload(host);
-    } catch {
-      /* noop */
-    }
 
     attachActiveTabViewOnly(host);
 
@@ -974,4 +1124,6 @@ module.exports = {
   chromeHeightFor,
   findForegroundChromeHost,
   setEmbeddedDesktopCover,
+  hibernateHost,
+  wakeHost,
 };

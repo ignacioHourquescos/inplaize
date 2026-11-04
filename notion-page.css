@@ -568,8 +568,25 @@ html[data-dock-layout='modal'] .notion-block.is-menu-open {
   cursor: default;
 }
 
-#dock-home-panel[data-home-view='downloads'] > .canvas-rail {
+#dock-home-panel[data-home-view='downloads'] > .canvas-rail #canvas-undo-btn,
+#dock-home-panel[data-home-view='downloads'] > .canvas-rail #canvas-redo-btn {
   display: none;
+}
+
+/* Descargas: abre/cierra la grilla de archivos dentro del home. */
+.canvas-downloads-btn {
+  margin-bottom: 4px;
+}
+
+.canvas-downloads-btn[aria-pressed='true'],
+.canvas-downloads-btn[aria-pressed='true']:hover {
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  border-color: rgba(167, 139, 250, 0.7);
+  color: #fff;
+}
+
+#dock-home-panel[data-home-view='downloads'] .downloads-home-grid {
+  padding-left: calc(var(--ud-chrome-strip-pad-x, 8px) + var(--ud-chrome-icon, 40px) + 16px);
 }
 
 .notion-menu-item.is-checked::after {
@@ -646,6 +663,13 @@ html[data-canvas-theme='light'] .canvas-options-btn:hover,
 html[data-canvas-theme='light'] .canvas-options-btn[aria-expanded='true'],
 html[data-canvas-theme='light'] .canvas-history-btn:hover:not([aria-disabled='true']) {
   background: #f4f4f5;
+}
+
+html[data-canvas-theme='light'] .canvas-downloads-btn[aria-pressed='true'],
+html[data-canvas-theme='light'] .canvas-downloads-btn[aria-pressed='true']:hover:not([aria-disabled='true']) {
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  border-color: rgba(109, 40, 217, 0.5);
+  color: #fff;
 }
 
 html[data-canvas-theme='light'] .notion-menu {

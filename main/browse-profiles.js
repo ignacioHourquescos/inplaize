@@ -4,8 +4,8 @@
  * Perfiles de la navegación suelta = cuentas de Google. Cada cuenta vive en
  * una partition (la de navegación suelta, la de algún acceso web o una
  * importada desde un perfil de Google Chrome); si el mismo mail está iniciado
- * en varias, se muestra una sola vez. La última cuenta elegida queda como
- * predeterminada para las pestañas nuevas.
+ * en varias, se muestra una sola vez. Las pestañas nuevas arrancan en
+ * "Sin sesión" (incógnito) salvo que el usuario elija otra predeterminada.
  */
 
 const fs = require('fs');
@@ -26,7 +26,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
  * @typedef {{ email: string, name: string, photo: string }} GoogleAccount
  * @typedef {{ partition: string, email: string, name: string, photo: string, label: string, kind: 'loose' | 'session' | 'chrome', avatar?: string }} BrowseProfile
  * @typedef {{ partition: string, label: string, email: string, directory: string }} ChromeImport
- * @typedef {{ chrome: ChromeImport[], defaultPartition: string, accounts: Record<string, GoogleAccount[]> }} Store
+ * @typedef {{ chrome: ChromeImport[], chosenDefault: string, accounts: Record<string, GoogleAccount[]> }} Store
  */
 
 function loosePartition() {
@@ -65,14 +65,15 @@ let storeCache = null;
 function loadStore() {
   if (storeCache) return storeCache;
   /** @type {Store} */
-  let store = { chrome: [], defaultPartition: '', accounts: {} };
+  let store = { chrome: [], chosenDefault: '', accounts: {} };
   try {
     const raw = JSON.parse(fs.readFileSync(storePath(), 'utf-8'));
     store = {
       chrome: Array.isArray(raw && raw.chrome)
         ? raw.chrome.filter((c) => c && typeof c.partition === 'string' && c.partition)
         : [],
-      defaultPartition: typeof raw.defaultPartition === 'string' ? raw.defaultPartition : '',
+      // `defaultPartition` (la última cuenta usada) se descarta: ahora el predeterminado se elige a mano.
+      chosenDefault: typeof raw.chosenDefault === 'string' ? raw.chosenDefault : '',
       accounts: normalizeAccounts(raw.accounts),
     };
   } catch {
@@ -138,7 +139,7 @@ const avatarDataUrls = new Map();
 function listProfiles() {
   const store = loadStore();
   const candidates = candidatePartitions();
-  const preferred = store.defaultPartition;
+  const preferred = store.chosenDefault;
   const ordered = preferred
     ? [...candidates.filter((c) => c.partition === preferred), ...candidates.filter((c) => c.partition !== preferred)]
     : candidates;
@@ -175,18 +176,23 @@ function listProfiles() {
   ];
 }
 
-/** Perfil predeterminado: el último elegido o, si no hay, la primera cuenta de Google. */
+/** Perfil predeterminado: el elegido por el usuario o, si no hay, "Sin sesión". */
 function defaultPartition() {
-  const list = listProfiles();
-  const chosen = loadStore().defaultPartition;
-  if (chosen && list.some((p) => p.partition === chosen)) return chosen;
-  return (list[1] || list[0]).partition;
+  const chosen = loadStore().chosenDefault;
+  if (
+    chosen &&
+    (listProfiles().some((p) => p.partition === chosen) ||
+      candidatePartitions().some((c) => c.partition === chosen))
+  ) {
+    return chosen;
+  }
+  return guestPartition();
 }
 
 /** @param {string} partition */
 function setDefaultPartition(partition) {
   if (!partition) return;
-  saveStore({ ...loadStore(), defaultPartition: partition });
+  saveStore({ ...loadStore(), chosenDefault: partition === guestPartition() ? '' : partition });
 }
 
 /**
@@ -433,14 +439,16 @@ function refreshChromeRail() {
 }
 
 /**
- * Riel vertical de la navegación suelta: cuentas de la app y, aparte, las de
- * Chrome que se pueden traer.
+ * Riel vertical de la navegación suelta: "Sin sesión", las cuentas de la app
+ * y, aparte, las de Chrome que se pueden traer.
  */
 function railEntries() {
   return {
-    accounts: listProfiles()
-      .filter((p) => p.email)
-      .map((p) => ({ partition: p.partition, email: p.email, name: p.name, avatar: avatarFor(p.partition) })),
+    accounts: listProfiles().map((p) =>
+      p.email
+        ? { partition: p.partition, email: p.email, name: p.name, avatar: avatarFor(p.partition) }
+        : { partition: p.partition, email: '', name: p.label, avatar: '', incognito: true }
+    ),
     chrome: chromeRail.map((c) => ({ ...c })),
   };
 }

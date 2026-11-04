@@ -202,8 +202,8 @@ function applyHomeView(view) {
   homeView = view === 'downloads' ? 'downloads' : 'todos';
   const panel = document.getElementById('dock-home-panel');
   if (panel) panel.setAttribute('data-home-view', homeView);
-  if (homeView === 'downloads') kickDownloadPreviews();
-  else pauseDrawerVideo();
+  kickDownloadPreviews();
+  if (homeView !== 'downloads') pauseDrawerVideo();
 }
 
 function syncDockHomeStripBtn() {
@@ -216,12 +216,11 @@ function syncDockHomeStripBtn() {
   const looseOpen = lnSurface && !lnSurface.classList.contains('hidden');
   const homeVisible = !editorOpen && !looseOpen;
   if (btn) {
-    const on = homeVisible && homeView === 'todos';
-    btn.classList.toggle('is-active', on);
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('is-active', homeVisible);
+    btn.setAttribute('aria-pressed', homeVisible ? 'true' : 'false');
   }
   if (downloadsBtn) {
-    const on = homeVisible && homeView === 'downloads';
+    const on = homeView === 'downloads';
     downloadsBtn.classList.toggle('is-active', on);
     downloadsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
@@ -577,9 +576,9 @@ function swapInDocThumb(tile, extChip, url) {
   tile.prepend(img);
 }
 
-/** ¿El panel de descargas está a la vista? Ahí recién se piden miniaturas. */
+/** ¿El panel de descargas está a la vista (vista completa o columna angosta)?
+ *  Ahí recién se piden miniaturas. */
 function downloadsPanelVisible() {
-  if (homeView !== 'downloads') return false;
   const sidebarEl = document.getElementById('sidebar');
   return !!(sidebarEl && sidebarEl.classList.contains('open'));
 }
@@ -1037,6 +1036,11 @@ function buildDownloadTile(d) {
     if (d.state === 'completed') {
       // Ver el archivo no cambia el orden: la grilla queda por fecha de descarga.
       if (isPreviewableDownload(d) && d.savePath) {
+        // Desde la columna angosta el visor no se ve: pasamos a la vista completa.
+        if (homeView !== 'downloads') {
+          applyHomeView('downloads');
+          syncDockHomeStripBtn();
+        }
         openImageDrawer(d);
       } else {
         window.usualDesk.openDownloadFile(d.id).catch(() => {});
@@ -1297,10 +1301,22 @@ function unloadDrawerVideo() {
 }
 
 function hideDrawerPdf() {
-  const pdfFrame = document.getElementById('image-drawer-pdf');
-  if (!pdfFrame) return;
-  if (pdfFrame.src && pdfFrame.src !== 'about:blank') pdfFrame.src = 'about:blank';
-  pdfFrame.classList.add('hidden');
+  document.getElementById('image-drawer-pdf')?.remove();
+}
+
+/**
+ * webview (no iframe): el visor de PDF de Chromium no funciona en iframes dentro de Electron.
+ * Un webview es un proceso aparte aunque esté vacío, así que existe solo mientras se ve un PDF.
+ */
+function createDrawerPdf() {
+  const video = drawerVideoEl();
+  if (!video) return null;
+  const el = document.createElement('webview');
+  el.id = 'image-drawer-pdf';
+  el.className = 'image-drawer-pdf';
+  el.setAttribute('plugins', 'true');
+  video.before(el);
+  return el;
 }
 
 /** Muestra una descarga completada (imagen, PDF o video) en el visor fijo. */
@@ -1308,7 +1324,6 @@ function openImageDrawer(d) {
   const drawer = document.getElementById('image-drawer');
   const title = document.getElementById('image-drawer-title');
   const canvas = document.getElementById('image-drawer-canvas');
-  const pdfFrame = document.getElementById('image-drawer-pdf');
   const video = drawerVideoEl();
   const errorEl = document.getElementById('image-drawer-error');
   const placeholder = document.getElementById('image-drawer-placeholder');
@@ -1360,10 +1375,10 @@ function openImageDrawer(d) {
   } else if (isPdf) {
     unloadDrawerVideo();
     // PDF: visor integrado de Chromium en un <webview>; sin herramientas de edición.
+    const pdfFrame = createDrawerPdf();
     if (pdfFrame) {
       // El webview debe estar visible ANTES de navegar: oculto (display:none)
       // no tiene webContents adjunto y la carga falla.
-      pdfFrame.classList.remove('hidden');
       pdfFrame.src = fileUrlFromPath(d.savePath);
     } else {
       errorEl?.classList.remove('hidden');
@@ -3479,9 +3494,13 @@ if (dockHomeBtn) {
 
 if (dockDownloadsBtn) {
   dockDownloadsBtn.addEventListener('click', () => {
-    goToDockWelcomeHome('downloads').catch(() => {});
+    goToDockWelcomeHome(homeView === 'downloads' ? 'todos' : 'downloads').catch(() => {});
   });
 }
+
+document.getElementById('downloads-expand-btn')?.addEventListener('click', () => {
+  goToDockWelcomeHome('downloads').catch(() => {});
+});
 
 async function exitShortcutsEditModeFromUi() {
   const formWasOpen =
@@ -3831,6 +3850,7 @@ init();
 
 const looseNavBar = document.getElementById('loose-nav-bar');
 const looseNavTabsStrip = document.getElementById('loose-nav-tabs-strip');
+const looseNavControls = document.getElementById('loose-nav-controls');
 const looseNavNewTabBtn = document.getElementById('loose-nav-new-tab-btn');
 const dockViewport = document.getElementById('dock-viewport');
 const looseNavSurface = document.getElementById('loose-nav-surface');
@@ -3876,14 +3896,11 @@ function findLooseShortcut() {
 function computeViewportBoundsPayload() {
   if (!dockViewport) return null;
   const r = dockViewport.getBoundingClientRect();
-  const rail = looseNavAccountsRail && !looseNavAccountsRail.classList.contains('hidden')
-    ? Math.round(looseNavAccountsRail.getBoundingClientRect().width)
-    : 0;
-  const w = Math.max(0, Math.round(r.width) - rail);
+  const w = Math.max(0, Math.round(r.width));
   const h = Math.max(0, Math.round(r.height));
   if (w <= 0 || h <= 0) return null;
   return {
-    x: Math.max(0, Math.round(r.left) + rail),
+    x: Math.max(0, Math.round(r.left)),
     y: Math.max(0, Math.round(r.top)),
     width: w,
     height: h,
@@ -3926,6 +3943,14 @@ function invalidateLooseNavViewport() {
 
 window.__dockInvalidateLooseNavViewport = invalidateLooseNavViewport;
 
+window.__dockToggleInternet = () => {
+  if (looseNavState.active) {
+    goToDockWelcomeHome(homeView);
+    return;
+  }
+  window.usualDesk.openAppBrowser?.().catch(() => {});
+};
+
 function faviconFallbackEl(initial) {
   const letter = (initial || '?').trim().charAt(0).toUpperCase() || '?';
   const span = document.createElement('span');
@@ -3951,35 +3976,26 @@ function makeLooseNavIconButton(className, label, svg, enabled, onClick) {
   return btn;
 }
 
-/** Atrás y adelante solo en la pestaña activa. Recargar, en cada una. */
-function appendLooseNavControls(el, tab) {
-  const nav = document.createElement('span');
-  nav.className = 'loose-nav-tab-nav';
-  nav.addEventListener('click', (ev) => ev.stopPropagation());
-  if (tab.isActive) {
-    nav.appendChild(makeLooseNavIconButton(
-      'loose-nav-tab-nav-btn',
-      'Atrás',
-      LOOSE_NAV_BACK_SVG,
-      !!tab.canGoBack,
-      () => window.usualDesk.looseNavBack().catch(() => {})
-    ));
-    nav.appendChild(makeLooseNavIconButton(
-      'loose-nav-tab-nav-btn',
-      'Adelante',
-      LOOSE_NAV_FORWARD_SVG,
-      !!tab.canGoForward,
-      () => window.usualDesk.looseNavForward().catch(() => {})
-    ));
+let looseNavControlButtons = null;
+
+/** Atrás, adelante y recargar fijos a la izquierda de las pestañas; actúan sobre la activa. */
+function renderLooseNavControls(state) {
+  if (!looseNavControls) return;
+  if (!looseNavControlButtons) {
+    looseNavControlButtons = {
+      back: makeLooseNavIconButton('loose-nav-tab-nav-btn', 'Atrás', LOOSE_NAV_BACK_SVG, false,
+        () => window.usualDesk.looseNavBack().catch(() => {})),
+      forward: makeLooseNavIconButton('loose-nav-tab-nav-btn', 'Adelante', LOOSE_NAV_FORWARD_SVG, false,
+        () => window.usualDesk.looseNavForward().catch(() => {})),
+      reload: makeLooseNavIconButton('loose-nav-tab-nav-btn', 'Recargar', LOOSE_NAV_RELOAD_SVG, false,
+        () => window.usualDesk.looseNavReload().catch(() => {})),
+    };
+    looseNavControls.append(looseNavControlButtons.back, looseNavControlButtons.forward, looseNavControlButtons.reload);
   }
-  nav.appendChild(makeLooseNavIconButton(
-    'loose-nav-tab-nav-btn loose-nav-tab-reload',
-    'Recargar',
-    LOOSE_NAV_RELOAD_SVG,
-    true,
-    () => window.usualDesk.looseNavReload(tab.id).catch(() => {})
-  ));
-  el.appendChild(nav);
+  const active = state.tabs.find((t) => t.isActive);
+  looseNavControlButtons.back.disabled = !active?.canGoBack;
+  looseNavControlButtons.forward.disabled = !active?.canGoForward;
+  looseNavControlButtons.reload.disabled = !active;
 }
 
 function appendLooseNavClose(el, label, onClose) {
@@ -4158,6 +4174,7 @@ async function commitLooseNavComposer(raw, opts = {}) {
 
 function renderLooseNavTabs(state) {
   if (!looseNavTabsStrip) return;
+  renderLooseNavControls(state);
 
   const previousComposer = looseNavTabsStrip.querySelector('.loose-nav-tab.is-composing');
   const previousInput = previousComposer?.querySelector('.loose-nav-tab-url');
@@ -4206,9 +4223,6 @@ function renderLooseNavTabs(state) {
       el.classList.add('has-profile');
       el.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(tab.partition)));
     }
-
-    appendLooseNavControls(el, tab);
-
     if (tab.loading) {
       const spin = document.createElement('span');
       spin.className = 'loose-nav-tab-fav is-loading';
@@ -4268,7 +4282,32 @@ function renderLooseNavTabs(state) {
 let looseNavAccountBusy = '';
 let looseNavAccountsSig = '';
 
-function looseNavAccountButton({ key, label, tooltip, avatar, seed, active, count = 0, onClick }) {
+const LOOSE_NAV_INCOGNITO_SVG =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M6.5 10.5 8 5.6a1 1 0 0 1 1.3-.66L12 6l2.7-1.06a1 1 0 0 1 1.3.66l1.5 4.9z" fill="currentColor"/>' +
+  '<path d="M3.5 11h17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+  '<circle cx="7.5" cy="16" r="2.6" stroke="currentColor" stroke-width="1.8"/>' +
+  '<circle cx="16.5" cy="16" r="2.6" stroke="currentColor" stroke-width="1.8"/>' +
+  '<path d="M10.1 16c1.2-.7 2.6-.7 3.8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+  '</svg>';
+/** Corre una acción del riel con la cuenta marcada como ocupada hasta que termine. */
+async function runLooseNavAccountAction(key, el, action) {
+  if (looseNavAccountBusy) return;
+  looseNavAccountBusy = key;
+  el.classList.add('is-busy');
+  try {
+    await action();
+  } catch {
+    /* el main muestra el error si no pudo traer la cuenta */
+  } finally {
+    looseNavAccountBusy = '';
+    renderLooseNavAccounts(looseNavState);
+  }
+}
+
+function looseNavAccountButton({
+  key, label, tooltip, avatar, seed, incognito, active, isDefault, count = 0, onClick, onSetDefault,
+}) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'loose-nav-account';
@@ -4276,8 +4315,14 @@ function looseNavAccountButton({ key, label, tooltip, avatar, seed, active, coun
   btn.setAttribute('aria-label', tooltip);
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   if (active) btn.classList.add('is-active');
+  if (isDefault) btn.classList.add('is-default');
   if (looseNavAccountBusy === key) btn.classList.add('is-busy');
-  if (avatar && avatar.startsWith('data:image/')) {
+  if (incognito) {
+    const glyph = document.createElement('span');
+    glyph.className = 'loose-nav-account-incognito';
+    glyph.innerHTML = LOOSE_NAV_INCOGNITO_SVG;
+    btn.appendChild(glyph);
+  } else if (avatar && avatar.startsWith('data:image/')) {
     const img = document.createElement('img');
     img.src = avatar;
     img.alt = '';
@@ -4296,76 +4341,107 @@ function looseNavAccountButton({ key, label, tooltip, avatar, seed, active, coun
     badge.textContent = count > 99 ? '99+' : String(count);
     btn.appendChild(badge);
   }
-  btn.addEventListener('click', async () => {
-    if (looseNavAccountBusy) return;
-    looseNavAccountBusy = key;
-    btn.classList.add('is-busy');
-    try {
-      await onClick();
-    } catch {
-      /* el main muestra el error si no pudo traer la cuenta */
-    } finally {
-      looseNavAccountBusy = '';
-      renderLooseNavAccounts(looseNavState);
-    }
-  });
+  btn.addEventListener('click', () => runLooseNavAccountAction(key, btn, onClick));
+  if (onSetDefault) {
+    btn.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      if (isDefault) return;
+      runLooseNavAccountAction(key, btn, onSetDefault);
+    });
+  }
   return btn;
 }
 
-/** Riel vertical: cada sesión con sus pestañas; tocar una entra a las de esa sesión. */
+/**
+ * Fila de perfiles en la franja de arriba (en lugar de los accesos directos):
+ * cada sesión con sus pestañas; tocar una entra a las de esa sesión. Clic
+ * derecho la deja como predeterminada de las pestañas nuevas (estrella).
+ */
 function renderLooseNavAccounts(state) {
   if (!looseNavAccountsRail) return;
   const accounts = (state.accounts && state.accounts.accounts) || [];
   const chrome = (state.accounts && state.accounts.chrome) || [];
   const counts = state.tabCounts || {};
-  const show = !!state.active && accounts.length + chrome.length > 0;
-  const wasHidden = looseNavAccountsRail.classList.contains('hidden');
-  looseNavAccountsRail.classList.toggle('hidden', !show);
-  document.documentElement.setAttribute('data-loose-nav-rail', show ? 'on' : 'off');
-  if (wasHidden === show) invalidateLooseNavViewport();
+  const defaultPartition = (state.defaultProfile && state.defaultProfile.partition) || '';
+  const show = !!state.active;
   const sig = show
-    ? JSON.stringify([state.activePartition, looseNavAccountBusy, counts, accounts, chrome])
+    ? JSON.stringify([state.activePartition, defaultPartition, looseNavAccountBusy, counts, accounts, chrome])
     : '';
   if (sig === looseNavAccountsSig) return;
   looseNavAccountsSig = sig;
   looseNavAccountsRail.innerHTML = '';
   if (!show) return;
 
+  const list = looseNavAccountsRail;
+
   for (const a of accounts) {
-    const who = a.name && a.email ? `${a.name} (${a.email})` : a.email || a.name;
+    const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
+    const who = a.name && a.email ? `${a.name} (${a.email})` : display;
     const count = counts[a.partition] || 0;
     const tabsLabel = count === 1 ? '1 pestaña' : `${count} pestañas`;
-    looseNavAccountsRail.appendChild(looseNavAccountButton({
+    const isDefault = a.partition === defaultPartition;
+    const opts = {
       key: a.partition,
       label: a.name || a.email,
-      tooltip: `${who} · ${tabsLabel}`,
+      tooltip: `${who} · ${tabsLabel} · ${isDefault ? 'predeterminado' : 'clic derecho: usar como predeterminado'}`,
       avatar: a.avatar,
       seed: a.email || a.partition,
+      incognito: !!a.incognito,
       active: a.partition === state.activePartition,
+      isDefault,
       count,
       onClick: () => window.usualDesk.looseNavUseAccount({ partition: a.partition }),
-    }));
+      onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ partition: a.partition }),
+    };
+    list.appendChild(looseNavAccountButton(opts));
   }
   if (chrome.length) {
     if (accounts.length) {
       const sep = document.createElement('span');
       sep.className = 'loose-nav-accounts-sep';
       sep.setAttribute('aria-hidden', 'true');
-      looseNavAccountsRail.appendChild(sep);
+      list.appendChild(sep);
     }
     for (const c of chrome) {
       const who = c.email || c.name;
-      looseNavAccountsRail.appendChild(looseNavAccountButton({
+      const opts = {
         key: `chrome:${c.directory}`,
         label: c.email || c.name,
-        tooltip: `${who} · traer desde Chrome`,
+        tooltip: `${who} · traer desde Chrome · clic derecho: usar como predeterminado`,
         avatar: c.avatar,
         seed: c.email || c.name,
         active: false,
         onClick: () => window.usualDesk.looseNavUseAccount({ chromeDirectory: c.directory }),
-      }));
+        onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ chromeDirectory: c.directory }),
+      };
+      list.appendChild(looseNavAccountButton(opts));
     }
   }
+}
+
+const STRIP_SWAP_FADE_MS = 80;
+let stripSwapTimer = null;
+let stripSwapSeq = 0;
+
+/** Franja de arriba: accesos directos o perfiles. Apaga la fila vieja, cambia y enciende la nueva. */
+function applyStripMode(mode) {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-strip-mode');
+  if (current === null) {
+    root.setAttribute('data-strip-mode', mode);
+    return;
+  }
+  if (current === mode && !root.classList.contains('strip-swap-out')) return;
+  const seq = ++stripSwapSeq;
+  clearTimeout(stripSwapTimer);
+  root.classList.add('strip-swap-out');
+  stripSwapTimer = setTimeout(() => {
+    if (seq !== stripSwapSeq) return;
+    root.setAttribute('data-strip-mode', mode);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (seq === stripSwapSeq) root.classList.remove('strip-swap-out');
+    }));
+  }, STRIP_SWAP_FADE_MS);
 }
 
 function renderLooseNavBar(state) {
@@ -4378,6 +4454,7 @@ function renderLooseNavBar(state) {
   looseNavBar.classList.toggle('hidden', !show);
   if (looseNavSurface) looseNavSurface.classList.toggle('hidden', !show);
   document.documentElement.setAttribute('data-loose-nav', show ? 'on' : 'off');
+  applyStripMode(show ? 'accounts' : 'shortcuts');
 
   // Marcar el acceso directo “Navegación suelta” como activo visualmente.
   const looseSc = findLooseShortcut();
@@ -4420,6 +4497,34 @@ function initLooseNavUiEvents() {
     openLooseNavComposer();
   });
 
+  const looseNavPageMenuBtn = document.getElementById('loose-nav-page-menu-btn');
+  looseNavPageMenuBtn?.addEventListener('click', () => {
+    const r = looseNavPageMenuBtn.getBoundingClientRect();
+    window.usualDesk.looseNavOpenPageMenu?.(r.left, r.bottom).catch(() => {});
+  });
+
+  const looseNavTabsRow = looseNavBar.querySelector('.loose-nav-tabs-row');
+  const looseNavFindBar =
+    looseNavTabsRow && window.UsualDeskPageFindBar && window.usualDesk.looseNavFindInPage
+      ? window.UsualDeskPageFindBar.create(looseNavTabsRow, {
+          find: (text, opts) => window.usualDesk.looseNavFindInPage(text, opts),
+          stop: () => window.usualDesk.looseNavStopFindInPage(),
+        })
+      : null;
+  window.usualDesk.onLooseNavPageCommand?.((msg) => {
+    if (!msg) return;
+    if (msg.command === 'find-open') looseNavFindBar?.open();
+    else if (msg.command === 'find-result') looseNavFindBar?.showResult(msg.payload);
+    else if (msg.command === 'downloads') goToDockWelcomeHome('downloads').catch(() => {});
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (!looseNavState.active || !looseNavFindBar) return;
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key || '').toLowerCase() === 'f') {
+      ev.preventDefault();
+      looseNavFindBar.open();
+    }
+  });
+
   const runLooseNavShortcut = (action) => {
     if (action === 'edit-address') openLooseNavComposer('edit');
     else if (action === 'new-tab') openLooseNavComposer('new');
@@ -4452,11 +4557,21 @@ function initLooseNavUiEvents() {
   }
 
   // Si el sidebar se cierra, pedimos al main cerrar el modo (detach del view).
+  // Las pestañas quedan en memoria: al volver a abrir el dock retomamos "www"
+  // si era la pestaña del segmento que estaba activa.
+  let resumeLooseNavOnExpand = false;
   window.usualDesk.onSidebarState((expanded) => {
     if (!expanded && looseNavState.active) {
+      resumeLooseNavOnExpand = true;
       window.usualDesk.looseNavClose().catch(() => {});
-    } else if (expanded && looseNavState.active) {
+    } else if (!expanded) {
+      resumeLooseNavOnExpand = false;
+    } else if (looseNavState.active) {
+      resumeLooseNavOnExpand = false;
       scheduleLooseNavViewportSync();
+    } else if (resumeLooseNavOnExpand) {
+      resumeLooseNavOnExpand = false;
+      window.usualDesk.looseNavOpen?.().catch(() => {});
     }
   });
 

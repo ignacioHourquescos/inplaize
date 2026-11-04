@@ -1,4 +1,5 @@
 @import url('chrome-strip.css');
+@import url('page-find-bar.css');
 
 * {
   box-sizing: border-box;
@@ -16,6 +17,7 @@ body {
 }
 
 .shell-top {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: var(--ud-chrome-strip-gap);
@@ -33,21 +35,12 @@ html[data-shell-frameless='true'] .dock-app-version,
 html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
 html[data-shell-frameless='true'] .strip-add-shortcut,
-html[data-shell-frameless='true'] .shell-home-strip-btn,
-html[data-shell-frameless='true'] .shell-downloads-strip-btn,
-html[data-shell-frameless='true'] .open-url-slot {
+html[data-shell-frameless='true'] .strip-mode-seg {
   -webkit-app-region: no-drag;
 }
 
-.shell-home-strip-btn {
-  flex-shrink: 0;
-  align-self: center;
+.shell-top > .strip-mode-seg {
   margin-left: var(--ud-chrome-strip-pad-x);
-}
-
-.shell-downloads-strip-btn {
-  flex-shrink: 0;
-  align-self: center;
 }
 
 .shortcut-strip {
@@ -103,6 +96,38 @@ html[data-shell-frameless='true'] .shortcut-strip {
   font-size: 13px;
 }
 
+/* Botón ⋮ de opciones de la página (zoom, imprimir, Lens, traducir…) */
+.page-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ud-chrome-strip-h, 58px);
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-left: 1px solid var(--ud-chrome-strip-border);
+  background: transparent;
+  color: #e8e8ef;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.page-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.page-menu-btn:focus-visible {
+  outline: 2px solid var(--accent, #7c6cff);
+  outline-offset: -2px;
+}
+
+/* Buscar en la página (Ctrl+F): flota sobre la franja, a la izquierda del ⋮ */
+.shell-top > .page-find-bar {
+  right: calc(var(--ud-chrome-strip-h, 58px) * 2 + 8px);
+  height: 38px;
+}
+
 html:not([data-shell-frameless='true']) .shell-win-btns,
 html:not([data-shell-frameless='true']) .dock-chrome-menu-wrap {
   display: none;
@@ -116,6 +141,36 @@ html[data-usualdesk-detached-host='true'] body {
 
 html[data-usualdesk-detached-host='true'] .shell-top {
   background: var(--ud-chrome-strip-bg);
+}
+
+.page-hibernated-cover {
+  position: fixed;
+  top: var(--ud-chrome-strip-h, 58px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 24px;
+  background-color: var(--ud-chrome-canvas);
+  background-position: top left;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: grayscale(0.35);
+  pointer-events: none;
+}
+
+.page-hibernated-cover[hidden] {
+  display: none;
+}
+
+.page-hibernated-note {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(20, 20, 26, 0.82);
+  color: #e8e8ef;
+  font-size: 12px;
 }
 
 /* ==========================================================================

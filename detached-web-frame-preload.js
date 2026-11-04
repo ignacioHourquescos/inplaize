@@ -37,11 +37,25 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   onChrome: (cb) => {
     ipcRenderer.on('detached-chrome', (_e, payload) => cb(payload));
   },
+  openPageMenu: (x, y) => ipcRenderer.invoke('detached-frame-action', 'page-menu', { x, y }),
+  findInPage: (text, opts) =>
+    ipcRenderer.invoke('detached-frame-action', 'find', {
+      text: String(text || ''),
+      forward: !(opts && opts.forward === false),
+      newSearch: !!(opts && opts.newSearch === true),
+    }),
+  stopFindInPage: () => ipcRenderer.invoke('detached-frame-action', 'find-stop'),
+  onPageCommand: (cb) => {
+    ipcRenderer.on('detached-page-command', (_e, msg) => cb(msg));
+  },
   onTabs: (cb) => {
     ipcRenderer.on('detached-tabs', (_e, payload) => cb(payload));
   },
   onTitleBadge: (cb) => {
     ipcRenderer.on('detached-title-badge', (_e, payload) => cb(payload));
+  },
+  onHibernated: (cb) => {
+    ipcRenderer.on('detached-hibernated', (_e, payload) => cb(payload));
   },
   onWindowMaximized: (cb) => {
     ipcRenderer.on('detached-window-maximized', (_e, maximized) => cb(maximized === true));

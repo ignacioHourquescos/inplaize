@@ -4,7 +4,10 @@
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
+    "postinstall": "node scripts/brand-dev-electron.js",
+    "prestart": "node scripts/brand-dev-electron.js",
     "start": "electron .",
+    "predev": "node scripts/brand-dev-electron.js",
     "dev": "electronmon .",
     "preview:onboarding": "node scripts/onboarding-preview-server.js",
     "build:editor": "node scripts/bundle-document-editor.js",
@@ -16,6 +19,7 @@
     "appId": "com.inplaize.app",
     "productName": "inplaize",
     "forceCodeSigning": false,
+    "afterPack": "scripts/after-pack.js",
     "files": [
       "main/**/*",
       "landing/**/*",
@@ -67,6 +71,7 @@
     "electronmon": "^2.0.3",
     "esbuild": "^0.28.2",
     "png-to-ico": "^3.0.2",
+    "rcedit": "^5.0.2",
     "sharp": "^0.35.3"
   },
   "dependencies": {

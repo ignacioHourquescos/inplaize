@@ -5,7 +5,6 @@ const path = require('path');
 const { app, BrowserWindow } = require('electron');
 const {
   DEFAULT_SHORTCUTS,
-  LOOSE_NAV_DEFAULT_SHORTCUT,
   MAX_SHORTCUT_UNDO,
 } = require('./constants');
 
@@ -22,18 +21,11 @@ function shortcutArrayFromFilePayload(raw) {
   return null;
 }
 
-/**
- * Migración suave: usuarios con shortcuts existentes pero sin el acceso de
- * "Navegación suelta" lo reciben automáticamente. NO se inyecta en listas
- * vacías (instalación nueva o usuario que borró todo): ahí queremos que el
- * onboarding lo guíe a crear su primera ventana sin elementos pre-cargados.
- */
-function ensureLooseNavShortcutPresent(list) {
+/** El acceso de "Navegación suelta" ya no se muestra en el dock: se quita de listas viejas. */
+function removeLooseNavShortcut(list) {
   if (!Array.isArray(list)) return { list, mutated: false };
-  if (list.length === 0) return { list, mutated: false };
-  const hasLoose = list.some((s) => s && s.type === 'loose');
-  if (hasLoose) return { list, mutated: false };
-  return { list: [...list, LOOSE_NAV_DEFAULT_SHORTCUT], mutated: true };
+  const filtered = list.filter((s) => !(s && s.type === 'loose'));
+  return { list: filtered, mutated: filtered.length !== list.length };
 }
 
 function loadShortcuts() {
@@ -43,7 +35,7 @@ function loadShortcuts() {
       const raw = JSON.parse(fs.readFileSync(p, 'utf-8'));
       const list = shortcutArrayFromFilePayload(raw);
       if (list !== null) {
-        const { list: ensured, mutated } = ensureLooseNavShortcutPresent(list);
+        const { list: ensured, mutated } = removeLooseNavShortcut(list);
         if (mutated) {
           try {
             saveShortcuts(ensured);

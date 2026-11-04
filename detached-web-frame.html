@@ -9,20 +9,29 @@
 </head>
 <body>
   <header class="shell-top" role="banner">
+    <div class="strip-mode-seg" role="group" aria-label="inplaize o internet">
+    <button
+      type="button"
+      id="shell-home-btn"
+      class="shell-home-strip-btn shell-shortcut-item"
+      aria-pressed="false"
+      data-tooltip="inplaize"
+      data-tooltip-placement="bottom"
+      aria-label="Abrir inplaize"
+    >
+      <span class="dock-home-logo-mark" aria-hidden="true"></span>
+    </button>
     <div class="open-url-slot" id="open-url-slot">
       <button
         type="button"
         id="open-url-btn"
-        class="shell-shortcut-item open-url-btn"
+        class="shell-shortcut-item open-url-btn is-active"
+        aria-pressed="true"
         data-tooltip="Internet"
         data-tooltip-placement="bottom"
         aria-label="Abrir el navegador"
       >
-        <svg class="open-url-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
-          <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          <path d="M12 4c2.2 2.4 3.3 5.1 3.3 8s-1.1 5.6-3.3 8c-2.2-2.4-3.3-5.1-3.3-8s1.1-5.6 3.3-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-        </svg>
+        <span class="open-url-icon" aria-hidden="true">www</span>
       </button>
       <form id="open-url-form" class="open-url-form" hidden autocomplete="off">
         <div class="open-url-card">
@@ -39,30 +48,7 @@
         <p class="open-url-error" hidden></p>
       </form>
     </div>
-    <span class="strip-lead-sep" aria-hidden="true"></span>
-    <button
-      type="button"
-      id="shell-home-btn"
-      class="shell-home-strip-btn shell-shortcut-item"
-      data-tooltip="Tareas"
-      data-tooltip-placement="bottom"
-      aria-label="Abrir tareas"
-    >
-      <span class="dock-home-logo-mark" aria-hidden="true"></span>
-    </button>
-    <button
-      type="button"
-      id="shell-downloads-btn"
-      class="shell-downloads-strip-btn shell-shortcut-item"
-      data-tooltip="Descargas"
-      data-tooltip-placement="bottom"
-      aria-label="Abrir descargas"
-    >
-      <svg class="dock-downloads-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </button>
+    </div>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos">
     <button
       type="button"
@@ -90,6 +76,7 @@
   <script src="open-url-bar.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
+  <script src="page-find-bar.js"></script>
   <script src="detached-web-frame-renderer.js"></script>
 </body>
 </html>

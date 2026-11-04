@@ -27,6 +27,11 @@ function appIconIco() {
   return path.join(appRoot(), 'assets', 'icon.ico');
 }
 
+/** Windows no puede leer archivos dentro de app.asar: empaquetada, el ícono va embebido en el .exe. */
+function shellIconPath() {
+  return app.isPackaged ? process.execPath : appIconIco();
+}
+
 function appIconFile() {
   const ico = appIconIco();
   const png = path.join(appRoot(), 'assets', 'icon.png');
@@ -112,7 +117,7 @@ function brandWindow(win) {
     try {
       win.setAppDetails({
         appId: APP_ID,
-        appIconPath: appIconIco(),
+        appIconPath: shellIconPath(),
         appIconIndex: 0,
         relaunchDisplayName: APP_NAME,
         relaunchCommand: `"${process.execPath}" ${app.isPackaged ? '' : `"${appRoot()}"`}`.trim(),
@@ -128,6 +133,7 @@ module.exports = {
   APP_ID,
   appIconFile,
   appIconIco,
+  shellIconPath,
   brandWindow,
   installWindowsTaskbarShortcut,
 };

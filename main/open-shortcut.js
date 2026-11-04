@@ -54,7 +54,7 @@ try{
   var Native=window.Notification;
   if(!Native||typeof Native!=='function')return;
   if(!window.__usualDeskNativeNotification)window.__usualDeskNativeNotification=Native;
-  var VER=5;
+  var VER=6;
   if(window.__usualDeskNotifyPatch&&window.__usualDeskNotifyVer===VER)return;
   if(window.__usualDeskNotifyPatch){
     try{window.Notification=window.__usualDeskNativeNotification;}catch(e){}
@@ -178,6 +178,9 @@ try{
   }
   function W(title,opts){
     opts=opts||{};
+    try{
+      if(typeof window.__usualDeskNoteNotification==='function')window.__usualDeskNoteNotification();
+    }catch(e){}
     if(CUSTOM)return makeInAppMock(title,opts);
     if(!DEBUG){
       var n=new N(title,opts);
@@ -297,7 +300,9 @@ function attachWebContentsTitleBadge(webContents, shortcutId) {
   webContents.__usualDeskTitleBadgeAttached = true;
 
   webContents.on('page-title-updated', (_event, title) => {
-    broadcastShortcutTitleBadge(shortcutId, parseParenCount(title));
+    const count = parseParenCount(title);
+    if (count != null) markWebPageNotifies(webContents.__usualDeskWebMapKey);
+    broadcastShortcutTitleBadge(shortcutId, count);
   });
 
   webContents.once('did-finish-load', () => {
@@ -654,6 +659,9 @@ function installWebNotificationPermissionHandlers(partition) {
   }
 
   ses.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'notifications' && webContents && !webContents.isDestroyed()) {
+      markWebPageNotifies(webContents.__usualDeskWebMapKey);
+    }
     if (permission === 'notifications' && notificationsMutedForContents(webContents)) {
       callback(false);
       return;
@@ -669,6 +677,37 @@ function syncOpenWebKeysToDock() {
   } catch {
     /* noop */
   }
+}
+
+/**
+ * La página usa notificaciones o contador de no leídos: hibernarla haría perder avisos.
+ * @param {unknown} mapKey
+ */
+function markWebPageNotifies(mapKey) {
+  if (!mapKey || typeof mapKey !== 'string') return;
+  const win = webWindowsByUrlKey.get(mapKey);
+  if (win && !win.isDestroyed()) win.__usualDeskPageNotifies = true;
+}
+
+/**
+ * Silencio de audio/notificaciones que corresponde ahora (el Modo Foco pisa lo guardado).
+ * @param {{ audioMuted?: boolean, notificationsMuted?: boolean }} shortcut
+ * @param {string} mapKey
+ * @returns {{ audioMuted: boolean, notificationsMuted: boolean }}
+ */
+function desiredWebMuteState(shortcut, mapKey) {
+  let focusOverride = null;
+  try {
+    focusOverride = require('./focus-mode').getRuntimeOverride(mapKey);
+  } catch {
+    focusOverride = null;
+  }
+  return {
+    notificationsMuted: focusOverride
+      ? focusOverride.notificationsMuted
+      : shortcut.notificationsMuted === true,
+    audioMuted: focusOverride ? focusOverride.audioMuted : !!shortcut.audioMuted,
+  };
 }
 
 /**
@@ -761,19 +800,8 @@ async function openWebShortcut(shortcut) {
 
   const partition = partitionFromSessionId(shortcut.sessionId);
   const mapKey = webMapKey(shortcut);
-  const focusOverride = (() => {
-    try {
-      return require('./focus-mode').getRuntimeOverride(mapKey);
-    } catch {
-      return null;
-    }
-  })();
-  const desiredNotificationsMuted = focusOverride
-    ? focusOverride.notificationsMuted
-    : shortcut.notificationsMuted === true;
-  const desiredAudioMuted = focusOverride
-    ? focusOverride.audioMuted
-    : !!shortcut.audioMuted;
+  const { notificationsMuted: desiredNotificationsMuted, audioMuted: desiredAudioMuted } =
+    desiredWebMuteState(shortcut, mapKey);
   let win = webWindowsByUrlKey.get(mapKey);
   if (win && !win.isDestroyed()) {
     try {
@@ -784,6 +812,8 @@ async function openWebShortcut(shortcut) {
     installWebNotificationPermissionHandlers(partition);
     win.__usualDeskWebMapKey = mapKey;
     win.__usualDeskShortcutLabel = shortcut.name || 'Web';
+    win.__usualDeskShortcut = shortcut;
+    require('./detached-web-frame').wakeHost(win);
     if (win.isMinimized()) win.restore();
     if (win.isFullScreen()) win.setFullScreen(false);
     if (!win.isMaximized()) win.maximize();
@@ -886,6 +916,7 @@ function focusWebWindowByMapKey(mapKey) {
   }
   const win = webWindowsByUrlKey.get(mapKey);
   if (!win || win.isDestroyed()) return false;
+  require('./detached-web-frame').wakeHost(win);
   if (win.isMinimized()) win.restore();
   if (win.isFullScreen()) win.setFullScreen(false);
   if (!win.isMaximized()) win.maximize();
@@ -1212,6 +1243,8 @@ module.exports = {
   closeWebWindowByMapKey,
   setWebWindowForMapKey,
   deleteWebWindowForMapKey,
+  desiredWebMuteState,
+  markWebPageNotifies,
   focusLastWebWindowFromHotkey,
   getLastFocusedChromeWindow,
   anyWebWindowFocused,

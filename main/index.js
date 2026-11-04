@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, screen, BrowserWindow, shell, powerMonitor } = require('electron');
 const { log } = require('./logger');
-const { APP_ID, appIconIco, installWindowsTaskbarShortcut } = require('./app-identity');
+const { APP_ID, shellIconPath, installWindowsTaskbarShortcut } = require('./app-identity');
 
 /** Nombre fijo antes de ready: si no, Windows muestra el del ejecutable (Electron) o uno viejo. */
 app.setName('inplaize');
@@ -54,7 +54,7 @@ function enableAutoStart() {
         target: exe,
         cwd: path.dirname(exe),
         description: 'inplaize',
-        icon: appIconIco(),
+        icon: shellIconPath(),
         iconIndex: 0,
         appUserModelId: APP_ID,
       };
@@ -111,6 +111,8 @@ app.whenReady().then(() => {
   enableAutoStart();
 
   createWindow();
+  require('./web-hibernation').startWebHibernation();
+  require('./process-report').startProcessReports();
 
   registerDockGlobalShortcut(state, raiseAppFromGlobalHotkey, createWindow);
 

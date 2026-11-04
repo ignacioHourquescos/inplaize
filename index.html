@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-dock-position="left" data-dock-layout="topbar" data-sidebar-density="normal" data-web-host-mode="separate">
+<html lang="es" data-dock-position="left" data-dock-layout="topbar" data-sidebar-density="normal" data-web-host-mode="separate" data-strip-mode="shortcuts">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="shell-home-menu.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="onboarding.css">
+  <link rel="stylesheet" href="page-find-bar.css">
 </head>
 <body>
   <div id="app">
@@ -32,7 +33,19 @@
     <!-- Sidebar panel -->
     <div id="sidebar" data-mouse-hit>
       <div id="sidebar-chrome">
-        <div class="dock-strip-lead">
+        <div class="dock-strip-lead strip-mode-seg" role="group" aria-label="inplaize o internet">
+          <button
+            type="button"
+            id="dock-home-btn"
+            class="dock-home-strip-btn shell-shortcut-item is-active"
+            data-mouse-hit
+            data-tooltip="inplaize"
+            data-tooltip-placement="bottom"
+            aria-label="inplaize"
+            aria-pressed="true"
+          >
+            <span class="dock-home-logo-mark" aria-hidden="true"></span>
+          </button>
           <div class="open-url-slot" id="open-url-slot" data-mouse-hit>
             <button
               type="button"
@@ -43,11 +56,7 @@
               data-tooltip-placement="bottom"
               aria-label="Abrir el navegador"
             >
-              <svg class="open-url-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2"/>
-                <path d="M4 12h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M12 4c2.2 2.4 3.3 5.1 3.3 8s-1.1 5.6-3.3 8c-2.2-2.4-3.3-5.1-3.3-8s1.1-5.6 3.3-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-              </svg>
+              <span class="open-url-icon" aria-hidden="true">www</span>
             </button>
             <form id="open-url-form" class="open-url-form" hidden autocomplete="off" data-mouse-hit>
               <div class="open-url-card" data-mouse-hit>
@@ -64,35 +73,8 @@
               <p class="open-url-error" hidden></p>
             </form>
           </div>
-          <span class="strip-lead-sep" aria-hidden="true"></span>
-          <button
-            type="button"
-            id="dock-home-btn"
-            class="dock-home-strip-btn shell-shortcut-item is-active"
-            data-mouse-hit
-            data-tooltip="Tareas"
-            data-tooltip-placement="bottom"
-            aria-label="Tareas"
-            aria-pressed="true"
-          >
-            <span class="dock-home-logo-mark" aria-hidden="true"></span>
-          </button>
-          <button
-            type="button"
-            id="dock-downloads-btn"
-            class="dock-home-strip-btn shell-shortcut-item"
-            data-mouse-hit
-            data-tooltip="Descargas"
-            data-tooltip-placement="bottom"
-            aria-label="Descargas"
-            aria-pressed="false"
-          >
-            <svg class="dock-downloads-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
         </div>
+        <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de Google"></nav>
         <div id="shortcuts-container">
         <button
           type="button"
@@ -147,10 +129,18 @@
 
       <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegador">
         <div class="loose-nav-tabs-row">
+          <div id="loose-nav-controls" class="loose-nav-controls"></div>
           <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
           <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-new-tab" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom" aria-label="Nueva pestaña">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button type="button" id="loose-nav-page-menu-btn" class="loose-nav-page-menu" data-tooltip="Opciones de la página" data-tooltip-placement="bottom" aria-label="Opciones de la página" aria-haspopup="menu">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
+              <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
+              <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
             </svg>
           </button>
         </div>
@@ -163,6 +153,21 @@
           </section>
 
           <div id="canvas-rail" class="canvas-rail" data-mouse-hit>
+            <button
+              type="button"
+              id="dock-downloads-btn"
+              class="canvas-history-btn canvas-downloads-btn"
+              data-mouse-hit
+              aria-label="Descargas"
+              aria-pressed="false"
+              data-tooltip="Descargas"
+              data-tooltip-placement="right"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
             <button
               type="button"
               id="canvas-undo-btn"
@@ -199,6 +204,22 @@
 
           <!-- Archivos descargados: se abre con la flecha de la franja. -->
           <div id="downloads-home" class="downloads-home" data-mouse-hit aria-label="Archivos de Descargas y Escritorio">
+            <!-- Solo en la columna angosta (vista de tareas): abre la vista completa. -->
+            <button
+              type="button"
+              id="downloads-expand-btn"
+              class="downloads-expand-btn"
+              aria-label="Ver todas las descargas"
+              data-tooltip="Ver todas las descargas"
+              data-tooltip-placement="right"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 4v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M7 11l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span>Ver todo</span>
+            </button>
             <div id="downloads-home-grid" class="downloads-home-grid">
               <!-- Tile fijo: QR para recibir archivos desde el teléfono. Siempre primero.
                    Los divisores violeta por fecha se insertan por JS a continuación. -->
@@ -282,8 +303,6 @@
             </div>
             <div class="image-drawer-body">
               <canvas id="image-drawer-canvas" class="image-drawer-canvas hidden"></canvas>
-              <!-- webview (no iframe): el visor de PDF de Chromium no funciona en iframes dentro de Electron -->
-              <webview id="image-drawer-pdf" class="image-drawer-pdf hidden" src="about:blank" plugins="true"></webview>
               <video id="image-drawer-video" class="image-drawer-video hidden" controls controlslist="nodownload" playsinline preload="metadata"></video>
               <p id="image-drawer-error" class="image-drawer-error hidden">No se pudo cargar el archivo.</p>
               <div id="image-drawer-placeholder" class="image-drawer-placeholder">
@@ -362,7 +381,6 @@
         </div>
         <div id="dock-inline-editor" class="dock-inline-editor hidden" data-mouse-hit></div>
         <div id="loose-nav-surface" class="loose-nav-surface hidden" aria-hidden="true"></div>
-        <nav id="loose-nav-accounts" class="loose-nav-accounts hidden" data-mouse-hit aria-label="Cuentas de Google"></nav>
       </div>
 
       <!-- Drawer de opciones (desliza desde la derecha) -->
@@ -671,6 +689,7 @@
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="onboarding.js"></script>
+  <script src="page-find-bar.js"></script>
   <script src="renderer.js"></script>
   <script src="document-editor.bundle.js"></script>
   <script src="document-markdown.js"></script>

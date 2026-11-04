@@ -17,19 +17,9 @@ const MAX_SHORTCUT_UNDO = 25;
 
 /**
  * En instalaciones nuevas la barra arranca vacía: el onboarding guía al
- * usuario para que cree su primera ventana. Mantenemos `LOOSE_NAV_DEFAULT_SHORTCUT`
- * por separado solo para la migración suave de usuarios que ya tenían
- * shortcuts cargados antes de que existiera el acceso de "Navegación suelta".
+ * usuario para que cree su primera ventana.
  */
 const DEFAULT_SHORTCUTS = [];
-
-const LOOSE_NAV_DEFAULT_SHORTCUT = {
-  id: 'loose-nav',
-  name: 'Navegación suelta',
-  type: 'loose',
-  url: '',
-  icon: 'assets/icons/loose-nav.svg',
-};
 
 /** URL al abrir el navegador si todavía no hay pestañas. El “+” pide el enlace en la pestaña. */
 const LOOSE_NAV_NEW_TAB_URL = 'https://www.google.com';
@@ -43,7 +33,6 @@ module.exports = {
   DOCK_TOGGLE_ACCELERATORS,
   MAX_SHORTCUT_UNDO,
   DEFAULT_SHORTCUTS,
-  LOOSE_NAV_DEFAULT_SHORTCUT,
   LOOSE_NAV_NEW_TAB_URL,
   LOOSE_NAV_SESSION_ID,
 };

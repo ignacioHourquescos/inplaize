@@ -453,6 +453,26 @@ if (api.onTitleBadge) {
 
 refreshChromeFromMain();
 
+/** Página en reposo: su última imagen ocupa el hueco hasta que la ventana vuelva a usarse. */
+function bindHibernationCover() {
+  if (!api.onHibernated) return;
+  const cover = document.createElement('div');
+  cover.className = 'page-hibernated-cover';
+  cover.hidden = true;
+  const note = document.createElement('span');
+  note.className = 'page-hibernated-note';
+  note.textContent = 'En reposo para ahorrar memoria · se recarga al volver';
+  cover.appendChild(note);
+  document.body.appendChild(cover);
+  api.onHibernated((payload) => {
+    const snapshot = payload && typeof payload.snapshot === 'string' ? payload.snapshot : '';
+    cover.style.backgroundImage = snapshot ? `url("${snapshot}")` : '';
+    cover.hidden = !payload;
+  });
+}
+
+bindHibernationCover();
+
 const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
 if (stripAddShortcutBtn) {
   stripAddShortcutBtn.addEventListener('click', () => {
@@ -464,13 +484,6 @@ const detachedShellHomeBtn = document.getElementById('shell-home-btn');
 if (detachedShellHomeBtn && window.usualDeskDetached.openDockWelcomeHome) {
   detachedShellHomeBtn.addEventListener('click', () => {
     window.usualDeskDetached.openDockWelcomeHome('todos').catch(() => {});
-  });
-}
-
-const detachedShellDownloadsBtn = document.getElementById('shell-downloads-btn');
-if (detachedShellDownloadsBtn && window.usualDeskDetached.openDockWelcomeHome) {
-  detachedShellDownloadsBtn.addEventListener('click', () => {
-    window.usualDeskDetached.openDockWelcomeHome('downloads').catch(() => {});
   });
 }
 
@@ -496,5 +509,60 @@ function initFramelessChrome() {
   initShellHomeMenuChrome(api);
 }
 
+const PAGE_MENU_SVG =
+  '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">' +
+  '<circle cx="12" cy="5" r="1.8" fill="currentColor"/>' +
+  '<circle cx="12" cy="12" r="1.8" fill="currentColor"/>' +
+  '<circle cx="12" cy="19" r="1.8" fill="currentColor"/>' +
+  '</svg>';
+
+/** Botón ⋮ con las opciones de la página (zoom, imprimir, Lens, traducir…). */
+function mountPageMenuButton() {
+  const header = document.querySelector('.shell-top');
+  if (!header || !api.openPageMenu || document.getElementById('page-menu-btn')) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'page-menu-btn';
+  btn.className = 'page-menu-btn';
+  btn.setAttribute('aria-label', 'Opciones de la página');
+  btn.setAttribute('aria-haspopup', 'menu');
+  btn.dataset.tooltip = 'Opciones de la página';
+  btn.dataset.tooltipPlacement = 'bottom';
+  btn.innerHTML = PAGE_MENU_SVG;
+  btn.addEventListener('click', () => {
+    const r = btn.getBoundingClientRect();
+    api.openPageMenu(r.left, r.bottom).catch(() => {});
+  });
+  const anchor = document.getElementById('header-actions') || header.querySelector('.shell-win-btns');
+  if (anchor) header.insertBefore(btn, anchor);
+  else header.appendChild(btn);
+}
+
+function bindPageCommands() {
+  const header = document.querySelector('.shell-top');
+  const findBar =
+    header && api.findInPage && window.UsualDeskPageFindBar
+      ? window.UsualDeskPageFindBar.create(header, {
+          find: (text, opts) => api.findInPage(text, opts),
+          stop: () => api.stopFindInPage(),
+        })
+      : null;
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'f' && findBar) {
+      e.preventDefault();
+      findBar.open();
+    }
+  });
+  if (!api.onPageCommand) return;
+  api.onPageCommand((msg) => {
+    if (!msg) return;
+    if (msg.command === 'find-open' && findBar) findBar.open();
+    else if (msg.command === 'find-result' && findBar) findBar.showResult(msg.payload);
+    else if (msg.command === 'downloads') api.openDockWelcomeHome?.('downloads').catch(() => {});
+  });
+}
+
 initFramelessChrome();
+mountPageMenuButton();
+bindPageCommands();
 bindShellFileDragAcceptance();

@@ -425,6 +425,12 @@ function registerIpcHandlers(state) {
 
   });
 
+  ipcMain.removeAllListeners('web-notification-shown');
+
+  ipcMain.on('web-notification-shown', (event) => {
+    require('./open-shortcut').markWebPageNotifies(event.sender.__usualDeskWebMapKey);
+  });
+
   ipcMain.removeAllListeners('in-app-notification-show');
 
   ipcMain.on('in-app-notification-show', (event, payload) => {

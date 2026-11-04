@@ -103,6 +103,11 @@ contextBridge.exposeInMainWorld('usualDesk', {
       partition: target && target.partition ? String(target.partition) : '',
       chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
     }),
+  looseNavSetDefaultProfile: (target) =>
+    ipcRenderer.invoke('loose-nav-set-default-profile', {
+      partition: target && target.partition ? String(target.partition) : '',
+      chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
+    }),
   onLooseNavShortcut: (callback) => {
     ipcRenderer.on('loose-nav-shortcut', (_event, action) => callback(String(action || '')));
   },
@@ -112,6 +117,17 @@ contextBridge.exposeInMainWorld('usualDesk', {
   looseNavReload: (tabId) => ipcRenderer.invoke('loose-nav-reload', tabId ? String(tabId) : null),
   looseNavOpenExternal: (url) => ipcRenderer.invoke('loose-nav-open-external', { url }),
   looseNavGetState: () => ipcRenderer.invoke('loose-nav-get-state'),
+  looseNavOpenPageMenu: (x, y) => ipcRenderer.invoke('loose-nav-page-menu', { x, y }),
+  looseNavFindInPage: (text, opts) =>
+    ipcRenderer.invoke('loose-nav-find', {
+      text: String(text || ''),
+      forward: !(opts && opts.forward === false),
+      newSearch: !!(opts && opts.newSearch === true),
+    }),
+  looseNavStopFindInPage: () => ipcRenderer.invoke('loose-nav-find-stop'),
+  onLooseNavPageCommand: (callback) => {
+    ipcRenderer.on('loose-nav-page-command', (_event, msg) => callback(msg));
+  },
   looseNavSetViewportBounds: (bounds) =>
     ipcRenderer.invoke('loose-nav-set-viewport-bounds', bounds),
   setMenuOverlayOpen: (open, editMode) =>

@@ -303,13 +303,6 @@ if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
   });
 }
 
-const shellDownloadsBtn = document.getElementById('shell-downloads-btn');
-if (shellDownloadsBtn && window.usualDeskShell.openDockWelcomeHome) {
-  shellDownloadsBtn.addEventListener('click', () => {
-    window.usualDeskShell.openDockWelcomeHome('downloads').catch(() => {});
-  });
-}
-
 function initShellHomeMenuChrome(api) {
   if (!window.UsualDeskShellHomeMenu) return;
   window.UsualDeskShellHomeMenu.mountChrome();

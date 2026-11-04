@@ -408,11 +408,10 @@ html[data-dock-position='center'] #sidebar.drop-target-active {
   -webkit-app-region: no-drag;
 }
 
-/* Logo de inplaize (tareas), flecha (descargas) y globo (abrir enlace), a la izquierda de los accesos. */
+/* Segmented "www | inplaize", a la izquierda de los accesos. */
 .dock-strip-lead {
   display: flex;
   align-items: center;
-  gap: var(--ud-chrome-strip-gap);
   -webkit-app-region: no-drag;
 }
 
@@ -425,6 +424,11 @@ html[data-dock-layout='modal'] .dock-strip-lead {
   grid-row: 1;
   align-self: center;
   justify-self: start;
+}
+
+html[data-dock-layout='modal'] .strip-mode-seg {
+  background: var(--bg-card);
+  border-color: var(--border);
 }
 
 html[data-dock-layout='modal'] .dock-strip-lead .shell-shortcut-item {
@@ -2300,7 +2304,6 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .dock-viewport {
   -webkit-app-region: no-drag;
 }
 
-#dock-home-panel[data-home-view='todos'] > #downloads-home,
 #dock-home-panel[data-home-view='todos'] > #image-drawer {
   display: none;
 }
@@ -3283,6 +3286,7 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
 }
 
 .loose-nav-tabs-row {
+  position: relative;
   display: flex;
   align-items: stretch;
   gap: 4px;
@@ -3290,11 +3294,6 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   padding: 4px 8px 0;
   background: var(--ud-chrome-strip-bg);
   overflow: hidden;
-}
-
-/* Con el riel de cuentas visible, la primera pestaña arranca donde empieza la página. */
-html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
-  padding-left: var(--loose-nav-rail-w);
 }
 
 .loose-nav-new-tab {
@@ -3317,6 +3316,34 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
 
 .loose-nav-new-tab:hover {
   background: var(--ud-chrome-icon-bg-hover);
+}
+
+/* ⋮ de opciones de la página: al final de la fila, como en Chrome. */
+.loose-nav-page-menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0 0 2px auto;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-page-menu:hover {
+  background: var(--ud-chrome-icon-bg-hover);
+}
+
+.loose-nav-tabs-row > .page-find-bar {
+  right: 44px;
+  margin-top: 2px;
 }
 
 /* Ocupa lo que necesitan las pestañas: el "+" queda pegado a la última, como en Chrome. */
@@ -3342,17 +3369,17 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   border-radius: 4px;
 }
 
+/* Como Chrome: todas del mismo ancho, separador fino entre inactivas y la activa como bloque claro. */
 .loose-nav-tab {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-width: 120px;
-  max-width: 260px;
-  flex: 0 1 auto;
-  padding: 0 8px 0 4px;
-  border: 1px solid transparent;
-  border-bottom: none;
+  gap: 8px;
+  width: 220px;
+  min-width: 72px;
+  flex: 0 1 220px;
+  padding: 0 6px 0 12px;
+  border: none;
   border-radius: 8px 8px 0 0;
   background: transparent;
   color: var(--ud-chrome-icon-muted);
@@ -3364,15 +3391,32 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   -webkit-app-region: no-drag;
 }
 
+.loose-nav-tab + .loose-nav-tab::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
+
+.loose-nav-tab:hover::before,
+.loose-nav-tab:hover + .loose-nav-tab::before,
+.loose-nav-tab.is-active::before,
+.loose-nav-tab.is-active + .loose-nav-tab::before,
+.loose-nav-tab.is-composing::before,
+.loose-nav-tab.is-composing + .loose-nav-tab::before {
+  opacity: 0;
+}
+
 .loose-nav-tab:hover {
-  background: var(--ud-chrome-icon-bg-hover);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .loose-nav-tab.is-active {
-  min-width: 176px;
-  padding-left: 4px;
   background: var(--ud-chrome-icon-active-bg);
-  border-color: var(--ud-chrome-icon-active-border);
   color: var(--ud-chrome-text);
 }
 
@@ -3382,28 +3426,28 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   max-width: 520px;
   padding: 0 4px 0 10px;
   background: var(--ud-chrome-icon-active-bg);
-  border-color: var(--ud-chrome-icon-active-border);
   color: var(--ud-chrome-text);
   cursor: text;
 }
 
-.loose-nav-tab-nav {
+.loose-nav-controls {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
   flex-shrink: 0;
-  margin-right: 2px;
+  margin: 0 6px 2px 0;
+  -webkit-app-region: no-drag;
 }
 
 .loose-nav-tab-nav-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
-  border-radius: 5px;
+  border-radius: 50%;
   background: transparent;
   color: var(--ud-chrome-text);
   cursor: pointer;
@@ -3421,10 +3465,6 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
 .loose-nav-tab-nav-btn:disabled {
   color: #6e6e7c;
   cursor: default;
-}
-
-.loose-nav-tab-reload {
-  color: inherit;
 }
 
 .loose-nav-tab-fav {
@@ -3485,6 +3525,25 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   color: #8d8d9c;
 }
 
+/* Campo de texto como la barra de direcciones de Chrome: pastilla redondeada. */
+.loose-nav-tab.is-composing .loose-nav-tab-url {
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid #5a5a68;
+  border-radius: 999px;
+  background: #16161b;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.loose-nav-tab.is-composing .loose-nav-tab-url:hover {
+  border-color: #70707e;
+}
+
+.loose-nav-tab.is-composing .loose-nav-tab-url:focus {
+  border-color: var(--ud-chrome-edit-tab, #7c6cff);
+  box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.3);
+}
+
 .loose-nav-tab.is-composing {
   padding-left: 4px;
 }
@@ -3542,7 +3601,7 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   min-width: 18px;
   padding: 0;
   border: none;
-  border-radius: 5px;
+  border-radius: 50%;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -3553,7 +3612,7 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
 }
 
 .loose-nav-tab-close:hover {
-  background: rgba(229, 57, 53, 0.35);
+  background: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
 
@@ -3578,55 +3637,95 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   display: none !important;
 }
 
-/* Riel de cuentas a la izquierda de la página (el BrowserView arranca después).
-   Mide lo mismo que margen + globo + espacio + línea violeta de la franja de arriba. */
-:root {
-  --loose-nav-rail-w: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) + 2px);
-}
-
+/* Switch del "www": con la navegación libre, la franja de arriba cambia los
+   accesos directos por la fila de perfiles. data-strip-mode va detrás de
+   data-loose-nav: primero se apaga la fila vieja (strip-swap-out) y después
+   se cambia y se enciende la nueva. */
 .loose-nav-accounts {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2;
-  width: var(--loose-nav-rail-w);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 0;
-  overflow-y: auto;
-  background: var(--ud-chrome-canvas, #16161c);
-  border-right: 1px solid var(--ud-chrome-icon-active-border, rgba(255, 255, 255, 0.08));
-  -webkit-app-region: no-drag;
+  display: none;
 }
 
-.loose-nav-accounts.hidden {
+html[data-dock-layout='topbar'] #shortcuts-container,
+html[data-dock-layout='topbar'] .loose-nav-accounts {
+  transition:
+    opacity 0.18s cubic-bezier(0, 0, 0.2, 1),
+    transform 0.18s cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* La salida es más corta que la entrada para que el cambio no se sienta lento. */
+html.strip-swap-out[data-dock-layout='topbar'] #shortcuts-container,
+html.strip-swap-out[data-dock-layout='topbar'] .loose-nav-accounts {
+  opacity: 0;
+  transform: translateX(-2px);
+  transition:
+    opacity 0.08s ease-in,
+    transform 0.08s ease-in;
+}
+
+html[data-strip-mode='accounts'][data-dock-layout='topbar'] #shortcuts-container {
   display: none !important;
 }
 
+html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-accounts {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ud-chrome-strip-gap);
+  padding: 0 var(--ud-chrome-strip-pad-x) 0 var(--ud-chrome-strip-gap);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+
+html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-accounts::-webkit-scrollbar {
+  display: none;
+}
+
+.loose-nav-account-incognito {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: #f4f4f5;
+  color: #27272a;
+}
+
+/* Mismo cuadrado que los accesos de la franja (.shell-shortcut-item). */
 .loose-nav-account {
   position: relative;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ud-chrome-icon);
+  height: var(--ud-chrome-icon);
+  padding: 7px;
+  box-sizing: border-box;
+  border: 1px solid var(--ud-chrome-icon-border);
+  border-radius: 10px;
   background: transparent;
   cursor: pointer;
   opacity: 0.72;
-  transition: opacity 120ms ease, box-shadow 120ms ease;
+  transition: opacity 120ms ease, background 0.15s ease, border-color 0.15s ease;
 }
 
 .loose-nav-account:hover {
   opacity: 1;
+  background: var(--ud-chrome-icon-bg-hover);
+  border-color: var(--ud-chrome-icon-border-hover);
 }
 
-.loose-nav-account.is-active {
+.loose-nav-account.is-active,
+.loose-nav-account.is-active:hover {
   opacity: 1;
-  box-shadow: 0 0 0 2px var(--ud-chrome-canvas, #16161c), 0 0 0 4px #8b5cf6;
+  background: var(--ud-chrome-icon-active-bg);
+  border-color: var(--ud-chrome-edit-tab);
 }
 
 .loose-nav-account.is-busy {
@@ -3641,7 +3740,8 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
   justify-content: center;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  border-radius: 6px;
+  object-fit: cover;
 }
 
 .loose-nav-account-letter {
@@ -3653,27 +3753,20 @@ html[data-loose-nav-rail='on'] .loose-nav-tabs-row {
 
 .loose-nav-account-count {
   position: absolute;
-  right: -6px;
-  bottom: -4px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  box-sizing: border-box;
-  border-radius: 999px;
-  border: 2px solid var(--ud-chrome-canvas, #16161c);
-  background: #8b5cf6;
+  right: -4px;
+  bottom: -5px;
   color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 12px;
-  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 3px var(--ud-chrome-strip-bg, #121216), 0 0 2px var(--ud-chrome-strip-bg, #121216);
   pointer-events: none;
 }
 
 .loose-nav-accounts-sep {
   flex-shrink: 0;
-  width: 20px;
-  height: 1px;
+  width: 1px;
+  height: 28px;
   background: var(--ud-chrome-icon-active-border, rgba(255, 255, 255, 0.12));
 }
 
@@ -3977,6 +4070,83 @@ html[data-loose-nav='on'] #dock-inline-editor {
   overflow: hidden;
   word-break: break-word;
   pointer-events: none;
+}
+
+/* ---- Columna angosta de descargas en la vista de tareas ----
+   Reemplaza la franja de botones redondos: muestra las descargas en una sola
+   columna a la izquierda; "Ver todo" abre la vista completa. */
+.downloads-expand-btn {
+  display: none;
+}
+
+#dock-home-panel[data-home-view='todos'] > .canvas-rail,
+#dock-home-panel[data-home-view='todos'] #magic-drawer,
+#dock-home-panel[data-home-view='todos'] .downloads-home-empty {
+  display: none;
+}
+
+#dock-home-panel[data-home-view='todos'] > #downloads-home {
+  order: -1;
+  flex: 0 0 132px;
+  width: 132px;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-expand-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 10px 10px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-expand-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.downloads-expand-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-home-grid {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 10px 10px 40px;
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-home-grid::-webkit-scrollbar {
+  width: 0;
+}
+
+#dock-home-panel[data-home-view='todos'] .download-tile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+#dock-home-panel[data-home-view='todos'] > #todo-home {
+  padding-left: 28px;
+}
+
+html[data-canvas-theme='light'] #dock-home-panel[data-home-view='todos'] > #downloads-home {
+  border-right-color: rgba(0, 0, 0, 0.08);
 }
 
 /* Icono de pestaña bajo un drag de archivo: aviso de que al mantener el

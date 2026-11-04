@@ -1,0 +1,62 @@
+/* Barra "Buscar en la página" (page-find-bar.js). Cada ventana fija dónde va con right/height. */
+.page-find-bar[hidden] {
+  display: none !important;
+}
+
+.page-find-bar {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--ud-chrome-strip-border, #33333c);
+  border-radius: 10px;
+  background: #2a2a32;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  -webkit-app-region: no-drag;
+}
+
+.page-find-input {
+  width: 220px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #e8e8ef;
+  font: inherit;
+}
+
+.page-find-count {
+  min-width: 44px;
+  margin-right: 2px;
+  padding: 0 6px;
+  border-right: 1px solid #44444e;
+  color: #9a9aa8;
+  font-size: 12px;
+  text-align: right;
+}
+
+.page-find-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #e8e8ef;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.page-find-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

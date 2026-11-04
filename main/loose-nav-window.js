@@ -13,6 +13,7 @@ const { setEmbeddedPageBackground } = require('./embedded-page-background');
 const { applyChromeIdentityToPartition } = require('./chrome-identity');
 const { isLoopbackHost, withScheme } = require('./load-web-url');
 const browseProfiles = require('./browse-profiles');
+const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
 
 /**
  * @typedef {{
@@ -25,6 +26,8 @@ const browseProfiles = require('./browse-profiles');
  *   loading: boolean,
  *   canGoBack: boolean,
  *   canGoForward: boolean,
+ *   lastActiveAt: number,
+ *   sleeping: boolean,
  * }} LooseTab
  */
 
@@ -124,6 +127,7 @@ function buildStatePayload() {
   const railAccounts = [...cache.rail.accounts];
   const extra = new Set(Object.keys(tabCounts));
   extra.add(activePartition);
+  extra.add(fallback);
   for (const a of railAccounts) extra.delete(a.partition);
   for (const partition of extra) {
     railAccounts.push({
@@ -133,6 +137,8 @@ function buildStatePayload() {
       avatar: browseProfiles.avatarFor(partition),
     });
   }
+  const defaultIdx = railAccounts.findIndex((a) => a.partition === fallback);
+  if (defaultIdx > 0) railAccounts.unshift(...railAccounts.splice(defaultIdx, 1));
   return {
     active: modeActive,
     tabs: items,
@@ -214,12 +220,73 @@ function attachActiveViewOnly() {
   if (urlPromptOpen || !modeActive || !activeTabId) return;
   const tab = tabs.get(activeTabId);
   if (!tab) return;
+  if (tab.sleeping) wakeTab(tab);
   try {
     dock.addBrowserView(tab.view);
   } catch {
     return;
   }
   layoutActiveView();
+}
+
+function tabInUse(tab) {
+  return modeActive && tab.id === activeTabId;
+}
+
+/**
+ * Libera el proceso de una pestaña que no se ve; se recrea al volver a mostrarla.
+ * @param {LooseTab} tab
+ */
+function sleepTab(tab) {
+  const dock = getDockWindow();
+  if (dock) {
+    try {
+      dock.removeBrowserView(tab.view);
+    } catch {
+      /* noop */
+    }
+  }
+  const wc = tab.view.webContents;
+  try {
+    if (wc && !wc.isDestroyed()) {
+      tab.url = wc.getURL() || tab.url;
+      wc.destroy();
+    }
+  } catch {
+    /* noop */
+  }
+  tab.sleeping = true;
+  tab.loading = false;
+}
+
+/** @param {LooseTab} tab */
+function wakeTab(tab) {
+  tab.sleeping = false;
+  tab.lastActiveAt = Date.now();
+  tab.view = createLooseView(tab.partition);
+  wireTab(tab, tab.url);
+  tab.view.webContents.loadURL(tab.url || LOOSE_NAV_NEW_TAB_URL).catch(() => {});
+}
+
+/**
+ * @param {number} idleMs
+ * @returns {number} pestañas puestas en reposo
+ */
+function sleepIdleTabs(idleMs) {
+  const now = Date.now();
+  let count = 0;
+  for (const tab of tabs.values()) {
+    if (tab.sleeping || tabInUse(tab) || now - tab.lastActiveAt < idleMs) continue;
+    const wc = tab.view.webContents;
+    try {
+      if (!wc || wc.isDestroyed() || wc.isCurrentlyAudible()) continue;
+    } catch {
+      continue;
+    }
+    sleepTab(tab);
+    count += 1;
+  }
+  return count;
 }
 
 function destroyTabView(tabId) {
@@ -320,7 +387,6 @@ function attachTabEvents(tab) {
     const key = String(input.key || '').toLowerCase();
     let action = '';
     if ((mod && key === 'l') || (input.alt && key === 'd') || key === 'f6') action = 'edit-address';
-    else if (mod && key === 't') action = 'new-tab';
     else if (mod && key === 'w') action = 'close-tab';
     if (!action) return;
     event.preventDefault();
@@ -330,7 +396,35 @@ function attachTabEvents(tab) {
     }
     sendShortcutToDock(action);
   });
+
+  attachPageShortcuts(wc, pageMenuContext);
 }
+
+/** @type {import('./page-menu').PageMenuContext} */
+const pageMenuContext = {
+  get host() {
+    return getDockWindow();
+  },
+  activeWebContents: () => activeTabWebContents(),
+  openTab: (url, opts = {}) => {
+    const current = activeTabId && tabs.get(activeTabId);
+    return openTabFromUrl(url, {
+      partition: (current && current.partition) || defaultPartition(),
+      loadOptions: opts.loadOptions,
+    });
+  },
+  newTab: () => sendShortcutToDock('new-tab'),
+  sendToChrome: (command, payload) => {
+    const dock = getDockWindow();
+    if (!dock) return;
+    try {
+      if (command === 'find-open') dock.webContents.focus();
+      dock.webContents.send('loose-nav-page-command', { command, payload: payload ?? null });
+    } catch {
+      /* noop */
+    }
+  },
+};
 
 /** @param {'edit-address' | 'new-tab'} action */
 function sendShortcutToDock(action) {
@@ -386,7 +480,7 @@ function wireTab(tab, url) {
  * Crea una pestaña y opcionalmente la activa. Si el modo está activo,
  * se ajusta el BrowserView inmediatamente.
  * @param {string} url
- * @param {{ background?: boolean, activateMode?: boolean, partition?: string }} [opts]
+ * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions }} [opts]
  * @returns {Promise<string>} id de la pestaña creada
  */
 async function openTabFromUrl(url, opts = {}) {
@@ -405,6 +499,8 @@ async function openTabFromUrl(url, opts = {}) {
     loading: true,
     canGoBack: false,
     canGoForward: false,
+    lastActiveAt: Date.now(),
+    sleeping: false,
   };
   insertTab(id, tab);
   wireTab(tab, url);
@@ -429,7 +525,7 @@ async function openTabFromUrl(url, opts = {}) {
   broadcastState();
 
   try {
-    await view.webContents.loadURL(url || LOOSE_NAV_NEW_TAB_URL);
+    await view.webContents.loadURL(url || LOOSE_NAV_NEW_TAB_URL, opts.loadOptions);
   } catch {
     /* la página puede fallar, la pestaña queda igualmente */
   }
@@ -439,9 +535,20 @@ async function openTabFromUrl(url, opts = {}) {
 
 /** @param {string | null} id */
 function setActiveTab(id) {
+  const previous = activeTabId ? tabs.get(activeTabId) : null;
+  if (previous) previous.lastActiveAt = Date.now();
   activeTabId = id;
   const tab = id ? tabs.get(id) : null;
-  if (tab) lastTabBySession.set(tab.partition, tab.id);
+  if (tab) {
+    tab.lastActiveAt = Date.now();
+    lastTabBySession.set(tab.partition, tab.id);
+  }
+}
+
+/** Al ocultar la navegación, la pestaña que se veía empieza a contar como inactiva desde ahora. */
+function stampActiveTab() {
+  const tab = activeTabId ? tabs.get(activeTabId) : null;
+  if (tab) tab.lastActiveAt = Date.now();
 }
 
 /** @param {string} partition */
@@ -451,13 +558,11 @@ function tabIdsOfSession(partition) {
 
 /**
  * Cada sesión tiene sus pestañas: entrar a una vuelve a la última que se usó
- * ahí o, si no tiene, abre una nueva. La sesión elegida pasa a ser la predeterminada.
+ * ahí o, si no tiene, abre una nueva.
  * @param {string} partition
  */
 async function switchToSession(partition) {
   if (!partition) return false;
-  browseProfiles.setDefaultPartition(partition);
-  profilesCache = null;
   const ids = tabIdsOfSession(partition);
   if (!ids.length) {
     await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition });
@@ -481,11 +586,6 @@ async function enterLooseNavMode() {
       /* noop */
     }
   }
-  try {
-    require('./menu-overlay').preload(getDockWindow());
-  } catch {
-    /* noop */
-  }
   if (tabs.size === 0) {
     await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { activateMode: false });
   } else if (modeActive) {
@@ -501,6 +601,7 @@ async function enterLooseNavMode() {
 function exitLooseNavMode(opts = {}) {
   if (!modeActive) return;
   modeActive = false;
+  stampActiveTab();
   detachAllFromDock();
   try {
     require('./menu-overlay').dismiss(getDockWindow());
@@ -524,6 +625,7 @@ function exitLooseNavMode(opts = {}) {
 function onDockSidebarCollapsed() {
   if (!modeActive) return;
   modeActive = false;
+  stampActiveTab();
   detachAllFromDock();
   broadcastState();
 }
@@ -717,6 +819,10 @@ function registerLooseNavIpc() {
     'loose-nav-set-viewport-bounds',
     'loose-nav-pick-profile',
     'loose-nav-use-account',
+    'loose-nav-set-default-profile',
+    'loose-nav-page-menu',
+    'loose-nav-find',
+    'loose-nav-find-stop',
   ];
   for (const ch of channels) {
     try {
@@ -751,18 +857,32 @@ function registerLooseNavIpc() {
     return true;
   });
 
-  ipcMain.handle('loose-nav-use-account', async (_e, payload) => {
+  /** @param {unknown} payload partition o perfil de Chrome a traer */
+  async function resolveAccountTarget(payload) {
     const p = payload && typeof payload === 'object' ? payload : {};
     let partition = typeof p.partition === 'string' ? p.partition : '';
     if (!partition && typeof p.chromeDirectory === 'string' && p.chromeDirectory) {
       partition = (await browseProfiles.importChromeByDirectory(getDockWindow(), p.chromeDirectory)) || '';
       profilesCache = null;
     }
+    return partition;
+  }
+
+  ipcMain.handle('loose-nav-use-account', async (_e, payload) => {
+    const partition = await resolveAccountTarget(payload);
     if (!partition) {
       broadcastState();
       return false;
     }
     return switchToSession(partition);
+  });
+
+  ipcMain.handle('loose-nav-set-default-profile', async (_e, payload) => {
+    const partition = await resolveAccountTarget(payload);
+    if (partition) browseProfiles.setDefaultPartition(partition);
+    profilesCache = null;
+    broadcastState();
+    return !!partition;
   });
 
   ipcMain.handle('loose-nav-pick-profile', async () => {
@@ -795,6 +915,15 @@ function registerLooseNavIpc() {
 
   ipcMain.handle('loose-nav-get-state', () => buildStatePayload());
 
+  ipcMain.handle('loose-nav-page-menu', (_e, at) => {
+    popupPageMenu(pageMenuContext, at && typeof at === 'object' ? at : {});
+    return true;
+  });
+  ipcMain.handle('loose-nav-find', (_e, arg) =>
+    findInPage(activeTabWebContents(), arg && typeof arg === 'object' ? arg : null)
+  );
+  ipcMain.handle('loose-nav-find-stop', () => stopFindInPage(activeTabWebContents()));
+
   ipcMain.handle('loose-nav-set-viewport-bounds', (_e, payload) => {
     setViewportBounds(payload);
     return true;
@@ -813,4 +942,5 @@ module.exports = {
   registerLooseNavIpc,
   configureHooks,
   setUrlPromptOpen,
+  sleepIdleTabs,
 };

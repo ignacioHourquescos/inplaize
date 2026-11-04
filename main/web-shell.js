@@ -327,11 +327,6 @@ function ensureShellWindow() {
 
   shellWin.loadFile(path.join(root, 'web-shell.html'));
   lockWindowZoom(shellWin.webContents);
-  try {
-    require('./menu-overlay').preload(shellWin);
-  } catch {
-    /* noop */
-  }
 
   shellWin.webContents.once('did-finish-load', () => {
     broadcastChromeToRenderer();

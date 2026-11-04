@@ -34,6 +34,11 @@ const DEFAULTS = {
   hotkeyCoachAwaitingHide: false,
   /** El popup de gestos ya se mostró (o el usuario lo cerró). */
   gestureCoachShown: false,
+  /**
+   * Minutos sin usar una ventana web antes de descargar su página para liberar memoria
+   * (vuelve a cargarse al enfocarla). 0 = nunca.
+   */
+  webIdleHibernateMinutes: 15,
 };
 
 const ALLOWED_DOCK = new Set(['left', 'center', 'right']);
@@ -73,6 +78,13 @@ function normalize(raw) {
   }
   if (typeof merged.gestureCoachShown !== 'boolean') {
     merged.gestureCoachShown = DEFAULTS.gestureCoachShown;
+  }
+  const idleMinutes = Number(merged.webIdleHibernateMinutes);
+  merged.webIdleHibernateMinutes = Number.isFinite(idleMinutes) && idleMinutes > 0
+    ? Math.min(24 * 60, Math.floor(idleMinutes))
+    : 0;
+  if (merged.webIdleHibernateMinutes > 0 && merged.webIdleHibernateMinutes < 5) {
+    merged.webIdleHibernateMinutes = 5;
   }
   merged.dockHotkey = normalizeDockHotkey(merged.dockHotkey);
   return merged;

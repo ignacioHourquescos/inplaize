@@ -16,6 +16,8 @@ const { lockWindowZoom } = require('./lock-window-zoom');
 /** Debe coincidir con .dock-home-menu-drawer { width } en shell-home-menu.css. */
 const MENU_W = 240;
 const SLIDE_MS = 280;
+/** Cada panel es un proceso aparte: cerrado un rato, se libera y se vuelve a crear al abrirlo. */
+const RELEASE_AFTER_CLOSE_MS = 60 * 1000;
 
 /** @type {WeakMap<Electron.BrowserWindow, OverlayEntry>} */
 const overlays = new WeakMap();
@@ -107,6 +109,32 @@ function syncHost(host, open) {
   }
 }
 
+function cancelRelease(entry) {
+  if (entry.releaseTimer) {
+    clearTimeout(entry.releaseTimer);
+    entry.releaseTimer = null;
+  }
+}
+
+function release(host) {
+  const entry = overlays.get(host);
+  if (!entry || entry.open || entry.animating) return;
+  cancelRelease(entry);
+  overlays.delete(host);
+  entry.token += 1;
+  try {
+    if (!host.isDestroyed()) host.contentView.removeChildView(entry.view);
+  } catch {
+    /* noop */
+  }
+  const wc = entry.view.webContents;
+  try {
+    if (wc && !wc.isDestroyed()) wc.close();
+  } catch {
+    /* noop */
+  }
+}
+
 function park(entry, host) {
   try {
     entry.view.setVisible(false);
@@ -118,6 +146,11 @@ function park(entry, host) {
   } catch {
     /* noop */
   }
+  cancelRelease(entry);
+  entry.releaseTimer = setTimeout(() => {
+    entry.releaseTimer = null;
+    if (!host.isDestroyed()) release(host);
+  }, RELEASE_AFTER_CLOSE_MS);
 }
 
 function raise(host) {
@@ -221,23 +254,25 @@ function ensure(host) {
     animating: false,
     token: 0,
     editMode: host.__menuOverlayEditMode === true,
+    releaseTimer: null,
   };
   overlays.set(host, entry);
   lockWindowZoom(view.webContents);
   view.webContents.loadFile(path.join(appRoot(), 'menu-overlay.html')).catch((err) => {
     console.error('menu-overlay', err);
   });
-  host.on('resize', () => snapOpen(host));
-  host.on('closed', () => {
-    entry.token += 1;
-    overlays.delete(host);
-  });
+  if (!host.__menuOverlayHostWired) {
+    host.__menuOverlayHostWired = true;
+    host.on('resize', () => snapOpen(host));
+    host.on('closed', () => {
+      const current = overlays.get(host);
+      if (!current) return;
+      current.token += 1;
+      cancelRelease(current);
+      overlays.delete(host);
+    });
+  }
   return entry;
-}
-
-function preload(host) {
-  if (!host || host.isDestroyed()) return;
-  ensure(host);
 }
 
 /**
@@ -247,10 +282,15 @@ function preload(host) {
  */
 function setOpen(host, open, opts = {}) {
   if (!host || host.isDestroyed()) return;
-  const entry = ensure(host);
-  if (opts.editMode != null) entry.editMode = opts.editMode === true;
   const next = open === true;
   const source = opts.source === 'overlay' ? 'overlay' : 'host';
+  if (!next && !overlays.has(host)) {
+    if (source === 'overlay') syncHost(host, false);
+    return;
+  }
+  const entry = ensure(host);
+  if (next) cancelRelease(entry);
+  if (opts.editMode != null) entry.editMode = opts.editMode === true;
   if (entry.open === next && !entry.animating) {
     if (next) {
       raise(host);
@@ -335,7 +375,6 @@ function registerMenuOverlayIpc() {
 }
 
 module.exports = {
-  preload,
   setOpen,
   raise,
   dismiss,
