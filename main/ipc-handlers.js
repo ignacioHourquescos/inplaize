@@ -67,6 +67,7 @@ const {
 const {
   listChromeProfiles,
   isChromeRunning,
+  confirmChromeCloseForImport,
   findChromeExecutable,
   importGoogleCookiesFromChrome,
 } = require('./chrome-cookie-import');
@@ -1281,10 +1282,14 @@ function registerIpcHandlers(state) {
     // Por ahora siempre importamos a la partition de Navegación suelta (la que usa
     // el login de Cursor y demás pestañas dentro del dock).
     const targetPartition = partitionFromSessionId(LOOSE_NAV_SESSION_ID);
+    if (!(await confirmChromeCloseForImport(state.mainWindow))) {
+      return { ok: false, error: 'CANCELLED' };
+    }
     try {
       const result = await importGoogleCookiesFromChrome({
         profileDirectory,
         targetPartition,
+        autoCloseChrome: true,
       });
       return { ok: true, ...result, targetPartition };
     } catch (err) {
@@ -1337,9 +1342,16 @@ function registerIpcHandlers(state) {
       domains: [...domains],
     }));
 
+    if (!(await confirmChromeCloseForImport(state.mainWindow))) {
+      return { ok: false, error: 'CANCELLED' };
+    }
     try {
       const { importSessionsForTargets } = require('./chrome-cookie-import');
-      const result = await importSessionsForTargets({ profileDirectory, targets });
+      const result = await importSessionsForTargets({
+        profileDirectory,
+        targets,
+        autoCloseChrome: true,
+      });
       const byPartition = new Map(result.results.map((r) => [r.partition, r]));
       const importedByShortcut = entries.map((e) => ({
         shortcutId: String(e.shortcut.id),
@@ -1522,7 +1534,14 @@ function registerIpcHandlers(state) {
 
   ipcMain.handle('set-onboarding-active', (_event, on) => {
     state.onboardingActive = on === true;
-    if (!state.onboardingActive) state.onboardingHotkeyTrial = false;
+    if (!state.onboardingActive) {
+      state.onboardingHotkeyTrial = false;
+      return true;
+    }
+    // El tour necesita el panel abierto y al frente. Lo aseguramos desde acá
+    // además de desde el renderer: en el primer arranque de una instalación
+    // nueva cualquier ventana de Windows puede habernos robado el foco antes.
+    expandDockSidebar();
     return true;
   });
 

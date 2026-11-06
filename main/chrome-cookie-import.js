@@ -5,6 +5,10 @@
  * partition de la app (para evitar el primer login de Gmail/Google).
  *
  * Estrategia:
+ *  - Chrome no comparte su perfil: si el usuario lo tiene abierto hay que
+ *    cerrarlo. Con `autoCloseChrome` lo cerramos nosotros (pidiendo primero un
+ *    cierre normal para que guarde la sesión) y al terminar lo reabrimos con
+ *    `--restore-last-session`, así el usuario recupera sus pestañas.
  *  - Se lanza una instancia transitoria de Chrome contra el mismo `--user-data-dir`
  *    del usuario, en modo `--headless=new`, con `--remote-debugging-port=0` y
  *    `--remote-allow-origins=*` (imprescindible desde Chrome 111+, sin él Chrome
@@ -28,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
-const { session, app } = require('electron');
+const { session, app, dialog } = require('electron');
 
 /**
  * Logger persistente de la importación a `<userData>/chrome-import.log`.
@@ -122,6 +126,98 @@ function isChromeRunning() {
     );
     return /chrome\.exe/i.test(out);
   } catch {
+    return false;
+  }
+}
+
+/** @param {string[]} args */
+function taskkillChrome(args) {
+  try {
+    execFileSync('taskkill', ['/IM', 'chrome.exe', '/T', ...args], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+  } catch {
+    // taskkill devuelve error si algún proceso hijo no tiene ventana; los que
+    // importan (el proceso browser) sí la tienen y reciben el cierre igual.
+  }
+}
+
+/** @param {number} timeoutMs */
+async function waitForChromeExit(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isChromeRunning()) {
+      // Chrome libera el lock del perfil un instante después de que el
+      // proceso desaparece; sin este margen la instancia headless arranca
+      // contra un perfil todavía tomado y no ve ninguna cookie.
+      await sleep(800);
+      return true;
+    }
+    await sleep(250);
+  }
+  return false;
+}
+
+/**
+ * Cierra Chrome para poder leer su perfil. Primero pide un cierre normal (así
+ * guarda la sesión y no aparece el aviso de "Chrome no se cerró
+ * correctamente"); si se resiste, lo fuerza.
+ * @returns {Promise<boolean>} true si quedó cerrado
+ */
+async function closeChromeForImport() {
+  if (process.platform !== 'win32') return false;
+  if (!isChromeRunning()) return true;
+  logLine('Chrome abierto: pidiendo cierre normal');
+  taskkillChrome([]);
+  if (await waitForChromeExit(12000)) return true;
+  logLine('Chrome sigue abierto: cierre forzado');
+  taskkillChrome(['/F']);
+  return waitForChromeExit(6000);
+}
+
+/**
+ * Chrome no deja leer su perfil mientras está abierto. En vez de mandar al
+ * usuario a cerrar ventana por ventana, pedimos permiso una sola vez y lo
+ * cerramos nosotros.
+ * @param {Electron.BrowserWindow | null} [host]
+ * @returns {Promise<boolean>} false si el usuario prefiere no cerrarlo
+ */
+async function confirmChromeCloseForImport(host) {
+  if (!isChromeRunning()) return true;
+  const opts = {
+    type: /** @type {const} */ ('question'),
+    message: 'Hay que cerrar Google Chrome un momento',
+    detail:
+      'Para traer tu cuenta necesitamos leer la sesión de Chrome, y eso solo se puede con Chrome cerrado. '
+      + 'Lo cerramos y lo volvemos a abrir con las mismas pestañas apenas termine.',
+    buttons: ['Cerrar Chrome y continuar', 'Cancelar'],
+    defaultId: 0,
+    cancelId: 1,
+  };
+  const { response } = host && !host.isDestroyed()
+    ? await dialog.showMessageBox(host, opts)
+    : await dialog.showMessageBox(opts);
+  return response === 0;
+}
+
+/**
+ * Vuelve a abrir Chrome restaurando lo que el usuario tenía. Se llama solo si
+ * lo cerramos nosotros para importar.
+ */
+function relaunchChrome() {
+  const exe = findChromeExecutable();
+  if (!exe) return false;
+  try {
+    const child = spawn(exe, ['--restore-last-session'], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    logLine('Chrome reabierto con la sesión anterior');
+    return true;
+  } catch (err) {
+    logLine('No se pudo reabrir Chrome:', err && err.message ? err.message : String(err));
     return false;
   }
 }
@@ -353,9 +449,13 @@ function mapCdpSameSite(s) {
  * browser context. Valida plataforma, binario, perfil y que Chrome esté cerrado.
  * Asume que el log ya fue reseteado por el caller.
  * @param {string} profileDirectory
+ * @param {{ autoCloseChrome?: boolean }} [opts] con `autoCloseChrome` cerramos
+ *   Chrome nosotros y lo reabrimos al terminar, en vez de pedirle al usuario
+ *   que lo haga a mano.
  * @returns {Promise<Array<object>>}
  */
-async function fetchAllCookiesFromChromeProfile(profileDirectory) {
+async function fetchAllCookiesFromChromeProfile(profileDirectory, opts) {
+  const autoCloseChrome = !!(opts && opts.autoCloseChrome);
   if (process.platform !== 'win32') {
     throw new Error('NOT_SUPPORTED_PLATFORM');
   }
@@ -374,10 +474,19 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory) {
     throw new Error('CHROME_PROFILE_DIR_NOT_FOUND');
   }
 
+  let reopenChrome = false;
   if (isChromeRunning()) {
-    logLine('CHROME_RUNNING');
-    logFlush();
-    throw new Error('CHROME_RUNNING');
+    if (!autoCloseChrome) {
+      logLine('CHROME_RUNNING');
+      logFlush();
+      throw new Error('CHROME_RUNNING');
+    }
+    if (!(await closeChromeForImport())) {
+      logLine('CHROME_CLOSE_FAILED');
+      logFlush();
+      throw new Error('CHROME_CLOSE_FAILED');
+    }
+    reopenChrome = true;
   }
 
   const portFile = path.join(userDataDir, 'DevToolsActivePort');
@@ -434,6 +543,12 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory) {
     return await fetchCookiesFromChrome(port, 12000);
   } finally {
     killChild();
+    if (reopenChrome) {
+      // La instancia headless tiene que soltar el perfil antes de devolvérselo
+      // al Chrome del usuario; si se superponen, el nuevo se cierra solo.
+      await waitForChromeExit(8000);
+      relaunchChrome();
+    }
   }
 }
 
@@ -550,7 +665,7 @@ function domainFilterFor(domain) {
 
 /**
  * Importa sesiones de Chrome para varios destinos con UNA sola lectura de cookies.
- * @param {{ profileDirectory?: string, targets: Array<{ partition: string, domains: string[] }> }} opts
+ * @param {{ profileDirectory?: string, targets: Array<{ partition: string, domains: string[] }>, autoCloseChrome?: boolean }} opts
  * @returns {Promise<{ total: number, results: Array<{ partition: string, imported: number, considered: number }>, logPath: string }>}
  */
 async function importSessionsForTargets(opts) {
@@ -569,7 +684,9 @@ async function importSessionsForTargets(opts) {
     targets.map((t) => `${t.partition}←[${(t.domains || []).join(',')}]`).join(' ')
   );
 
-  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory);
+  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory, {
+    autoCloseChrome: !!(opts && opts.autoCloseChrome),
+  });
 
   const results = [];
   for (const t of targets) {
@@ -586,7 +703,7 @@ async function importSessionsForTargets(opts) {
 }
 
 /**
- * @param {{ profileDirectory?: string, targetPartition: string }} opts
+ * @param {{ profileDirectory?: string, targetPartition: string, autoCloseChrome?: boolean }} opts
  * @returns {Promise<{ imported: number, total: number, considered: number }>}
  */
 async function importGoogleCookiesFromChrome(opts) {
@@ -600,7 +717,9 @@ async function importGoogleCookiesFromChrome(opts) {
   logReset();
   logLine('Inicio importación. profileDirectory=', profileDirectory, 'partition=', targetPartition);
 
-  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory);
+  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory, {
+    autoCloseChrome: !!(opts && opts.autoCloseChrome),
+  });
   const { imported, considered } = await setCookiesIntoPartition(
     cookies,
     targetPartition,
@@ -614,6 +733,8 @@ async function importGoogleCookiesFromChrome(opts) {
 module.exports = {
   listChromeProfiles,
   isChromeRunning,
+  closeChromeForImport,
+  confirmChromeCloseForImport,
   findChromeExecutable,
   defaultChromeUserDataDir,
   importGoogleCookiesFromChrome,

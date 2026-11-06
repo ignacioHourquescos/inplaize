@@ -187,6 +187,11 @@ function createDockWindow(display, state) {
   }
 
   win.on('blur', () => {
+    // El tour de primera vez vive dentro de esta ventana. En un equipo recién
+    // instalado el primer arranque se come el foco con el aviso de firewall de
+    // Windows: si acá bajamos la ventana de capa o la colapsamos, el tour se va
+    // detrás del resto y el usuario nunca lo ve.
+    if (state.onboardingActive) return;
     // La ventana ocupa toda la pantalla y es transparente. Con always-on-top,
     // el modal de un documento queda pintado encima de las otras apps.
     if (state.isExpanded || state.docModalOpen) {
@@ -216,6 +221,7 @@ function createDockWindow(display, state) {
       } catch {
         /* noop */
       }
+      if (state.onboardingActive) return;
       if (state.gestureCoachOpen) return;
       if (state.dockBlurIgnoreUntil && Date.now() < state.dockBlurIgnoreUntil) return;
       if (dockSurfaceHasFocus(win)) return;

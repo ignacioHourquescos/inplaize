@@ -1566,13 +1566,10 @@ async function refreshChromeCookieImportUi() {
   }
   select.disabled = false;
 
-  if (status.chromeRunning) {
-    btn.disabled = true;
-    statusEl.textContent = 'Cerrá Chrome antes de importar (no puede haber procesos chrome.exe abiertos).';
-  } else {
-    btn.disabled = false;
-    statusEl.textContent = '';
-  }
+  btn.disabled = false;
+  statusEl.textContent = status.chromeRunning
+    ? 'Chrome está abierto: te vamos a pedir permiso para cerrarlo un momento y lo reabrimos con tus pestañas.'
+    : '';
 }
 
 function initChromeCookieImportUI() {
@@ -1610,8 +1607,12 @@ function initChromeCookieImportUI() {
 
 function friendlyChromeImportError(code) {
   switch (code) {
+    case 'CANCELLED':
+      return 'Importación cancelada.';
     case 'CHROME_RUNNING':
       return 'Cerrá todas las ventanas de Chrome y volvé a intentarlo.';
+    case 'CHROME_CLOSE_FAILED':
+      return 'No se pudo cerrar Chrome. Cerralo a mano y volvé a intentarlo.';
     case 'CHROME_NOT_FOUND':
       return 'No se encontró el ejecutable de Chrome.';
     case 'CHROME_PROFILE_DIR_NOT_FOUND':
@@ -2199,8 +2200,17 @@ async function exitDockShortcutEditModeFromChrome() {
 }
 
 async function init() {
-  await loadInitialDockPosition();
-  shortcuts = await window.usualDesk.getShortcuts();
+  try {
+    await loadInitialDockPosition();
+  } catch (err) {
+    console.error('init-dock-position', err);
+  }
+  try {
+    shortcuts = await window.usualDesk.getShortcuts();
+  } catch (err) {
+    console.error('init-shortcuts', err);
+    shortcuts = [];
+  }
   let migrated = false;
   for (const s of shortcuts) {
     if (s.type === 'web' && (!s.sessionId || typeof s.sessionId !== 'string' || !s.sessionId.trim())) {
@@ -2211,17 +2221,26 @@ async function init() {
   if (migrated) {
     await window.usualDesk.saveShortcuts(shortcuts);
   }
-  await initIconPicker();
-  await refreshOpenWebWindowKeys();
-  renderShortcuts();
-  initAppSettingsUI();
-  initDockInAppToasts();
-  initDownloadsUI();
-  initImageDrawer();
-  initFooter();
-  initDockHomeMenu();
-  schedulePointerPassthroughSync();
-  maybeStartOnboarding();
+  // El tour de primera vez no puede depender de que todo el resto del panel
+  // cargue bien: en una instalación nueva no hay nada en disco y cualquier
+  // paso de acá puede fallar, dejando al usuario frente a una barra vacía y
+  // sin explicación. Por eso va en `finally` y cada pieza se aísla.
+  try {
+    await initIconPicker();
+    await refreshOpenWebWindowKeys();
+    renderShortcuts();
+    initAppSettingsUI();
+    initDockInAppToasts();
+    initDownloadsUI();
+    initImageDrawer();
+    initFooter();
+    initDockHomeMenu();
+    schedulePointerPassthroughSync();
+  } catch (err) {
+    console.error('init-dock-ui', err);
+  } finally {
+    maybeStartOnboarding();
+  }
   if (typeof window.usualDesk.onDockOpenWelcomeHome === 'function') {
     window.usualDesk.onDockOpenWelcomeHome((view) => {
       goToDockWelcomeHome(view === 'downloads' ? 'downloads' : 'todos').catch(() => {});
@@ -2293,6 +2312,17 @@ async function maybeStartOnboarding() {
     /* sin settings asumimos onboarding pendiente: estado por defecto */
   }
   if (settings && settings.onboardingCompleted === true) return;
+  // Marcamos el tour como activo ANTES de expandir. Recién instalada, la app
+  // suele arrancar detrás del instalador o del escritorio: sin esta bandera
+  // el main colapsa el panel al primer blur y el tour queda dibujado dentro
+  // de una franja de 4 px, invisible.
+  try {
+    if (window.usualDesk.setOnboardingActive) {
+      await window.usualDesk.setOnboardingActive(true);
+    }
+  } catch {
+    /* seguimos: el tour igual se dibuja, solo queda expuesto al blur */
+  }
   // En topbar la ventana del dock arranca de 4 px de alto: el overlay no se
   // vería. Expandimos el panel para que el usuario tenga lienzo completo
   // donde leer el bocadillo y el spotlight pueda dibujarse libre.
@@ -2310,6 +2340,11 @@ async function maybeStartOnboarding() {
       window.UsualDeskOnboarding.start();
     } catch (err) {
       console.error('onboarding-start', err);
+      try {
+        window.usualDesk.setOnboardingActive?.(false);
+      } catch {
+        /* noop */
+      }
     }
   }, 250);
 }
@@ -3406,6 +3441,9 @@ window.usualDesk.onSidebarState((expanded) => {
 // Clic fuera del panel (capa transparente a pantalla completa)
 if (sidebarBackdrop) {
   sidebarBackdrop.addEventListener('pointerdown', async (e) => {
+    // Durante el tour el fondo oscuro es parte del tutorial: un clic al lado
+    // del bocadillo cerraría el panel y se perdería el recorrido.
+    if (window.UsualDeskOnboarding?.isActive?.()) return;
     if (!modalOverlay.classList.contains('hidden')) return;
     if (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) return;
     if (settingsModalOverlay && !settingsModalOverlay.classList.contains('hidden')) return;

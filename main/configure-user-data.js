@@ -13,6 +13,10 @@ const CANONICAL_DIR = 'inplaize';
 const LEGACY_DIRS = ['UsualDesk', 'Dock Station', 'dock-station'];
 
 function applyUserDataPath() {
+  // Con `--user-data-dir` (probar cómo se ve una instalación nueva sin tocar
+  // los datos reales) mandamos lo que pidió la línea de comandos.
+  if (process.argv.some((a) => a.startsWith('--user-data-dir'))) return;
+
   const appData = app.getPath('appData');
   const newUserData = path.join(appData, CANONICAL_DIR);
 

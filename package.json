@@ -1,6 +1,6 @@
 {
   "name": "inplaize",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
@@ -12,7 +12,7 @@
     "preview:onboarding": "node scripts/onboarding-preview-server.js",
     "build:editor": "node scripts/bundle-document-editor.js",
     "test:docs": "node scripts/test-document-content.js",
-    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && set CSC_IDENTITY_AUTO_DISCOVERY=false&& electron-builder --win",
+    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && node scripts/build-win.js",
     "build:mac": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
   },
   "build": {
@@ -42,7 +42,20 @@
       "target": "nsis",
       "icon": "assets/icon.ico",
       "signAndEditExecutable": false,
-      "artifactName": "inplaize.Setup.${version}.${ext}"
+      "artifactName": "inplaize.Setup.${version}.${ext}",
+      "signtoolOptions": {
+        "publisherName": "Ignacio Hourquescos",
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "shortcutName": "inplaize",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false
     },
     "mac": {
       "target": "dmg",
@@ -53,7 +66,7 @@
       "identity": null
     }
   },
-  "author": "",
+  "author": "Ignacio Hourquescos",
   "license": "MIT",
   "devDependencies": {
     "@tiptap/core": "^3.32.0",

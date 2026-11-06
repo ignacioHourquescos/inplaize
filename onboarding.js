@@ -266,8 +266,12 @@
 
   function importErrorText(code) {
     switch (code) {
+      case 'CANCELLED':
+        return 'Para traer tus sesiones hay que cerrar Chrome un momento. Podés hacerlo más tarde desde Ajustes.';
       case 'CHROME_RUNNING':
         return 'Chrome está abierto. Cerralo completamente y volvé a intentar.';
+      case 'CHROME_CLOSE_FAILED':
+        return 'No pudimos cerrar Chrome. Cerralo a mano y volvé a intentar.';
       case 'CHROME_NOT_FOUND':
         return 'No encontramos Chrome en este equipo.';
       case 'NO_IMPORTABLE_SHORTCUTS':
@@ -395,8 +399,8 @@
       .join('');
 
     const warning = status.chromeRunning
-      ? '<div class="onboarding-bubble-warning" role="alert">Chrome está abierto ahora: '
-        + 'cerralo por completo antes de importar.</div>'
+      ? '<div class="onboarding-bubble-warning" role="alert">Chrome está abierto: '
+        + 'te vamos a pedir permiso para cerrarlo un momento y lo reabrimos con tus pestañas.</div>'
       : '';
     const error = importState.error
       ? `<div class="onboarding-bubble-warning" role="alert">${escapeHtml(importState.error)}</div>`

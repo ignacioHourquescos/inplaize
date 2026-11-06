@@ -9,6 +9,13 @@ const path = require('path');
 
 exports.default = async function afterPack(context) {
   if (context.electronPlatformName !== 'win32') return;
+  if (process.env.INPLAIZE_SIGNING === '1') {
+    // Firmando, electron-builder ya incrusta ícono y metadatos antes de firmar.
+    // Tocar el .exe acá invalidaría la firma y SmartScreen volvería a quejarse.
+    // eslint-disable-next-line no-console
+    console.log('[after-pack] build firmada: se omite rcedit para no invalidar la firma');
+    return;
+  }
   const { rcedit } = await import('rcedit');
   const { productFilename } = context.packager.appInfo;
   const exe = path.join(context.appOutDir, `${productFilename}.exe`);
@@ -18,6 +25,8 @@ exports.default = async function afterPack(context) {
     'version-string': {
       ProductName: productFilename,
       FileDescription: productFilename,
+      CompanyName: context.packager.appInfo.companyName || productFilename,
+      LegalCopyright: `© ${new Date().getFullYear()} ${context.packager.appInfo.companyName || productFilename}`,
     },
   });
   // eslint-disable-next-line no-console
