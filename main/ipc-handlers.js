@@ -71,6 +71,11 @@ const {
   findChromeExecutable,
   importGoogleCookiesFromChrome,
 } = require('./chrome-cookie-import');
+const browserImport = require('./browser-import');
+const profileImport = require('./profile-import');
+const historyStore = require('./history-store');
+const bookmarksStore = require('./bookmarks-store');
+const passwordsStore = require('./passwords-store');
 const { partitionFromSessionId } = require('./session-partition');
 const { LOOSE_NAV_SESSION_ID } = require('./constants');
 
@@ -227,6 +232,36 @@ const IPC_CHANNELS = [
   'chrome-import-status',
 
   'chrome-import-google-cookies',
+
+  'browser-import-list-profiles',
+
+  'browser-import-run',
+
+  'history-suggest',
+
+  'history-record',
+
+  'history-list',
+
+  'history-remove',
+
+  'history-clear',
+
+  'bookmarks-list',
+
+  'bookmarks-add',
+
+  'bookmarks-remove',
+
+  'bookmarks-has',
+
+  'passwords-for-host',
+
+  'passwords-save',
+
+  'passwords-list',
+
+  'passwords-remove',
 
   'get-sticky-notes',
 
@@ -1410,6 +1445,31 @@ function registerIpcHandlers(state) {
         return { ok: false };
       }
     });
+    // Icono del sistema (exe, zip, docx…) para los archivos sin miniatura propia.
+    // getFileIcon en Windows llega a 32px como mucho; el thumbnail del shell
+    // devuelve el icono grande (jumbo) del archivo.
+    const fileIconCache = new Map();
+    ipcMain.handle('downloads-get-file-icon', async (_event, id) => {
+      try {
+        const savePath = downloads.getSavePath(String(id));
+        if (!savePath) return { ok: false };
+        if (fileIconCache.has(savePath)) return { ok: true, url: fileIconCache.get(savePath) };
+        const { nativeImage } = require('electron');
+        let img = null;
+        try {
+          img = await nativeImage.createThumbnailFromPath(savePath, { width: 128, height: 128 });
+        } catch {
+          img = null;
+        }
+        if (!img || img.isEmpty()) img = await app.getFileIcon(savePath, { size: 'large' });
+        if (!img || img.isEmpty()) return { ok: false };
+        const url = img.toDataURL();
+        fileIconCache.set(savePath, url);
+        return { ok: true, url };
+      } catch {
+        return { ok: false };
+      }
+    });
     // Drag nativo: el renderer avisa con send (no invoke) y startDrag tiene que
     // correr en ese mismo turno, con el botón del mouse todavía abajo.
     ipcMain.on('downloads-drag-start', (event, payload) => {
@@ -1585,7 +1645,197 @@ function registerIpcHandlers(state) {
     return true;
   });
 
+  /* ---- Importar perfil completo de otro navegador (estilo Comet) ---- */
 
+  ipcMain.handle('browser-import-list-profiles', () => {
+    try {
+      const profiles = browserImport.listAllProfiles();
+      const running = {};
+      for (const b of browserImport.listInstalledBrowsers()) {
+        running[b.id] = browserImport.isBrowserRunning(browserImport.BROWSERS[b.id].processName);
+      }
+      return {
+        platformSupported: process.platform === 'win32',
+        vaultAvailable: passwordsStore.available(),
+        browsers: browserImport.listInstalledBrowsers(),
+        running,
+        profiles,
+      };
+    } catch {
+      return {
+        platformSupported: process.platform === 'win32',
+        vaultAvailable: false,
+        browsers: [],
+        running: {},
+        profiles: [],
+      };
+    }
+  });
+
+  ipcMain.handle('browser-import-run', async (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    const browser = String(raw.browser || 'chrome');
+    const directory = String(raw.directory || 'Default');
+    const parts = raw.parts && typeof raw.parts === 'object' ? raw.parts : undefined;
+    const wantsCookies = !parts || parts.cookies !== false;
+
+    const def = browserImport.browserDef(browser);
+    if (!def) return { ok: false, error: 'BROWSER_NOT_FOUND' };
+
+    // Las cookies obligan a cerrar el navegador; pedimos permiso una vez. Si el
+    // usuario no quiere cerrarlo, seguimos sin cookies (historial/marcadores/
+    // contraseñas se leen con el navegador abierto).
+    let importCookies = wantsCookies;
+    if (wantsCookies && browserImport.isBrowserRunning(def.processName)) {
+      const { response } = await dialog.showMessageBox(
+        state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined,
+        {
+          type: 'question',
+          message: `Hay que cerrar ${def.name} un momento`,
+          detail:
+            `Para traer las cookies necesitamos leer la sesión de ${def.name}, y eso solo se puede con `
+            + `${def.name} cerrado. Lo cerramos y lo reabrimos con tus pestañas apenas termine.`,
+          buttons: [`Cerrar ${def.name} y continuar`, 'Continuar sin cookies', 'Cancelar'],
+          defaultId: 0,
+          cancelId: 2,
+        },
+      );
+      if (response === 2) return { ok: false, error: 'CANCELLED' };
+      if (response === 1) importCookies = false;
+    }
+
+    try {
+      const summary = await profileImport.importFullProfile({
+        browser,
+        directory,
+        autoClose: true,
+        parts: parts ? { ...parts, cookies: importCookies } : { cookies: importCookies },
+      });
+      try {
+        require('./browse-profiles').refreshAccounts();
+      } catch {
+        /* noop */
+      }
+      return { ok: true, ...summary };
+    } catch (err) {
+      return { ok: false, error: (err && err.message) || 'IMPORT_FAILED' };
+    }
+  });
+
+  ipcMain.handle('history-suggest', (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    try {
+      return historyStore.suggest(String(raw.query || ''), Number(raw.limit) || 8);
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('history-record', (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    try {
+      historyStore.record(String(raw.url || ''), String(raw.title || ''));
+    } catch {
+      /* noop */
+    }
+    return true;
+  });
+
+  ipcMain.handle('history-list', (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    try {
+      return historyStore.search(String(raw.query || ''), Number(raw.limit) || 300);
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('history-remove', (_event, url) => {
+    try {
+      return historyStore.remove(String(url || ''));
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('history-clear', () => {
+    try {
+      historyStore.clear();
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('bookmarks-list', () => {
+    try {
+      return bookmarksStore.list();
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('bookmarks-add', (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    try {
+      return bookmarksStore.add({ url: String(raw.url || ''), title: String(raw.title || '') });
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('bookmarks-remove', (_event, id) => {
+    try {
+      return bookmarksStore.remove(String(id || ''));
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('bookmarks-has', (_event, url) => {
+    try {
+      return bookmarksStore.has(String(url || ''));
+    } catch {
+      return false;
+    }
+  });
+
+  ipcMain.handle('passwords-for-host', (_event, url) => {
+    try {
+      return passwordsStore.forHost(String(url || ''));
+    } catch {
+      return [];
+    }
+  });
+
+  ipcMain.handle('passwords-save', (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    try {
+      return passwordsStore.upsert({
+        origin: String(raw.origin || raw.url || ''),
+        username: String(raw.username || ''),
+        password: String(raw.password || ''),
+      });
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('passwords-list', () => {
+    try {
+      return { available: passwordsStore.available(), items: passwordsStore.listForDisplay() };
+    } catch {
+      return { available: false, items: [] };
+    }
+  });
+
+  ipcMain.handle('passwords-remove', (_event, id) => {
+    try {
+      return passwordsStore.remove(String(id || ''));
+    } catch {
+      return false;
+    }
+  });
 
   return { raiseAppFromGlobalHotkey };
 

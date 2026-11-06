@@ -74,7 +74,19 @@
             </form>
           </div>
         </div>
-        <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de Google"></nav>
+        <form id="loose-nav-omnibox" class="loose-nav-omnibox" autocomplete="off" data-mouse-hit>
+          <span id="loose-nav-omnibox-profile" class="loose-nav-omnibox-profile"></span>
+          <input
+            id="loose-nav-omnibox-input"
+            class="loose-nav-omnibox-input"
+            type="text"
+            placeholder="Buscá en Google o escribí un enlace"
+            spellcheck="false"
+            enterkeyhint="go"
+            aria-label="Abrir en el perfil seleccionado"
+          />
+          <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de Google"></nav>
+        </form>
         <div id="shortcuts-container">
         <button
           type="button"
@@ -220,6 +232,15 @@
               </svg>
               <span>Ver todo</span>
             </button>
+            <div
+              id="downloads-col-resizer"
+              class="downloads-col-resizer"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Ancho de la columna de archivos"
+              data-tooltip="Arrastrá para mostrar más columnas"
+              data-tooltip-placement="right"
+            ></div>
             <div id="downloads-home-grid" class="downloads-home-grid">
               <!-- Tile fijo: QR para recibir archivos desde el teléfono. Siempre primero.
                    Los divisores violeta por fecha se insertan por JS a continuación. -->
@@ -378,6 +399,25 @@
               <button type="button" id="image-drawer-save" class="image-drawer-save" disabled>Guardar</button>
             </div>
           </aside>
+
+          <!-- Historial de navegación: se abre con el reloj de la franja. -->
+          <section id="history-home" class="history-home" data-mouse-hit aria-label="Historial de navegación">
+            <div class="history-home-head">
+              <h2 class="history-home-title">Historial</h2>
+              <div class="history-home-search">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/>
+                  <path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <input type="text" id="history-search-input" class="history-search-input" placeholder="Buscar en el historial" spellcheck="false" autocomplete="off" />
+              </div>
+              <button type="button" id="history-clear-btn" class="history-clear-btn">Borrar todo</button>
+            </div>
+            <div id="history-home-list" class="history-home-list"></div>
+            <p id="history-home-empty" class="history-home-empty" hidden>
+              Todavía no hay historial. Lo que navegues (o importes de otro navegador) aparece acá.
+            </p>
+          </section>
         </div>
         <div id="dock-inline-editor" class="dock-inline-editor hidden" data-mouse-hit></div>
         <div id="loose-nav-surface" class="loose-nav-surface hidden" aria-hidden="true"></div>
@@ -407,6 +447,14 @@
               <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
             <span class="dock-home-menu-item-label">Añadir acceso</span>
+          </button>
+          <button type="button" id="dock-home-history-btn" class="dock-home-menu-item" role="menuitem" data-tooltip="Ver historial de navegación" data-tooltip-placement="left">
+            <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7L3 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 4v4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="dock-home-menu-item-label">Historial</span>
           </button>
           <button
             type="button"

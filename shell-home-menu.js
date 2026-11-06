@@ -104,6 +104,7 @@ function initShellHomeMenu(api) {
   }
 
   bindItem('dock-home-add-btn', () => api.openAddShortcut?.());
+  bindItem('dock-home-history-btn', () => api.openHistory?.());
   bindItem('quit-app-btn', () => api.quitApp?.());
   bindItem('settings-btn', () => {
     if (typeof api.openAppearance === 'function') api.openAppearance();
@@ -150,6 +151,14 @@ const SHELL_HOME_MENU_DRAWER_HTML = `
         <line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
       <span class="dock-home-menu-item-label">Añadir acceso</span>
+    </button>
+    <button type="button" id="dock-home-history-btn" class="dock-home-menu-item" role="menuitem">
+      <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M3 4v4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="dock-home-menu-item-label">Historial</span>
     </button>
     <button type="button" id="shortcuts-edit-toggle" class="dock-home-menu-item" role="menuitemcheckbox" aria-checked="false">
       <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">

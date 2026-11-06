@@ -160,10 +160,10 @@
     {
       id: 'import-sessions',
       kind: 'modal',
-      title: 'Traé tus sesiones',
-      stepperLabel: 'Configuración de sesión',
+      title: 'Importá la configuración del navegador',
+      stepperLabel: 'Importar del navegador',
       body:
-        'Copiá las sesiones ya iniciadas en Chrome (Gmail, LinkedIn…) para no volver a loguearte. WhatsApp siempre pide vincular con el QR.',
+        'Retomá donde lo dejaste: traé tu historial, marcadores, contraseñas y sesiones iniciadas desde Chrome, Edge u otro navegador.',
       primaryLabel: 'Terminar',
     },
   ];
@@ -174,20 +174,25 @@
 
   /** ---------------- Paso "import-sessions" ---------------- */
 
-  /** Estado propio del paso de importación de sesiones desde Chrome. */
+  /**
+   * Estado del paso "Importar configuración del navegador" (estilo Comet):
+   * elegir navegador + perfil y traer el perfil completo.
+   */
   const importState = {
     loading: false,
     loaded: false,
-    /** @type {{ platformSupported: boolean, chromeFound: boolean, chromeRunning: boolean } | null} */
-    status: null,
+    platformSupported: true,
+    vaultAvailable: false,
+    /** @type {Array<{ browser: string, browserName: string, key: string, directory: string, name: string, userName: string, picturePath: string, historyCount: number }>} */
     profiles: [],
-    selectedProfile: 'Default',
-    /** Accesos web del usuario (excluye apps). */
-    webShortcuts: [],
-    /** @type {Set<string>} ids seleccionados para importar */
-    selectedIds: new Set(),
+    /** key (`browser::directory`) del perfil elegido */
+    selectedKey: '',
+    /** Qué traer. */
+    parts: { cookies: true, history: true, bookmarks: true, passwords: true },
+    /** Si el usuario abrió el detalle de opciones. */
+    optionsOpen: false,
     busy: false,
-    /** @type {{ importedByShortcut: Array<{ name: string, imported: number }> } | null} */
+    /** @type {object | null} resultado de la importación */
     result: null,
     error: '',
   };
@@ -195,22 +200,19 @@
   function resetImportState() {
     importState.loading = false;
     importState.loaded = false;
-    importState.status = null;
+    importState.platformSupported = true;
+    importState.vaultAvailable = false;
     importState.profiles = [];
-    importState.selectedProfile = 'Default';
-    importState.webShortcuts = [];
-    importState.selectedIds = new Set();
+    importState.selectedKey = '';
+    importState.parts = { cookies: true, history: true, bookmarks: true, passwords: true };
+    importState.optionsOpen = false;
     importState.busy = false;
     importState.result = null;
     importState.error = '';
   }
 
-  function isWhatsAppShortcut(s) {
-    try {
-      return new URL(String(s.url || '')).hostname === 'web.whatsapp.com';
-    } catch {
-      return false;
-    }
+  function selectedProfileObj() {
+    return importState.profiles.find((p) => p.key === importState.selectedKey) || null;
   }
 
   async function initImportStepData() {
@@ -218,82 +220,64 @@
     importState.loading = true;
     renderImportArea();
     const api = window.usualDesk || {};
-    let status = null;
-    let profiles = [];
-    let shortcuts = [];
+    let info = null;
     try {
-      status = typeof api.getChromeImportStatus === 'function'
-        ? await api.getChromeImportStatus()
+      info = typeof api.listBrowserImportProfiles === 'function'
+        ? await api.listBrowserImportProfiles()
         : null;
     } catch {
-      status = null;
-    }
-    try {
-      profiles = typeof api.listChromeProfiles === 'function'
-        ? await api.listChromeProfiles()
-        : [];
-    } catch {
-      profiles = [];
-    }
-    try {
-      shortcuts = typeof api.getShortcuts === 'function' ? await api.getShortcuts() : [];
-    } catch {
-      shortcuts = [];
+      info = null;
     }
     importState.loading = false;
     importState.loaded = true;
-    importState.status = status;
 
-    // Plataformas sin soporte de importación: el paso no aporta nada, cerramos.
-    if (!status || status.platformSupported === false) {
+    // Plataformas sin soporte (o sin navegadores): el paso no aporta nada.
+    if (!info || info.platformSupported === false) {
       showFarewell();
       return;
     }
-
-    importState.profiles =
-      Array.isArray(profiles) && profiles.length
-        ? profiles
-        : [{ directory: 'Default', name: 'Default', userName: '' }];
-    importState.selectedProfile = importState.profiles[0].directory;
-    importState.webShortcuts = (Array.isArray(shortcuts) ? shortcuts : []).filter(
-      (s) => s && s.type === 'web' && s.url
-    );
-    importState.selectedIds = new Set(
-      importState.webShortcuts.filter((s) => !isWhatsAppShortcut(s)).map((s) => String(s.id))
-    );
+    importState.platformSupported = true;
+    importState.vaultAvailable = !!info.vaultAvailable;
+    importState.profiles = Array.isArray(info.profiles) ? info.profiles : [];
+    if (importState.profiles.length === 0) {
+      renderImportArea();
+      return;
+    }
+    // El perfil con más historial queda preseleccionado (ya viene primero).
+    importState.selectedKey = importState.profiles[0].key;
+    importState.parts.passwords = importState.vaultAvailable;
     renderImportArea();
   }
 
   function importErrorText(code) {
     switch (code) {
       case 'CANCELLED':
-        return 'Para traer tus sesiones hay que cerrar Chrome un momento. Podés hacerlo más tarde desde Ajustes.';
-      case 'CHROME_RUNNING':
-        return 'Chrome está abierto. Cerralo completamente y volvé a intentar.';
-      case 'CHROME_CLOSE_FAILED':
-        return 'No pudimos cerrar Chrome. Cerralo a mano y volvé a intentar.';
-      case 'CHROME_NOT_FOUND':
-        return 'No encontramos Chrome en este equipo.';
-      case 'NO_IMPORTABLE_SHORTCUTS':
-        return 'No hay ventanas compatibles para importar.';
+        return 'Importación cancelada. Podés hacerlo más tarde desde Ajustes.';
+      case 'BROWSER_RUNNING':
+        return 'El navegador está abierto. Cerralo o elegí "continuar sin cookies".';
+      case 'BROWSER_CLOSE_FAILED':
+        return 'No pudimos cerrar el navegador. Cerralo a mano y volvé a intentar.';
+      case 'BROWSER_NOT_FOUND':
+        return 'No encontramos ese navegador en este equipo.';
       default:
-        return 'No se pudo importar. Podés iniciar sesión manualmente en cada ventana.';
+        return 'No se pudo importar. Podés intentarlo más tarde desde Ajustes.';
     }
   }
 
   async function runImport() {
     if (importState.busy) return;
-    const ids = [...importState.selectedIds];
-    if (ids.length === 0) return;
+    const profile = selectedProfileObj();
+    if (!profile) return;
     importState.busy = true;
     importState.error = '';
     importState.result = null;
     renderImportArea();
     let res = null;
     try {
-      res = await window.usualDesk.importChromeSessionsForShortcuts(
-        importState.selectedProfile,
-        ids
+      res = await window.usualDesk.runBrowserImport(
+        profile.browser,
+        profile.directory,
+        { ...importState.parts },
       );
     } catch {
       res = null;
@@ -307,137 +291,122 @@
     renderImportArea();
   }
 
-  function hostOf(url) {
-    try {
-      return new URL(String(url || '')).hostname.replace(/^www\./, '');
-    } catch {
-      return '';
-    }
-  }
-
-  /** Ícono de la ficha: el del acceso o, si no tiene, el de la app que coincide por dirección. */
-  function sessionIconFor(shortcut) {
-    if (shortcut && shortcut.icon) return String(shortcut.icon);
-    const host = hostOf(shortcut && shortcut.url);
-    if (!host) return '';
-    const personalize = STEPS.find((x) => x.id === 'personalize');
-    const apps = personalize && Array.isArray(personalize.apps) ? personalize.apps : [];
-    const match = apps.find((app) => hostOf(app.url) === host);
-    return match ? match.icon : '';
-  }
+  const PART_LABELS = {
+    cookies: 'Sesiones iniciadas (cookies)',
+    history: 'Historial',
+    bookmarks: 'Marcadores',
+    passwords: 'Contraseñas',
+  };
 
   function renderImportArea() {
     const area = document.getElementById('onboarding-import-area');
     if (!area) return;
 
     if (importState.loading || !importState.loaded) {
-      area.innerHTML = '<p class="onboarding-import-hint">Comprobando Google Chrome…</p>';
+      area.innerHTML = '<p class="onboarding-import-hint">Buscando tus navegadores…</p>';
       scheduleReflow();
       return;
     }
 
-    const status = importState.status || {};
-    if (!status.chromeFound) {
+    if (importState.profiles.length === 0) {
       area.innerHTML =
-        '<p class="onboarding-import-hint">No detectamos Google Chrome en este equipo. '
-        + 'Podés iniciar sesión manualmente en cada ventana.</p>';
-      scheduleReflow();
-      return;
-    }
-
-    if (importState.webShortcuts.length === 0) {
-      area.innerHTML =
-        '<p class="onboarding-import-hint">Todavía no tenés ventanas web para importar. '
-        + 'Podés hacerlo más adelante desde Internal.</p>';
+        '<p class="onboarding-import-hint">No detectamos Chrome, Edge ni otros navegadores compatibles '
+        + 'en este equipo. Podés iniciar sesión manualmente cuando quieras.</p>';
       scheduleReflow();
       return;
     }
 
     if (importState.result) {
-      const lines = (importState.result.importedByShortcut || [])
-        .map((r) => {
-          const okTxt = r.imported > 0
-            ? `${r.imported} cookies importadas`
-            : 'sin cookies para este sitio en Chrome';
-          return `<li><strong>${escapeHtml(r.name)}</strong>: ${escapeHtml(okTxt)}</li>`;
-        })
-        .join('');
+      const r = importState.result;
+      const bits = [];
+      if (r.cookies) bits.push(`${r.cookies} cookies`);
+      if (r.history) bits.push(`${r.history} páginas de historial`);
+      if (r.bookmarks) bits.push(`${r.bookmarks} marcadores`);
+      if (r.passwords) bits.push(`${r.passwords} contraseñas`);
+      const summary = bits.length ? bits.join(', ') : 'nada nuevo para traer';
+      const notes = [];
+      if (r.cookiesError) {
+        notes.push('No se pudieron traer las cookies (el navegador tiene que cerrarse para eso).');
+      }
+      if (r.passwordsSkipped) {
+        notes.push(
+          `${r.passwordsSkipped} contraseñas no se pudieron descifrar (protegidas por el navegador).`,
+        );
+      }
+      if (importState.parts.passwords && !r.passwordsVaultAvailable) {
+        notes.push('Las contraseñas no se pudieron guardar: el cifrado del sistema no está disponible.');
+      }
       area.innerHTML =
-        '<p class="onboarding-import-hint">Listo. Al abrir cada ventana deberías entrar ya logueado:</p>'
-        + `<ul class="onboarding-import-summary">${lines}</ul>`;
+        `<p class="onboarding-import-hint">Listo, importamos: ${escapeHtml(summary)}.</p>`
+        + notes.map((n) => `<div class="onboarding-import-note">${escapeHtml(n)}</div>`).join('');
       scheduleReflow();
       return;
     }
 
     const profileOptions = importState.profiles
       .map((p) => {
-        const label = p.userName ? `${p.name} (${p.userName})` : p.name;
-        const sel = p.directory === importState.selectedProfile ? ' selected' : '';
-        return `<option value="${escapeHtml(p.directory)}"${sel}>${escapeHtml(label)}</option>`;
+        const who = p.userName || p.name;
+        const label = `${p.browserName} · ${who}`;
+        const sel = p.key === importState.selectedKey ? ' selected' : '';
+        return `<option value="${escapeHtml(p.key)}"${sel}>${escapeHtml(label)}</option>`;
       })
       .join('');
-    const profileRow = importState.profiles.length > 1
-      ? '<label class="onboarding-import-row">Perfil de Chrome: '
-        + `<select id="onboarding-import-profile">${profileOptions}</select></label>`
-      : '';
+    const profileRow =
+      '<label class="onboarding-import-row">Perfil a importar'
+      + `<select id="onboarding-import-profile">${profileOptions}</select></label>`;
 
-    const cards = importState.webShortcuts
-      .map((s) => {
-        const id = String(s.id);
-        const name = String(s.name || s.url || 'Ventana');
-        const icon = sessionIconFor(s);
-        const iconHtml = icon ? appIconMarkup(icon) : escapeHtml(name.charAt(0).toUpperCase());
-        const head = `<div class="onboarding-app-icon">${iconHtml}</div><div class="onboarding-app-name">${escapeHtml(name)}</div>`;
-        if (isWhatsAppShortcut(s)) {
-          return '<div class="onboarding-app-option onboarding-session-card is-disabled" aria-disabled="true">'
-            + head + '<div class="onboarding-session-note">requiere QR</div></div>';
-        }
-        const on = importState.selectedIds.has(id);
-        return `<div class="onboarding-app-option onboarding-session-card${on ? ' is-selected' : ''}" role="checkbox"`
-          + ` tabindex="0" aria-checked="${on ? 'true' : 'false'}" data-import-shortcut="${escapeHtml(id)}">${head}</div>`;
+    const optionRows = Object.keys(PART_LABELS)
+      .map((key) => {
+        const on = !!importState.parts[key];
+        const disabled = key === 'passwords' && !importState.vaultAvailable ? ' disabled' : '';
+        const note = disabled ? ' (cifrado no disponible)' : '';
+        return (
+          '<label class="onboarding-import-check">'
+          + `<input type="checkbox" data-import-part="${key}"${on ? ' checked' : ''}${disabled}> `
+          + `${escapeHtml(PART_LABELS[key] + note)}</label>`
+        );
       })
       .join('');
-
-    const warning = status.chromeRunning
-      ? '<div class="onboarding-bubble-warning" role="alert">Chrome está abierto: '
-        + 'te vamos a pedir permiso para cerrarlo un momento y lo reabrimos con tus pestañas.</div>'
+    const optionsBlock = importState.optionsOpen
+      ? `<div class="onboarding-import-options">${optionRows}</div>`
       : '';
+    const optionsToggle =
+      `<button type="button" id="onboarding-import-options-toggle" class="onboarding-import-link">`
+      + `${importState.optionsOpen ? 'Ocultar opciones' : 'Elegir opciones de importación'}</button>`;
+
     const error = importState.error
       ? `<div class="onboarding-bubble-warning" role="alert">${escapeHtml(importState.error)}</div>`
       : '';
-    const btnLabel = importState.busy ? 'Importando… (puede tardar unos segundos)' : 'Importar sesiones';
-    const btnDisabled = importState.busy || importState.selectedIds.size === 0 ? ' disabled' : '';
+    const anyPart = Object.values(importState.parts).some(Boolean);
+    const btnLabel = importState.busy ? 'Importando… (puede tardar unos segundos)' : 'Importar';
+    const btnDisabled = importState.busy || !anyPart ? ' disabled' : '';
 
     area.innerHTML =
       profileRow
-      + `<div class="onboarding-session-grid">${cards}</div>`
-      + warning
+      + optionsToggle
+      + optionsBlock
       + error
       + `<button type="button" id="onboarding-import-btn" class="onboarding-btn-primary onboarding-import-btn"${btnDisabled}>${escapeHtml(btnLabel)}</button>`;
 
     const profileSel = area.querySelector('#onboarding-import-profile');
     if (profileSel) {
       profileSel.addEventListener('change', () => {
-        importState.selectedProfile = profileSel.value;
+        importState.selectedKey = profileSel.value;
       });
     }
-    area.querySelectorAll('[data-import-shortcut]').forEach((card) => {
-      const toggle = () => {
-        const id = card.getAttribute('data-import-shortcut');
-        const on = !importState.selectedIds.has(id);
-        if (on) importState.selectedIds.add(id);
-        else importState.selectedIds.delete(id);
-        card.classList.toggle('is-selected', on);
-        card.setAttribute('aria-checked', on ? 'true' : 'false');
+    const optToggle = area.querySelector('#onboarding-import-options-toggle');
+    if (optToggle) {
+      optToggle.addEventListener('click', () => {
+        importState.optionsOpen = !importState.optionsOpen;
+        renderImportArea();
+      });
+    }
+    area.querySelectorAll('[data-import-part]').forEach((box) => {
+      box.addEventListener('change', () => {
+        const key = box.getAttribute('data-import-part');
+        importState.parts[key] = box.checked;
         const btn = area.querySelector('#onboarding-import-btn');
-        if (btn) btn.disabled = importState.busy || importState.selectedIds.size === 0;
-      };
-      card.addEventListener('click', toggle);
-      card.addEventListener('keydown', (e) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          toggle();
-        }
+        if (btn) btn.disabled = importState.busy || !Object.values(importState.parts).some(Boolean);
       });
     });
     const importBtn = area.querySelector('#onboarding-import-btn');

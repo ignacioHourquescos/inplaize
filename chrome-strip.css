@@ -232,11 +232,15 @@
   box-shadow: 0 0 0 2px var(--accent, #7c5cff) !important;
 }
 
-/* Segmented "inplaize | www": dónde estás, la app o internet. Solo un lado encendido. */
+/* Segmented "inplaize | www": dónde estás, la app o internet. Solo un lado encendido.
+   Todo el control es un switch: el clic en cualquier parte lo alterna. */
 .strip-mode-seg {
+  --strip-seg-w: 48px;
+  --strip-seg-h: 32px;
+  --strip-seg-gap: 2px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--strip-seg-gap);
   flex: 0 0 auto;
   align-self: center;
   padding: 3px;
@@ -244,50 +248,43 @@
   background: #1c1c22;
   border: 1px solid var(--ud-chrome-strip-border);
   position: relative;
+  cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
-/* Pastilla que se desliza bajo el lado activo: violeta en inplaize (::before) y
-   blanca en www (::after, que aparece encima). El desplazamiento = 32px del
-   segmento + 2px de gap. */
+/* Pastillas violetas fijas, una por lado (::before inplaize, ::after www): el
+   lado activo se enciende y el otro se apaga, sin desplazarse. Solo hay fundido
+   cuando el cambio sale de un clic en el switch (.is-user-switch, lo pone
+   open-url-bar.js); si el modo cambia solo (al abrir la ventana con el atajo,
+   al cargar), aparece directamente. */
 .strip-mode-seg::before,
 .strip-mode-seg::after {
   content: '';
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 32px;
-  height: 32px;
+  width: var(--strip-seg-w);
+  height: var(--strip-seg-h);
   border-radius: 8px;
   pointer-events: none;
   z-index: 0;
-  transition:
-    transform 0.26s cubic-bezier(0.3, 0.7, 0.2, 1),
-    opacity 0.2s ease;
-}
-
-.strip-mode-seg::before {
   background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  opacity: 0;
 }
 
 .strip-mode-seg::after {
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(109, 40, 217, 0.18);
-  opacity: 0;
+  left: calc(3px + var(--strip-seg-w) + var(--strip-seg-gap));
 }
 
-.strip-mode-seg:has(.open-url-btn.is-active)::before,
-.strip-mode-seg:has(.open-url-btn.is-active)::after {
-  transform: translateX(34px);
+.strip-mode-seg.is-user-switch::before,
+.strip-mode-seg.is-user-switch::after {
+  transition: opacity 0.22s ease;
 }
 
+.strip-mode-seg:has(> .shell-shortcut-item.is-active)::before,
 .strip-mode-seg:has(.open-url-btn.is-active)::after {
   opacity: 1;
-}
-
-.strip-mode-seg:not(:has(.is-active))::before {
-  opacity: 0;
 }
 
 .strip-mode-seg > .shell-shortcut-item,
@@ -297,18 +294,18 @@
 }
 
 .strip-mode-seg .shell-shortcut-item {
-  width: 32px;
-  min-width: 32px;
-  max-width: 32px;
-  height: 32px;
-  min-height: 32px;
-  max-height: 32px;
+  width: var(--strip-seg-w);
+  min-width: var(--strip-seg-w);
+  max-width: var(--strip-seg-w);
+  height: var(--strip-seg-h);
+  min-height: var(--strip-seg-h);
+  max-height: var(--strip-seg-h);
   border-radius: 8px;
 }
 
 .strip-mode-seg .open-url-icon {
-  font-size: 10px;
-  letter-spacing: -0.03em;
+  font-size: 12px;
+  letter-spacing: -0.02em;
 }
 
 .strip-mode-seg .open-url-icon,
@@ -316,6 +313,10 @@
   width: 100%;
   height: 100%;
   border-radius: 8px;
+}
+
+.strip-mode-seg.is-user-switch .open-url-icon,
+.strip-mode-seg.is-user-switch .dock-home-logo-mark {
   transition: background 0.15s ease, color 0.2s ease, opacity 0.15s ease;
 }
 
@@ -325,8 +326,12 @@
   box-shadow: none;
 }
 
-.strip-mode-seg .dock-home-logo-mark::before,
-.strip-mode-seg .dock-home-logo-mark::after {
+.strip-mode-seg .open-url-btn.is-active .open-url-icon {
+  color: #fff;
+}
+
+.strip-mode-seg.is-user-switch .dock-home-logo-mark::before,
+.strip-mode-seg.is-user-switch .dock-home-logo-mark::after {
   transition: background 0.2s ease;
 }
 
@@ -390,6 +395,46 @@
 }
 
 .open-url-btn:focus-visible {
+  outline: 2px solid var(--ud-chrome-edit-tab);
+  outline-offset: 2px;
+}
+
+/* Botón de Historial en la franja, junto al de internet. */
+.dock-history-strip-btn {
+  -webkit-app-region: no-drag;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.dock-history-strip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 8px;
+  color: #8e8ea0;
+}
+
+.dock-history-strip-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dock-history-strip-btn:hover .dock-history-strip-icon {
+  background: rgba(255, 255, 255, 0.07);
+  color: #e8e8ef;
+}
+
+.dock-history-strip-btn.is-active .dock-history-strip-icon {
+  background: rgba(124, 92, 255, 0.18);
+  color: #fff;
+}
+
+.dock-history-strip-btn:focus-visible {
   outline: 2px solid var(--ud-chrome-edit-tab);
   outline-offset: 2px;
 }

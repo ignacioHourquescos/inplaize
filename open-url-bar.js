@@ -24,4 +24,22 @@
     if (!api || typeof api.openAppBrowser !== 'function') return;
     api.openAppBrowser().catch(() => {});
   });
+
+  /* En el dock, el padding y el hueco entre opciones también alternan el modo.
+     Los botones frenan el burbujeo y se encargan solos. */
+  const seg = btn.closest('.strip-mode-seg');
+  if (seg) {
+    let userSwitchTimer = null;
+    seg.addEventListener('pointerdown', () => {
+      clearTimeout(userSwitchTimer);
+      seg.classList.add('is-user-switch');
+      userSwitchTimer = setTimeout(() => seg.classList.remove('is-user-switch'), 800);
+    }, true);
+    seg.addEventListener('click', (e) => {
+      if (typeof window.__dockToggleInternet !== 'function') return;
+      if (e.target.closest('#open-url-form') || e.target.closest('button')) return;
+      e.preventDefault();
+      window.__dockToggleInternet();
+    });
+  }
 })();

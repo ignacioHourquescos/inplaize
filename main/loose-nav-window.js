@@ -13,7 +13,29 @@ const { setEmbeddedPageBackground } = require('./embedded-page-background');
 const { applyChromeIdentityToPartition } = require('./chrome-identity');
 const { isLoopbackHost, withScheme } = require('./load-web-url');
 const browseProfiles = require('./browse-profiles');
+const historyStore = require('./history-store');
 const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
+
+/**
+ * Registra una visita en el historial de la app (alimenta las sugerencias de la
+ * barra de direcciones). "Sin sesión" (incógnito) no se registra.
+ * @param {string} url @param {Electron.WebContents} [wc]
+ */
+function recordHistoryVisit(url, wc) {
+  const u = String(url || '');
+  if (!/^https?:\/\//i.test(u)) return;
+  try {
+    let title = '';
+    try {
+      title = wc && !wc.isDestroyed() ? wc.getTitle() : '';
+    } catch {
+      title = '';
+    }
+    historyStore.record(u, title);
+  } catch {
+    /* noop */
+  }
+}
 
 /**
  * @typedef {{
@@ -316,6 +338,13 @@ function attachTabEvents(tab) {
 
   wc.on('page-title-updated', (_e, title) => {
     tab.title = String(title || '');
+    if (tab.url && !/browse-guest/.test(String(tab.partition || ''))) {
+      try {
+        historyStore.record(tab.url, tab.title);
+      } catch {
+        /* noop */
+      }
+    }
     broadcastState();
   });
 
@@ -335,6 +364,7 @@ function attachTabEvents(tab) {
     tab.loading = false;
     try {
       tab.url = wc.getURL() || tab.url;
+      if (tab.title === 'Cargando…') tab.title = wc.getTitle() || tab.url;
       tab.canGoBack = wc.canGoBack();
       tab.canGoForward = wc.canGoForward();
     } catch {
@@ -351,6 +381,7 @@ function attachTabEvents(tab) {
     } catch {
       /* noop */
     }
+    if (!/browse-guest/.test(String(tab.partition || ''))) recordHistoryVisit(tab.url, wc);
     broadcastState();
   });
 
@@ -502,7 +533,7 @@ async function openTabFromUrl(url, opts = {}) {
     lastActiveAt: Date.now(),
     sleeping: false,
   };
-  insertTab(id, tab);
+  insertTab(id, tab, opts.afterId);
   wireTab(tab, url);
 
   const shouldActivateMode = opts.activateMode !== false;
@@ -658,8 +689,17 @@ function selectTab(tabId) {
 }
 
 /** Las pestañas nuevas van a la derecha, junto al "+", como en Chrome. */
-function insertTab(id, tab) {
-  tabs.set(id, tab);
+/** Sin `afterId` va al final; con `afterId`, justo a la derecha de esa pestaña. */
+function insertTab(id, tab, afterId) {
+  if (!afterId || !tabs.has(afterId)) {
+    tabs.set(id, tab);
+    return;
+  }
+  const entries = [...tabs.entries()];
+  const idx = entries.findIndex(([key]) => key === afterId);
+  entries.splice(idx + 1, 0, [id, tab]);
+  tabs.clear();
+  for (const [key, value] of entries) tabs.set(key, value);
 }
 
 function closeTab(tabId) {
@@ -853,7 +893,10 @@ function registerLooseNavIpc() {
     if (!target) return false;
     const picked = typeof p.partition === 'string' && p.partition ? p.partition : '';
     const current = activeTabId && tabs.get(activeTabId);
-    await openTabFromUrl(target, { partition: picked || (current && current.partition) || defaultPartition() });
+    await openTabFromUrl(target, {
+      partition: picked || (current && current.partition) || defaultPartition(),
+      afterId: p.nextToActive && current ? current.id : undefined,
+    });
     return true;
   });
 

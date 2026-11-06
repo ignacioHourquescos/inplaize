@@ -2312,6 +2312,203 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .dock-viewport {
   display: none;
 }
 
+/* ---- Vista de Historial ---- */
+#history-home {
+  display: none;
+}
+
+#dock-home-panel[data-home-view='history'] > #todo-home,
+#dock-home-panel[data-home-view='history'] > #downloads-home,
+#dock-home-panel[data-home-view='history'] > #image-drawer {
+  display: none;
+}
+
+#dock-home-panel[data-home-view='history'] > #history-home {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 16px 18px 24px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.history-home-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.history-home-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary, #e8e8ee);
+}
+
+.history-home-search {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+}
+
+.history-home-search svg {
+  position: absolute;
+  left: 10px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary, #9a9aa8);
+  pointer-events: none;
+}
+
+.history-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px 0 32px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle, #3a3a44);
+  background: var(--bg-card, #1c1c22);
+  color: var(--text-primary, #e8e8ee);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.history-search-input:focus {
+  border-color: var(--accent, #7c5cff);
+}
+
+.history-clear-btn {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle, #3a3a44);
+  background: transparent;
+  color: var(--text-secondary, #9a9aa8);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.history-clear-btn:hover {
+  color: var(--text-primary, #e8e8ee);
+  border-color: var(--text-secondary, #9a9aa8);
+}
+
+.history-home-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-day-sep {
+  padding: 14px 4px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #9a9aa8);
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.history-row:hover {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.06));
+}
+
+.history-row-fav {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary, #9a9aa8);
+  text-transform: uppercase;
+}
+
+.history-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-row-title {
+  font-size: 13px;
+  color: var(--text-primary, #e8e8ee);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-row-url {
+  font-size: 11px;
+  color: var(--text-secondary, #9a9aa8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-row-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-secondary, #9a9aa8);
+}
+
+.history-row-del {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #9a9aa8);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.history-row:hover .history-row-del {
+  display: flex;
+}
+
+.history-row-del:hover {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-primary, #e8e8ee);
+}
+
+.history-home-empty {
+  margin: 0;
+  padding: 20px 4px;
+  font-size: 13px;
+  color: var(--text-secondary, #9a9aa8);
+}
+
+html[data-canvas-theme='light'] #dock-home-panel[data-home-view='history'] {
+  background: #ffffff;
+}
+
 /* Barra vertical con acciones + cerrar, pegada a la izquierda.
    Ancho = alto de la barra horizontal superior (--ud-chrome-strip-h) para que
    quede pixel perfect con el icono de inicio. Sin textos: solo iconos. */
@@ -3544,6 +3741,126 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
   box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.3);
 }
 
+/* Dropdown de sugerencias del historial (position:fixed, en el hueco sobre la página). */
+.loose-nav-suggest {
+  position: fixed;
+  z-index: 9999;
+  padding: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: #1f1f26;
+  border: 1px solid #34343e;
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.loose-nav-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.loose-nav-suggest-row.is-active {
+  background: rgba(124, 108, 255, 0.2);
+}
+
+.loose-nav-suggest-fav {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  color: #c6c6d2;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.loose-nav-suggest-fav img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.loose-nav-suggest-fav.is-search {
+  background: transparent;
+}
+
+.loose-nav-suggest-fav.is-search svg {
+  width: 16px;
+  height: 16px;
+}
+
+.loose-nav-suggest-fav.is-fallback img {
+  display: none;
+}
+
+.loose-nav-suggest-text {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.loose-nav-suggest-primary {
+  font-size: 13.5px;
+  color: #e8e8ee;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+  max-width: 55%;
+}
+
+.loose-nav-suggest-primary b {
+  font-weight: 700;
+  color: #fff;
+}
+
+.loose-nav-suggest-url {
+  font-size: 12px;
+  color: #8f8fa0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-canvas-theme='light'] .loose-nav-suggest {
+  background: #fff;
+  border-color: #e3e3ea;
+  box-shadow: 0 18px 44px rgba(20, 20, 40, 0.18);
+}
+
+html[data-canvas-theme='light'] .loose-nav-suggest-row.is-active {
+  background: rgba(124, 108, 255, 0.12);
+}
+
+html[data-canvas-theme='light'] .loose-nav-suggest-fav {
+  background: rgba(20, 20, 40, 0.05);
+  color: #4a4a58;
+}
+
+html[data-canvas-theme='light'] .loose-nav-suggest-primary {
+  color: #1f1f2b;
+}
+
+html[data-canvas-theme='light'] .loose-nav-suggest-primary b {
+  color: #000;
+}
+
+html[data-canvas-theme='light'] .loose-nav-suggest-url {
+  color: #6a6a7a;
+}
+
 .loose-nav-tab.is-composing {
   padding-left: 4px;
 }
@@ -3638,23 +3955,17 @@ html:not([data-dock-layout='topbar']) .loose-nav-bar {
 }
 
 /* Switch del "www": con la navegación libre, la franja de arriba cambia los
-   accesos directos por la fila de perfiles. data-strip-mode va detrás de
-   data-loose-nav: primero se apaga la fila vieja (strip-swap-out) y después
-   se cambia y se enciende la nueva. */
-.loose-nav-accounts {
-  display: none;
-}
-
-html[data-dock-layout='topbar'] #shortcuts-container,
-html[data-dock-layout='topbar'] .loose-nav-accounts {
+   accesos directos por la barra de dirección (con los perfiles adentro).
+   data-strip-mode va detrás de data-loose-nav: primero se apaga la fila vieja
+   (strip-swap-out) y después se cambia y se enciende la nueva. */
+html[data-dock-layout='topbar'] #shortcuts-container {
   transition:
     opacity 0.18s cubic-bezier(0, 0, 0.2, 1),
     transform 0.18s cubic-bezier(0, 0, 0.2, 1);
 }
 
 /* La salida es más corta que la entrada para que el cambio no se sienta lento. */
-html.strip-swap-out[data-dock-layout='topbar'] #shortcuts-container,
-html.strip-swap-out[data-dock-layout='topbar'] .loose-nav-accounts {
+html.strip-swap-out[data-dock-layout='topbar'] #shortcuts-container {
   opacity: 0;
   transform: translateX(-2px);
   transition:
@@ -3666,22 +3977,25 @@ html[data-strip-mode='accounts'][data-dock-layout='topbar'] #shortcuts-container
   display: none !important;
 }
 
-html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-accounts {
-  flex: 1 1 auto;
+/* Perfiles que no son el activo: dentro de la barra, a la derecha. */
+.loose-nav-accounts {
+  flex: 0 1 auto;
   min-width: 0;
-  align-self: stretch;
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: var(--ud-chrome-strip-gap);
-  padding: 0 var(--ud-chrome-strip-pad-x) 0 var(--ud-chrome-strip-gap);
+  gap: 4px;
+  padding: 2px 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  -webkit-app-region: no-drag;
 }
 
-html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-accounts::-webkit-scrollbar {
+.loose-nav-accounts:empty {
+  display: none;
+}
+
+.loose-nav-accounts::-webkit-scrollbar {
   display: none;
 }
 
@@ -3763,10 +4077,139 @@ html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-accounts:
   pointer-events: none;
 }
 
+.loose-nav-omnibox {
+  display: none;
+}
+
+html[data-dock-layout='topbar'] .loose-nav-omnibox {
+  transition:
+    opacity 0.18s cubic-bezier(0, 0, 0.2, 1),
+    transform 0.18s cubic-bezier(0, 0, 0.2, 1);
+}
+
+html.strip-swap-out[data-dock-layout='topbar'] .loose-nav-omnibox {
+  opacity: 0;
+  transform: translateX(-2px);
+  transition:
+    opacity 0.08s ease-in,
+    transform 0.08s ease-in;
+}
+
+/* La píldora es el form: perfil activo · dirección · demás perfiles.
+   El padding izquierdo deja el centro del avatar (22px) en el mismo x que el
+   favicon de la primera pestaña (12px de padding + 16px de favicon). */
+html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-omnibox {
+  flex: 1 1 auto;
+  min-width: 160px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  /* Mismo alto que .strip-mode-seg: 32px de pastilla + 3px de padding + 1px de borde por lado. */
+  height: 40px;
+  margin: 0 var(--ud-chrome-strip-pad-x) 0 0;
+  padding: 0 5px 0 8px;
+  border: 1px solid #5a5a68;
+  border-radius: 999px;
+  background: #16161b;
+  cursor: text;
+  -webkit-app-region: no-drag;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-omnibox:hover {
+  border-color: #70707e;
+}
+
+html[data-strip-mode='accounts'][data-dock-layout='topbar'] .loose-nav-omnibox:focus-within {
+  border-color: var(--ud-chrome-edit-tab, #7c6cff);
+  box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.3);
+}
+
+.loose-nav-omnibox-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ud-chrome-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-omnibox-input::placeholder {
+  color: #8d8d9c;
+}
+
+.loose-nav-omnibox-profile {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.loose-nav-omnibox-profile:empty {
+  display: none;
+}
+
+/* Dentro de la píldora los perfiles van sueltos, sin recuadro. */
+.loose-nav-omnibox .loose-nav-account,
+.loose-nav-omnibox .loose-nav-account:hover {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.loose-nav-omnibox .loose-nav-account img,
+.loose-nav-omnibox .loose-nav-account-letter,
+.loose-nav-omnibox .loose-nav-account-incognito {
+  border-radius: 50%;
+}
+
+.loose-nav-omnibox .loose-nav-account-letter {
+  font-size: 10px;
+}
+
+.loose-nav-omnibox .loose-nav-account-count {
+  right: -3px;
+  bottom: -3px;
+  font-size: 9px;
+  text-shadow: 0 0 3px #16161b, 0 0 2px #16161b;
+}
+
+/* El activo, al principio: avatar redondo, sin recuadro. */
+.loose-nav-omnibox-profile .loose-nav-account,
+.loose-nav-omnibox-profile .loose-nav-account:hover {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.loose-nav-omnibox-profile .loose-nav-account img,
+.loose-nav-omnibox-profile .loose-nav-account-letter,
+.loose-nav-omnibox-profile .loose-nav-account-incognito {
+  border-radius: 50%;
+}
+
+.loose-nav-omnibox-profile .loose-nav-account-count {
+  display: none;
+}
+
 .loose-nav-accounts-sep {
   flex-shrink: 0;
   width: 1px;
-  height: 28px;
+  height: 18px;
   background: var(--ud-chrome-icon-active-border, rgba(255, 255, 255, 0.12));
 }
 
@@ -3911,7 +4354,7 @@ html[data-loose-nav='on'] #dock-inline-editor {
   height: 116px;
   border: none;
   border-radius: 14px;
-  background: var(--bg-card);
+  background: transparent;
   color: var(--text-primary);
   cursor: pointer;
   font-family: inherit;
@@ -3924,7 +4367,7 @@ html[data-loose-nav='on'] #dock-inline-editor {
 }
 
 .download-tile:hover {
-  background: var(--bg-card-hover);
+  background: rgba(255, 255, 255, 0.06);
   transform: translateY(-1px);
   z-index: 1;
 }
@@ -3952,6 +4395,25 @@ html[data-loose-nav='on'] #dock-inline-editor {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* Icono del sistema (exe, zip…): centrado y entero, dejando lugar al nombre. */
+.download-tile-thumb.is-icon {
+  top: 10%;
+  left: 18%;
+  width: 64%;
+  height: 56%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+}
+
+/* Sin miniatura de contenido el nombre va suelto, sin la franja oscura. */
+.download-tile:not(:has(.download-tile-thumb:not(.is-icon))) .download-tile-label {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .download-tile-ext {
@@ -4087,10 +4549,53 @@ html[data-loose-nav='on'] #dock-inline-editor {
 
 #dock-home-panel[data-home-view='todos'] > #downloads-home {
   order: -1;
-  flex: 0 0 132px;
-  width: 132px;
+  flex: 0 0 var(--downloads-col-width, 132px);
+  width: var(--downloads-col-width, 132px);
   min-height: 0;
   border-right: 1px solid var(--border);
+}
+
+#dock-home-panel[data-home-view='todos'].is-col-snapping > #downloads-home {
+  transition: flex-basis 0.16s ease, width 0.16s ease;
+}
+
+/* Borde derecho arrastrable: al ensanchar entran más columnas de archivos. */
+.downloads-col-resizer {
+  display: none;
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-col-resizer {
+  display: block;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -4px;
+  width: 8px;
+  z-index: 5;
+  cursor: col-resize;
+  -webkit-app-region: no-drag;
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-col-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+#dock-home-panel[data-home-view='todos'] .downloads-col-resizer:hover::after,
+#dock-home-panel[data-home-view='todos'] .downloads-col-resizer.is-dragging::after {
+  background: var(--accent, #7c5cff);
+}
+
+#dock-home-panel.is-col-resizing,
+#dock-home-panel.is-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 #dock-home-panel[data-home-view='todos'] .downloads-expand-btn {
@@ -4126,7 +4631,7 @@ html[data-loose-nav='on'] #dock-inline-editor {
 }
 
 #dock-home-panel[data-home-view='todos'] .downloads-home-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   gap: 8px;
   padding: 10px 10px 40px;
 }
@@ -4386,8 +4891,12 @@ html[data-canvas-theme='light'] .downloads-home-empty {
   color: #52525b;
 }
 
-html[data-canvas-theme='light'] .download-tile {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+html[data-canvas-theme='light'] .download-tile:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+html[data-canvas-theme='light'] .download-tile:not(:has(.download-tile-thumb:not(.is-icon))) .download-tile-label {
+  color: #18181b;
 }
 
 html[data-canvas-theme='light'] .image-drawer {

@@ -96,6 +96,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
       ...(profile && profile.partition
         ? { partition: String(profile.partition) }
         : {}),
+      ...(profile && profile.nextToActive ? { nextToActive: true } : {}),
     }),
   looseNavPickProfile: () => ipcRenderer.invoke('loose-nav-pick-profile'),
   looseNavUseAccount: (target) =>
@@ -151,6 +152,27 @@ contextBridge.exposeInMainWorld('usualDesk', {
   importChromeSessionsForShortcuts: (profileDirectory, shortcutIds) =>
     ipcRenderer.invoke('chrome-import-sessions-for-shortcuts', { profileDirectory, shortcutIds }),
 
+  /* ---- Importar perfil completo de otro navegador (estilo Comet) ---- */
+  listBrowserImportProfiles: () => ipcRenderer.invoke('browser-import-list-profiles'),
+  runBrowserImport: (browser, directory, parts) =>
+    ipcRenderer.invoke('browser-import-run', { browser, directory, parts: parts || null }),
+
+  /* ---- Historial, marcadores y contraseñas ---- */
+  suggestHistory: (query, limit) => ipcRenderer.invoke('history-suggest', { query, limit }),
+  recordHistory: (url, title) => ipcRenderer.invoke('history-record', { url, title }),
+  listHistory: (query, limit) => ipcRenderer.invoke('history-list', { query, limit }),
+  removeHistory: (url) => ipcRenderer.invoke('history-remove', url),
+  clearHistory: () => ipcRenderer.invoke('history-clear'),
+  listBookmarks: () => ipcRenderer.invoke('bookmarks-list'),
+  addBookmark: (url, title) => ipcRenderer.invoke('bookmarks-add', { url, title }),
+  removeBookmark: (id) => ipcRenderer.invoke('bookmarks-remove', id),
+  hasBookmark: (url) => ipcRenderer.invoke('bookmarks-has', url),
+  passwordsForHost: (url) => ipcRenderer.invoke('passwords-for-host', url),
+  savePassword: (origin, username, password) =>
+    ipcRenderer.invoke('passwords-save', { origin, username, password }),
+  listPasswords: () => ipcRenderer.invoke('passwords-list'),
+  removePassword: (id) => ipcRenderer.invoke('passwords-remove', id),
+
   /* ---- Descargas centralizadas en el dock ---- */
   getDownloads: () => ipcRenderer.invoke('downloads-get-history'),
   openDownloadFile: (id) => ipcRenderer.invoke('downloads-open-file', id),
@@ -162,6 +184,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   saveDownloadImageEdit: (id, dataUrl) => ipcRenderer.invoke('downloads-save-image-edit', id, dataUrl),
   ingestDroppedFiles: (paths) => ipcRenderer.invoke('downloads-ingest-dropped-files', paths),
   getDownloadThumbnail: (id) => ipcRenderer.invoke('downloads-get-thumbnail', id),
+  getDownloadFileIcon: (id) => ipcRenderer.invoke('downloads-get-file-icon', id),
   startDownloadDrag: (id, anchor) => ipcRenderer.send('downloads-drag-start', {
     id,
     anchor: anchor || null,

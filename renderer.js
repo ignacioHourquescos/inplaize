@@ -199,11 +199,16 @@ function initFooter() {
 let homeView = 'todos';
 
 function applyHomeView(view) {
-  homeView = view === 'downloads' ? 'downloads' : 'todos';
+  homeView =
+    view === 'downloads' ? 'downloads' : view === 'history' ? 'history' : 'todos';
   const panel = document.getElementById('dock-home-panel');
   if (panel) panel.setAttribute('data-home-view', homeView);
   kickDownloadPreviews();
   if (homeView !== 'downloads') pauseDrawerVideo();
+  if (homeView === 'history') {
+    wireHistoryHome();
+    renderHistoryHome();
+  }
 }
 
 function syncDockHomeStripBtn() {
@@ -220,7 +225,7 @@ function syncDockHomeStripBtn() {
     btn.setAttribute('aria-pressed', homeVisible ? 'true' : 'false');
   }
   if (downloadsBtn) {
-    const on = homeView === 'downloads';
+    const on = homeView === 'downloads' && homeVisible;
     downloadsBtn.classList.toggle('is-active', on);
     downloadsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
@@ -232,7 +237,7 @@ function syncDockHomeStripBtn() {
 }
 
 async function goToDockWelcomeHome(view) {
-  applyHomeView(view === 'downloads' ? 'downloads' : 'todos');
+  applyHomeView(view === 'downloads' ? 'downloads' : view === 'history' ? 'history' : 'todos');
   try {
     closeModal();
     if (looseNavState?.active && typeof window.usualDesk?.looseNavClose === 'function') {
@@ -563,6 +568,10 @@ function swapInDocThumb(tile, extChip, url) {
   if (tile.querySelector('.download-tile-thumb')) return;
   const img = document.createElement('img');
   img.className = 'download-tile-thumb';
+  if (tile.dataset.previewKind === 'icon') {
+    img.classList.add('is-icon');
+    tile.classList.add('has-icon');
+  }
   img.alt = '';
   img.draggable = false;
   img.decoding = 'async';
@@ -665,8 +674,11 @@ function pumpDownloadPreviews() {
       continue;
     }
     previewInflight += 1;
-    window.usualDesk
-      .getDownloadThumbnail(id)
+    const fetchPreview =
+      tile.dataset.previewKind === 'icon'
+        ? window.usualDesk.getDownloadFileIcon
+        : window.usualDesk.getDownloadThumbnail;
+    Promise.resolve(fetchPreview ? fetchPreview(id) : null)
       .then((res) => {
         if (res && res.ok && res.url) {
           docThumbCache.set(id, res.url);
@@ -688,7 +700,8 @@ function pumpDownloadPreviews() {
 }
 
 /** Chip primero. La miniatura (chica y cacheada) entra cuando el tile se ve. */
-function scheduleTilePreview(tile, extChip, d) {
+function scheduleTilePreview(tile, extChip, d, kind) {
+  if (kind) tile.dataset.previewKind = kind;
   const cached = docThumbCache.get(d.id);
   if (cached === 'error') return;
   if (cached) {
@@ -964,12 +977,12 @@ function buildDownloadTile(d) {
   ext.className = 'download-tile-ext';
   ext.textContent = downloadExtLabel(d.filename);
   tile.appendChild(ext);
-  if (
-    d.state === 'completed' &&
-    d.savePath &&
-    (isImageDownload(d) || isDocThumbDownload(d))
-  ) {
-    scheduleTilePreview(tile, ext, d);
+  if (d.state === 'completed' && d.savePath) {
+    if (isImageDownload(d) || isDocThumbDownload(d)) {
+      scheduleTilePreview(tile, ext, d);
+    } else {
+      scheduleTilePreview(tile, ext, d, 'icon');
+    }
   }
 
   // Aro/barra de progreso mientras descarga.
@@ -3486,6 +3499,7 @@ function initDockHomeMenu() {
     exitShortcutsEditMode: () => exitShortcutsEditModeFromUi(),
     openAppearance: () => openAppearanceModal(),
     openSettings: () => openSettingsModalFromMenu(),
+    openHistory: () => goToDockWelcomeHome('history').catch(() => {}),
     quitApp: () => window.usualDesk.closeApp(),
     onDrawerOpenChange: (open, editMode) => {
       if (document.documentElement.getAttribute('data-loose-nav') !== 'on') return;
@@ -3525,8 +3539,10 @@ browsePathBtn.addEventListener('click', async () => {
 // Add shortcut / modo edición / ajustes: menú hamburguesa (shell-home-menu.js)
 
 if (dockHomeBtn) {
-  dockHomeBtn.addEventListener('click', () => {
-    goToDockWelcomeHome('todos').catch(() => {});
+  dockHomeBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.__dockToggleInternet?.();
   });
 }
 
@@ -3536,9 +3552,225 @@ if (dockDownloadsBtn) {
   });
 }
 
+/* ---------------- Página de Historial ---------------- */
+
+let historyHomeWired = false;
+let historySearchTimer = 0;
+
+function formatHistoryTime(ts) {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
+function historyDayLabel(ts) {
+  const startOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const d = new Date(ts);
+  const today = startOf(new Date());
+  const day = startOf(d);
+  if (day === today) return 'Hoy';
+  if (day === today - 86400000) return 'Ayer';
+  try {
+    return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  } catch {
+    return '';
+  }
+}
+
+function openHistoryUrl(url) {
+  try {
+    window.usualDesk.looseNavNewTab(url);
+  } catch {
+    /* noop */
+  }
+}
+
+async function renderHistoryHome() {
+  const list = document.getElementById('history-home-list');
+  const empty = document.getElementById('history-home-empty');
+  if (!list) return;
+  const query = (document.getElementById('history-search-input')?.value || '').trim();
+  let items = [];
+  try {
+    items = (await window.usualDesk.listHistory(query, 500)) || [];
+  } catch {
+    items = [];
+  }
+  list.innerHTML = '';
+  if (!items.length) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  let lastDay = '';
+  for (const it of items) {
+    const dayLabel = it.lastVisit ? historyDayLabel(it.lastVisit) : '';
+    if (dayLabel && dayLabel !== lastDay) {
+      lastDay = dayLabel;
+      const sep = document.createElement('div');
+      sep.className = 'history-day-sep';
+      sep.textContent = dayLabel;
+      list.appendChild(sep);
+    }
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.title = it.url;
+
+    const fav = document.createElement('span');
+    fav.className = 'history-row-fav';
+    fav.textContent = (it.host || it.url || '?').charAt(0).toUpperCase();
+
+    const body = document.createElement('div');
+    body.className = 'history-row-body';
+    const title = document.createElement('span');
+    title.className = 'history-row-title';
+    title.textContent = it.title || it.host || it.url;
+    const url = document.createElement('span');
+    url.className = 'history-row-url';
+    url.textContent = it.url;
+    body.append(title, url);
+
+    const time = document.createElement('span');
+    time.className = 'history-row-time';
+    time.textContent = formatHistoryTime(it.lastVisit);
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'history-row-del';
+    del.textContent = '\u00d7';
+    del.setAttribute('aria-label', 'Quitar del historial');
+
+    row.append(fav, body, time, del);
+    row.addEventListener('click', (ev) => {
+      if (ev.target === del) return;
+      openHistoryUrl(it.url);
+    });
+    del.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      try {
+        await window.usualDesk.removeHistory(it.url);
+      } catch {
+        /* noop */
+      }
+      renderHistoryHome();
+    });
+    list.appendChild(row);
+  }
+}
+
+function wireHistoryHome() {
+  if (historyHomeWired) return;
+  historyHomeWired = true;
+  const input = document.getElementById('history-search-input');
+  if (input) {
+    input.addEventListener('input', () => {
+      clearTimeout(historySearchTimer);
+      historySearchTimer = setTimeout(() => renderHistoryHome(), 150);
+    });
+  }
+  const clearBtn = document.getElementById('history-clear-btn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async () => {
+      try {
+        await window.usualDesk.clearHistory();
+      } catch {
+        /* noop */
+      }
+      if (input) input.value = '';
+      renderHistoryHome();
+    });
+  }
+}
+
 document.getElementById('downloads-expand-btn')?.addEventListener('click', () => {
   goToDockWelcomeHome('downloads').catch(() => {});
 });
+
+/** Columna de archivos en la vista de tareas: el borde derecho se arrastra y,
+ *  al soltar, el ancho encaja en un número entero de columnas de tiles. */
+const DOWNLOADS_COL_KEY = 'inplaize.downloadsColumns';
+const DOWNLOADS_COL_MIN_WIDTH = 132;
+const DOWNLOADS_COL_STEP = 120;
+
+function downloadsColWidthFor(cols) {
+  return DOWNLOADS_COL_MIN_WIDTH + (cols - 1) * DOWNLOADS_COL_STEP;
+}
+
+function downloadsColMaxWidth(panel) {
+  return Math.max(DOWNLOADS_COL_MIN_WIDTH, Math.round(panel.clientWidth * 0.6));
+}
+
+function applyDownloadsColWidth(panel, px) {
+  panel.style.setProperty('--downloads-col-width', `${Math.round(px)}px`);
+}
+
+(function initDownloadsColResizer() {
+  const panel = document.getElementById('dock-home-panel');
+  const handle = document.getElementById('downloads-col-resizer');
+  const home = document.getElementById('downloads-home');
+  if (!panel || !handle || !home) return;
+
+  let savedCols = 1;
+  try {
+    savedCols = Math.max(1, parseInt(localStorage.getItem(DOWNLOADS_COL_KEY), 10) || 1);
+  } catch {
+    /* noop */
+  }
+  applyDownloadsColWidth(panel, downloadsColWidthFor(savedCols));
+
+  const snapTo = (cols) => {
+    const maxCols = Math.max(
+      1,
+      Math.floor((downloadsColMaxWidth(panel) - DOWNLOADS_COL_MIN_WIDTH) / DOWNLOADS_COL_STEP) + 1,
+    );
+    const n = Math.min(Math.max(1, cols), maxCols);
+    panel.classList.add('is-col-snapping');
+    applyDownloadsColWidth(panel, downloadsColWidthFor(n));
+    setTimeout(() => panel.classList.remove('is-col-snapping'), 200);
+    try {
+      localStorage.setItem(DOWNLOADS_COL_KEY, String(n));
+    } catch {
+      /* noop */
+    }
+  };
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = home.getBoundingClientRect().width;
+    const maxWidth = downloadsColMaxWidth(panel);
+    let width = startWidth;
+    handle.classList.add('is-dragging');
+    panel.classList.add('is-col-resizing');
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
+    const move = (ev) => {
+      width = Math.min(maxWidth, Math.max(DOWNLOADS_COL_MIN_WIDTH, startWidth + ev.clientX - startX));
+      applyDownloadsColWidth(panel, width);
+    };
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+      handle.classList.remove('is-dragging');
+      panel.classList.remove('is-col-resizing');
+      snapTo(Math.round((width - DOWNLOADS_COL_MIN_WIDTH) / DOWNLOADS_COL_STEP) + 1);
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  });
+
+  handle.addEventListener('dblclick', () => snapTo(1));
+})();
 
 async function exitShortcutsEditModeFromUi() {
   const formWasOpen =
@@ -3893,6 +4125,9 @@ const looseNavNewTabBtn = document.getElementById('loose-nav-new-tab-btn');
 const dockViewport = document.getElementById('dock-viewport');
 const looseNavSurface = document.getElementById('loose-nav-surface');
 const looseNavAccountsRail = document.getElementById('loose-nav-accounts');
+const looseNavOmnibox = document.getElementById('loose-nav-omnibox');
+const looseNavOmniboxInput = document.getElementById('loose-nav-omnibox-input');
+const looseNavOmniboxProfile = document.getElementById('loose-nav-omnibox-profile');
 
 /** Último estado recibido del main. */
 let looseNavState = {
@@ -3904,6 +4139,9 @@ let looseNavState = {
   activeCanGoForward: false,
   activeLoading: false,
 };
+
+/** Dock oculto con "www" abierto: la franja se queda como está hasta que se retome al volver. */
+let looseNavResumePending = false;
 
 let lastSentViewportBounds = null;
 let viewportBoundsFrame = 0;
@@ -3935,11 +4173,15 @@ function computeViewportBoundsPayload() {
   if (!dockViewport) return null;
   const r = dockViewport.getBoundingClientRect();
   const w = Math.max(0, Math.round(r.width));
-  const h = Math.max(0, Math.round(r.height));
+  // El dropdown de sugerencias no puede dibujarse sobre la vista nativa: en vez
+  // de taparla, empujamos la página hacia abajo `inset` px y mostramos el
+  // dropdown (DOM) en el hueco que queda bajo la barra.
+  const inset = looseNavSuggestInset || 0;
+  const h = Math.max(0, Math.round(r.height) - inset);
   if (w <= 0 || h <= 0) return null;
   return {
     x: Math.max(0, Math.round(r.left)),
-    y: Math.max(0, Math.round(r.top)),
+    y: Math.max(0, Math.round(r.top) + inset),
     width: w,
     height: h,
   };
@@ -3980,6 +4222,255 @@ function invalidateLooseNavViewport() {
 }
 
 window.__dockInvalidateLooseNavViewport = invalidateLooseNavViewport;
+
+/* ---------------- Sugerencias de la barra de direcciones ----------------
+ * La navegación suelta se dibuja con una vista nativa que taparía un dropdown
+ * HTML. Para mostrarlo, insetamos la página desde arriba (ver
+ * computeViewportBoundsPayload) y ubicamos el dropdown, en position:fixed, en el
+ * hueco resultante bajo la barra. */
+const looseNavSuggest = { box: null, items: [], active: -1, seq: 0, inputEl: null, onCommit: null };
+let looseNavSuggestInset = 0;
+
+function setLooseNavSuggestInset(px) {
+  const next = Math.max(0, Math.round(px || 0));
+  if (next === looseNavSuggestInset) return;
+  looseNavSuggestInset = next;
+  invalidateLooseNavViewport();
+}
+
+function closeLooseNavSuggest() {
+  looseNavSuggest.items = [];
+  looseNavSuggest.active = -1;
+  looseNavSuggest.inputEl = null;
+  looseNavSuggest.onCommit = null;
+  looseNavSuggest.seq += 1;
+  if (looseNavSuggest.box) {
+    looseNavSuggest.box.remove();
+    looseNavSuggest.box = null;
+  }
+  setLooseNavSuggestInset(0);
+}
+
+function positionLooseNavSuggest() {
+  if (!looseNavSuggest.box || !looseNavSuggest.inputEl || !dockViewport) return;
+  // Verticalmente va en el hueco al tope del área de contenido (donde empujamos
+  // la vista nativa). Horizontalmente se alinea al ancho de la barra de
+  // direcciones, como la omnibox de Chrome (no ocupa toda la pantalla).
+  const anchor = looseNavSuggest.inputEl.closest('.loose-nav-omnibox')
+    || looseNavSuggest.inputEl.closest('.loose-nav-tab')
+    || looseNavSuggest.inputEl;
+  const ar = anchor.getBoundingClientRect();
+  const vr = dockViewport.getBoundingClientRect();
+  const left = Math.max(vr.left, Math.round(ar.left));
+  const width = Math.min(Math.round(vr.width), Math.max(320, Math.round(ar.width)));
+  looseNavSuggest.box.style.top = `${Math.round(vr.top)}px`;
+  looseNavSuggest.box.style.left = `${left}px`;
+  looseNavSuggest.box.style.width = `${width}px`;
+}
+
+/** `true` si el texto parece una URL/host navegable en vez de una búsqueda. */
+function looseNavLooksLikeUrl(q) {
+  const s = String(q || '').trim();
+  if (!s || /\s/.test(s)) return false;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/^localhost(:\d+)?(\/.*)?$/i.test(s)) return true;
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?(\/.*)?$/i.test(s);
+}
+
+function looseNavHostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+/** Arma las filas: fila de acción (ir a / buscar) + coincidencias del historial. */
+function buildLooseNavSuggestItems(q, hist) {
+  const items = [];
+  const seen = new Set();
+  if (looseNavLooksLikeUrl(q)) {
+    const url = /^https?:\/\//i.test(q) ? q : `https://${q}`;
+    seen.add(url);
+    items.push({ kind: 'nav', value: url, title: q, sub: looseNavHostOf(url) || url, host: looseNavHostOf(url) });
+  } else {
+    items.push({ kind: 'search', value: q, title: q, sub: 'Búsqueda de Google', host: '' });
+  }
+  for (const h of hist) {
+    if (!h || !h.url || seen.has(h.url)) continue;
+    seen.add(h.url);
+    items.push({
+      kind: 'url',
+      value: h.url,
+      title: h.title || h.host || h.url,
+      sub: h.url,
+      host: h.host || looseNavHostOf(h.url),
+    });
+    if (items.length >= 8) break;
+  }
+  return items;
+}
+
+/** Ícono: favicon del sitio (con fallback a inicial) o una lupa para búsquedas. */
+function looseNavSuggestIcon(item) {
+  const wrap = document.createElement('span');
+  wrap.className = 'loose-nav-suggest-fav';
+  if (item.kind === 'search') {
+    wrap.classList.add('is-search');
+    wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    return wrap;
+  }
+  if (item.host) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.referrerPolicy = 'no-referrer';
+    img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(item.host)}&sz=32`;
+    img.addEventListener('error', () => {
+      wrap.classList.add('is-fallback');
+      wrap.textContent = (item.host.charAt(0) || '?').toUpperCase();
+    });
+    wrap.appendChild(img);
+  } else {
+    wrap.classList.add('is-fallback');
+    wrap.textContent = (String(item.title || '?').charAt(0) || '?').toUpperCase();
+  }
+  return wrap;
+}
+
+/** Resalta la parte del texto que coincide con la consulta (como Chrome). */
+function looseNavHighlight(text, q) {
+  const span = document.createElement('span');
+  const t = String(text || '');
+  const needle = String(q || '').trim().toLowerCase();
+  const idx = needle ? t.toLowerCase().indexOf(needle) : -1;
+  if (idx === -1) {
+    span.textContent = t;
+    return span;
+  }
+  span.append(document.createTextNode(t.slice(0, idx)));
+  const b = document.createElement('b');
+  b.textContent = t.slice(idx, idx + needle.length);
+  span.append(b, document.createTextNode(t.slice(idx + needle.length)));
+  return span;
+}
+
+function paintLooseNavSuggest(q) {
+  if (!looseNavSuggest.items.length) {
+    closeLooseNavSuggest();
+    return;
+  }
+  if (!looseNavSuggest.box) {
+    const box = document.createElement('div');
+    box.className = 'loose-nav-suggest';
+    box.setAttribute('data-mouse-hit', '');
+    document.body.appendChild(box);
+    looseNavSuggest.box = box;
+  }
+  const box = looseNavSuggest.box;
+  box.innerHTML = '';
+  const query = q != null ? q : (looseNavSuggest.inputEl?.value || '');
+  looseNavSuggest.items.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'loose-nav-suggest-row' + (i === looseNavSuggest.active ? ' is-active' : '');
+    row.appendChild(looseNavSuggestIcon(s));
+    const text = document.createElement('span');
+    text.className = 'loose-nav-suggest-text';
+    const primary = looseNavHighlight(s.title, query);
+    primary.className = 'loose-nav-suggest-primary';
+    text.appendChild(primary);
+    if (s.sub) {
+      const secondary = document.createElement('span');
+      secondary.className = 'loose-nav-suggest-url';
+      secondary.textContent = s.sub;
+      text.appendChild(secondary);
+    }
+    row.appendChild(text);
+    row.addEventListener('mouseenter', () => {
+      looseNavSuggest.active = i;
+      box.querySelectorAll('.loose-nav-suggest-row').forEach((el, j) => {
+        el.classList.toggle('is-active', j === i);
+      });
+    });
+    row.addEventListener('mousedown', (ev) => {
+      ev.preventDefault();
+      commitLooseNavSuggestItem(i, { forceNewTab: ev.altKey });
+    });
+    box.appendChild(row);
+  });
+  positionLooseNavSuggest();
+  // Medimos la altura real para liberar exactamente ese hueco sobre la vista nativa.
+  requestAnimationFrame(() => {
+    if (!looseNavSuggest.box) return;
+    setLooseNavSuggestInset(looseNavSuggest.box.offsetHeight + 8);
+  });
+}
+
+function commitLooseNavSuggestItem(i, opts = {}) {
+  const item = looseNavSuggest.items[i];
+  if (!item) return;
+  const onCommit = looseNavSuggest.onCommit;
+  const value = item.value;
+  closeLooseNavSuggest();
+  if (typeof onCommit === 'function') onCommit(value, opts);
+}
+
+async function refreshLooseNavSuggest(input, onCommit) {
+  const q = (input.value || '').trim();
+  looseNavSuggest.inputEl = input;
+  if (typeof onCommit === 'function') looseNavSuggest.onCommit = onCommit;
+  if (q.length < 1) {
+    closeLooseNavSuggest();
+    return;
+  }
+  const seq = ++looseNavSuggest.seq;
+  let hist = [];
+  if (typeof window.usualDesk?.suggestHistory === 'function') {
+    try {
+      hist = await window.usualDesk.suggestHistory(q, 7);
+    } catch {
+      hist = [];
+    }
+  }
+  if (seq !== looseNavSuggest.seq || !input.isConnected || document.activeElement !== input) return;
+  looseNavSuggest.inputEl = input;
+  if (typeof onCommit === 'function') looseNavSuggest.onCommit = onCommit;
+  looseNavSuggest.items = buildLooseNavSuggestItems(q, Array.isArray(hist) ? hist : []);
+  looseNavSuggest.active = -1;
+  paintLooseNavSuggest(q);
+}
+
+function looseNavSuggestKeydown(ev, input) {
+  if (ev.key === 'Escape') {
+    if (looseNavSuggest.box) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeLooseNavSuggest();
+      return true;
+    }
+    return false;
+  }
+  if (!looseNavSuggest.items.length) return false;
+  if (ev.key === 'ArrowDown') {
+    ev.preventDefault();
+    looseNavSuggest.active = (looseNavSuggest.active + 1) % looseNavSuggest.items.length;
+    paintLooseNavSuggest();
+    return true;
+  }
+  if (ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    const n = looseNavSuggest.items.length;
+    looseNavSuggest.active = (looseNavSuggest.active - 1 + n) % n;
+    paintLooseNavSuggest();
+    return true;
+  }
+  if (ev.key === 'Enter' && looseNavSuggest.active >= 0) {
+    ev.preventDefault();
+    commitLooseNavSuggestItem(looseNavSuggest.active, { forceNewTab: ev.altKey });
+    return true;
+  }
+  return false;
+}
 
 window.__dockToggleInternet = () => {
   if (looseNavState.active) {
@@ -4112,7 +4603,11 @@ function buildLooseNavComposer() {
   input.spellcheck = false;
   input.autocomplete = 'off';
   input.setAttribute('aria-label', editing ? 'Dirección de esta pestaña' : 'Búsqueda o enlace de la pestaña nueva');
+  input.addEventListener('input', () => {
+    refreshLooseNavSuggest(input, (val, opts) => commitLooseNavComposer(val, opts));
+  });
   input.addEventListener('keydown', (ev) => {
+    if (looseNavSuggestKeydown(ev, input)) return;
     if (ev.key === 'Escape') {
       ev.preventDefault();
       cancelLooseNavComposer();
@@ -4122,6 +4617,7 @@ function buildLooseNavComposer() {
     }
   });
   input.addEventListener('blur', () => {
+    setTimeout(() => closeLooseNavSuggest(), 150);
     if (!editing) return;
     setTimeout(() => {
       if (looseNavComposer?.mode === 'edit' && !looseNavComposer.picking && document.activeElement !== input) {
@@ -4182,6 +4678,7 @@ function openLooseNavComposer(mode = 'new') {
 
 function cancelLooseNavComposer() {
   if (!looseNavComposer) return;
+  closeLooseNavSuggest();
   looseNavComposer = null;
   looseNavComposerFocusGen += 1;
   renderLooseNavTabs(looseNavState);
@@ -4195,6 +4692,7 @@ async function commitLooseNavComposer(raw, opts = {}) {
   const sameProfileAsActive =
     !!active && (!composer.profile || composer.profile.partition === active.partition);
   const navigateInPlace = composer.mode === 'edit' && sameProfileAsActive && !opts.forceNewTab;
+  closeLooseNavSuggest();
   looseNavComposer = null;
   looseNavComposerFocusGen += 1;
   renderLooseNavTabs(looseNavState);
@@ -4408,9 +4906,13 @@ function renderLooseNavAccounts(state) {
   if (sig === looseNavAccountsSig) return;
   looseNavAccountsSig = sig;
   looseNavAccountsRail.innerHTML = '';
+  if (looseNavOmniboxProfile) looseNavOmniboxProfile.innerHTML = '';
   if (!show) return;
 
-  const list = looseNavAccountsRail;
+  const leadPartition = accounts.some((a) => a.partition === state.activePartition)
+    ? state.activePartition
+    : defaultPartition;
+  let othersCount = 0;
 
   for (const a of accounts) {
     const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
@@ -4431,14 +4933,20 @@ function renderLooseNavAccounts(state) {
       onClick: () => window.usualDesk.looseNavUseAccount({ partition: a.partition }),
       onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ partition: a.partition }),
     };
-    list.appendChild(looseNavAccountButton(opts));
+    const btn = looseNavAccountButton(opts);
+    if (a.partition === leadPartition && looseNavOmniboxProfile) {
+      looseNavOmniboxProfile.appendChild(btn);
+    } else {
+      looseNavAccountsRail.appendChild(btn);
+      othersCount += 1;
+    }
   }
   if (chrome.length) {
-    if (accounts.length) {
+    if (othersCount) {
       const sep = document.createElement('span');
       sep.className = 'loose-nav-accounts-sep';
       sep.setAttribute('aria-hidden', 'true');
-      list.appendChild(sep);
+      looseNavAccountsRail.appendChild(sep);
     }
     for (const c of chrome) {
       const who = c.email || c.name;
@@ -4452,9 +4960,107 @@ function renderLooseNavAccounts(state) {
         onClick: () => window.usualDesk.looseNavUseAccount({ chromeDirectory: c.directory }),
         onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ chromeDirectory: c.directory }),
       };
-      list.appendChild(looseNavAccountButton(opts));
+      looseNavAccountsRail.appendChild(looseNavAccountButton(opts));
     }
   }
+}
+
+function looseNavDisplayUrl(state) {
+  const url = state && state.active && state.activeTabId ? String(state.activeUrl || '') : '';
+  return /^about:blank/i.test(url) ? '' : url;
+}
+
+/**
+ * Barra de la franja: muestra la URL de la pestaña activa. Lo que se escribe se abre
+ * en una pestaña nueva del perfil seleccionado, a la derecha de la activa.
+ */
+function renderLooseNavOmnibox(state) {
+  if (!looseNavOmniboxInput) return;
+  const profile = state.activeProfile || state.defaultProfile || null;
+  const label = profile && profile.label ? profile.label : '';
+  const hint = label ? `Abrir en ${label}` : 'Abrir en el perfil seleccionado';
+  looseNavOmniboxInput.placeholder = label
+    ? `Buscá o escribí un enlace para abrir en ${label}`
+    : 'Buscá en Google o escribí un enlace';
+  looseNavOmniboxInput.setAttribute('aria-label', hint);
+  if (document.activeElement !== looseNavOmniboxInput) {
+    looseNavOmniboxInput.value = looseNavDisplayUrl(state);
+  }
+}
+
+/** La primera pestaña arranca en el mismo x que la barra de arriba. */
+function alignLooseNavTabsToOmnibox() {
+  if (!looseNavControls || !looseNavTabsStrip || !looseNavOmnibox) return;
+  const target = looseNavOmnibox.getBoundingClientRect();
+  if (!target.width || looseNavBar?.classList.contains('hidden')) return;
+  const buttons = looseNavControls.children;
+  if (!buttons.length) return;
+  const content = buttons[buttons.length - 1].getBoundingClientRect().right
+    - buttons[0].getBoundingClientRect().left;
+  const delta = target.left - looseNavTabsStrip.getBoundingClientRect().left;
+  const width = Math.max(content, looseNavControls.getBoundingClientRect().width + delta);
+  looseNavControls.style.width = `${Math.round(width)}px`;
+}
+
+function initLooseNavTabsAlignment() {
+  if (!looseNavOmnibox) return;
+  const schedule = () => requestAnimationFrame(alignLooseNavTabsToOmnibox);
+  const ro = new ResizeObserver(schedule);
+  ro.observe(looseNavOmnibox);
+  if (looseNavControls) ro.observe(looseNavControls);
+  looseNavOmnibox.addEventListener('transitionend', schedule);
+  window.addEventListener('resize', schedule);
+}
+
+function initLooseNavOmnibox() {
+  if (!looseNavOmnibox || !looseNavOmniboxInput) return;
+  initLooseNavTabsAlignment();
+  looseNavOmnibox.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const val = looseNavOmniboxInput.value.trim();
+    if (!val || !looseNavState.active) return;
+    looseNavOmniboxInput.blur();
+    if (val === looseNavDisplayUrl(looseNavState)) return;
+    try {
+      const partition = looseNavState.activePartition
+        || (looseNavState.activeProfile && looseNavState.activeProfile.partition)
+        || '';
+      await window.usualDesk.looseNavNewTab(val, { partition, nextToActive: true });
+    } catch {
+      looseNavOmniboxInput.value = val;
+      looseNavOmniboxInput.focus();
+    }
+  });
+  looseNavOmnibox.addEventListener('mousedown', (ev) => {
+    if (ev.target !== looseNavOmnibox) return;
+    ev.preventDefault();
+    looseNavOmniboxInput.focus();
+  });
+  const omniboxCommit = (val, opts = {}) => {
+    const value = String(val || '').trim();
+    if (!value || !looseNavState.active) return;
+    looseNavOmniboxInput.blur();
+    const partition = looseNavState.activePartition
+      || (looseNavState.activeProfile && looseNavState.activeProfile.partition)
+      || '';
+    window.usualDesk.looseNavNewTab(value, { partition, nextToActive: true }).catch(() => {});
+  };
+  looseNavOmniboxInput.addEventListener('focus', () => {
+    looseNavOmniboxInput.select();
+  });
+  looseNavOmniboxInput.addEventListener('input', () => {
+    refreshLooseNavSuggest(looseNavOmniboxInput, omniboxCommit);
+  });
+  looseNavOmniboxInput.addEventListener('blur', () => {
+    setTimeout(() => closeLooseNavSuggest(), 150);
+    looseNavOmniboxInput.value = looseNavDisplayUrl(looseNavState);
+  });
+  looseNavOmniboxInput.addEventListener('keydown', (ev) => {
+    if (looseNavSuggestKeydown(ev, looseNavOmniboxInput)) return;
+    if (ev.key !== 'Escape') return;
+    ev.preventDefault();
+    looseNavOmniboxInput.blur();
+  });
 }
 
 const STRIP_SWAP_FADE_MS = 80;
@@ -4487,6 +5093,12 @@ function renderLooseNavBar(state) {
   looseNavState = state || looseNavState;
 
   if (!looseNavBar) return;
+  if (looseNavState.active) {
+    looseNavResumePending = false;
+  } else if (looseNavResumePending) {
+    lastSentViewportBounds = null;
+    return;
+  }
 
   const show = !!looseNavState.active;
   looseNavBar.classList.toggle('hidden', !show);
@@ -4508,9 +5120,11 @@ function renderLooseNavBar(state) {
   }
 
   renderLooseNavAccounts(looseNavState);
+  renderLooseNavOmnibox(looseNavState);
   if (show) {
     renderLooseNavTabs(looseNavState);
     scheduleLooseNavViewportSync();
+    if (!wasLoose) requestAnimationFrame(alignLooseNavTabsToOmnibox);
     if (!wasLoose && document.documentElement.getAttribute('data-home-menu-open') === 'on') {
       const toggle = document.getElementById('shortcuts-edit-toggle');
       const editOn = !!(
@@ -4534,6 +5148,8 @@ function initLooseNavUiEvents() {
   looseNavNewTabBtn?.addEventListener('click', () => {
     openLooseNavComposer();
   });
+
+  initLooseNavOmnibox();
 
   const looseNavPageMenuBtn = document.getElementById('loose-nav-page-menu-btn');
   looseNavPageMenuBtn?.addEventListener('click', () => {
@@ -4597,19 +5213,21 @@ function initLooseNavUiEvents() {
   // Si el sidebar se cierra, pedimos al main cerrar el modo (detach del view).
   // Las pestañas quedan en memoria: al volver a abrir el dock retomamos "www"
   // si era la pestaña del segmento que estaba activa.
-  let resumeLooseNavOnExpand = false;
   window.usualDesk.onSidebarState((expanded) => {
     if (!expanded && looseNavState.active) {
-      resumeLooseNavOnExpand = true;
+      looseNavResumePending = true;
       window.usualDesk.looseNavClose().catch(() => {});
     } else if (!expanded) {
-      resumeLooseNavOnExpand = false;
+      looseNavResumePending = false;
     } else if (looseNavState.active) {
-      resumeLooseNavOnExpand = false;
+      looseNavResumePending = false;
       scheduleLooseNavViewportSync();
-    } else if (resumeLooseNavOnExpand) {
-      resumeLooseNavOnExpand = false;
-      window.usualDesk.looseNavOpen?.().catch(() => {});
+    } else if (looseNavResumePending) {
+      const resume = window.usualDesk.looseNavOpen?.() || Promise.reject();
+      resume.catch(() => {
+        looseNavResumePending = false;
+        renderLooseNavBar(looseNavState);
+      });
     }
   });
 
