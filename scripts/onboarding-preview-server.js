@@ -151,5 +151,4 @@ server.listen(PORT, HOST, () => {
   console.log(`Manual:     http://${HOST}:${PORT}/manual/`);
   console.log(`Onboarding: http://${HOST}:${PORT}/onboarding`);
   console.log(`Atajo:      http://${HOST}:${PORT}/onboarding?step=hotkey`);
-  console.log(`Computadora: http://${HOST}:${PORT}/onboarding?step=hotkey&stage=desk`);
 });

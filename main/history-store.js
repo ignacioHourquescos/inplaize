@@ -172,13 +172,16 @@ function suggest(query, limit) {
 /**
  * Lista para la página de Historial. Sin query devuelve las más recientes;
  * con query filtra por host/url/título. Siempre ordena por última visita.
+ * `offset` permite paginar para llegar a todo el historial guardado.
  * @param {string} [query]
  * @param {number} [limit]
+ * @param {number} [offset]
  * @returns {Array<{ url: string, title: string, host: string, visitCount: number, lastVisit: number }>}
  */
-function search(query, limit) {
+function search(query, limit, offset) {
   const q = String(query || '').trim().toLowerCase();
   const max = Math.max(1, Math.min(1000, limit || 300));
+  const start = Math.max(0, Math.floor(Number(offset) || 0));
   let list = [...load().values()];
   if (q) {
     list = list.filter((e) => {
@@ -187,7 +190,7 @@ function search(query, limit) {
     });
   }
   list.sort((a, b) => b.lastVisit - a.lastVisit || b.visitCount - a.visitCount);
-  return list.slice(0, max).map((e) => ({
+  return list.slice(start, start + max).map((e) => ({
     url: e.url,
     title: e.title,
     host: hostOf(e.url),
@@ -196,14 +199,16 @@ function search(query, limit) {
   }));
 }
 
-/** @param {string} url @returns {boolean} */
-function remove(url) {
-  const u = normalizeUrl(url);
+/** @param {string | string[]} urls @returns {boolean} */
+function remove(urls) {
   const map = load();
-  if (!u || !map.has(u)) return false;
-  map.delete(u);
-  flush();
-  return true;
+  let removed = false;
+  for (const raw of Array.isArray(urls) ? urls : [urls]) {
+    const u = normalizeUrl(raw);
+    if (u && map.delete(u)) removed = true;
+  }
+  if (removed) flush();
+  return removed;
 }
 
 function clear() {

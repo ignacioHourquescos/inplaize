@@ -1,8 +1,7 @@
 'use strict';
 
-const DOCK_WINDOW_WIDTH = 320;
 /**
- * Ya no define el alto de la ventana. Izquierda/derecha ocupa siempre el área
+ * Ya no define el alto de la ventana. La ventana ocupa siempre el área
  * de trabajo; encogerla a 1 px y estirarla al abrir el panel era lento en Windows.
  */
 const DOCK_COLLAPSED_TOP_HEIGHT = 1;
@@ -27,7 +26,6 @@ const LOOSE_NAV_NEW_TAB_URL = 'https://www.google.com';
 const LOOSE_NAV_SESSION_ID = 'loose-nav';
 
 module.exports = {
-  DOCK_WINDOW_WIDTH,
   DOCK_COLLAPSED_TOP_HEIGHT,
   DOCK_TOGGLE_ACCELERATOR,
   DOCK_TOGGLE_ACCELERATORS,

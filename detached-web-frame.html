@@ -53,17 +53,48 @@
     <button
       type="button"
       id="strip-add-shortcut"
-      class="shell-shortcut-item strip-add-shortcut"
-      data-tooltip="Añadir acceso directo"
-      data-tooltip-placement="bottom"
-      aria-label="Añadir acceso directo"
+      class="shell-shortcut-item strip-add-shortcut strip-add-inline strip-add-secondary"
+      hidden
     >
       <span class="shell-shortcut-icon-wrap" aria-hidden="true">
         <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
           <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
       </span>
+      <span>Agregar acceso directo</span>
     </button>
+    <div id="strip-end-actions" class="strip-end-actions">
+      <button
+        type="button"
+        id="strip-edit-toggle"
+        class="shell-shortcut-item strip-add-shortcut"
+        data-tooltip="Editar accesos"
+        data-tooltip-placement="bottom"
+        aria-label="Editar accesos"
+      >
+        <span class="shell-shortcut-icon-wrap" aria-hidden="true">
+          <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
+            <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="m13.5 6.5 4 4" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </span>
+      </button>
+      <button
+        type="button"
+        id="strip-edit-done"
+        class="shell-shortcut-item strip-add-shortcut strip-edit-done"
+        data-tooltip="Terminar edición"
+        data-tooltip-placement="bottom"
+        aria-label="Terminar edición"
+        hidden
+      >
+        <span class="shell-shortcut-icon-wrap" aria-hidden="true">
+          <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
+            <path d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </button>
+    </div>
     </div>
     <div class="shell-win-btns" aria-label="Controles de ventana">
       <button type="button" id="shell-win-min" class="shell-win-btn" data-tooltip="Minimizar" data-tooltip-placement="bottom" aria-label="Minimizar">&#8722;</button>

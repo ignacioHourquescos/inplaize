@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de privacidad de inplaize</title>
+  <meta
+    name="description"
+    content="Qué datos guarda inplaize en tu equipo, qué sale de él y cómo desactivar las estadísticas de uso anónimas."
+  />
+  <meta name="theme-color" content="#ffffff" />
+  <meta property="og:title" content="Política de privacidad de inplaize" />
+  <meta property="og:description" content="Qué datos guarda inplaize en tu equipo y qué sale de él." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%236d28d9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='56' fill='url(%23g)'/%3E%3Crect x='74' y='74' width='108' height='108' rx='30' fill='rgba(255,255,255,0.95)'/%3E%3Ccircle cx='128' cy='128' r='20' fill='%238b5cf6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../doc.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="sh-inner">
+      <a class="sh-brand" href="../" aria-label="inplaize, inicio">
+        <span class="sh-mark" aria-hidden="true"></span>
+        <span>inplaize</span>
+      </a>
+      <span class="sh-spacer"></span>
+      <a class="sh-cta" href="https://github.com/ignacioHourquescos/inplaize/releases/latest">Descargar</a>
+    </div>
+  </header>
+
+  <main class="doc">
+    <p class="doc-kicker">Legal</p>
+    <h1>Política de privacidad</h1>
+    <p class="doc-updated">Última actualización: 10 de noviembre de 2026</p>
+
+    <section>
+      <p>
+        inplaize es una aplicación de escritorio que corre entera en tu equipo. No tiene cuentas, no tiene login y no
+        hay un servidor de inplaize al que se manden tus datos. Todo lo que configurás (accesos, notas, tareas,
+        contraseñas, sesiones) se guarda en disco, en la carpeta <code>%APPDATA%\inplaize</code>.
+      </p>
+      <p>
+        Esta página describe las únicas tres cosas que salen de tu equipo y cómo desactivar la que es opcional.
+      </p>
+    </section>
+
+    <section>
+      <h2>Lo que sale de tu equipo</h2>
+
+      <h3>1. Los sitios que abrís</h3>
+      <p>
+        Cada acceso web se abre en una ventana propia que es, por dentro, un navegador. Cuando usás esa ventana, tu
+        tráfico va directo al sitio en cuestión (Gmail, WhatsApp, ChatGPT, lo que sea) exactamente como iría desde
+        Chrome, y ese sitio recibe tus datos según su propia política de privacidad. inplaize no intercepta, no copia
+        ni reenvía ese contenido a ninguna parte.
+      </p>
+      <p>
+        Para mostrar el icono de cada acceso, la app le pide el favicon al propio sitio. Para mostrar qué cuentas de
+        Google tenés conectadas y el contador de correo sin leer, consulta
+        <code>accounts.google.com</code> y el feed de Gmail usando tu propia sesión, igual que lo haría el navegador.
+      </p>
+
+      <h3>2. Archivos que mandás desde el teléfono</h3>
+      <p>
+        La función de subida desde el teléfono levanta un servidor HTTPS temporal <strong>en tu red local</strong>, con
+        un certificado generado en tu propia máquina. Los archivos viajan del teléfono a la computadora por la red de
+        tu casa u oficina: no pasan por internet ni por ningún servidor intermedio.
+      </p>
+
+      <h3>3. Estadísticas de uso anónimas (opcional)</h3>
+      <p>
+        Para saber qué funciones se usan, la app manda eventos anónimos a
+        <a href="https://aptabase.com/" rel="noopener">Aptabase</a> (<code>us.aptabase.com</code>). Un evento es solo
+        el nombre de una acción, como <code>app_started</code> o <code>shortcut_opened</code>, acompañado de:
+      </p>
+      <ul class="list">
+        <li>un identificador aleatorio de instalación, generado en tu equipo y que no se vincula a tu identidad;</li>
+        <li>el idioma del sistema, la versión de Windows, la de Chromium y la de inplaize;</li>
+        <li>propiedades genéricas de la acción, como la cantidad de archivos que arrastraste.</li>
+      </ul>
+      <p>
+        <strong>Nunca se manda</strong> el contenido de lo que hacés: ni direcciones web, ni títulos de páginas, ni el
+        texto de las notas o los documentos, ni nombres de archivo, ni datos de tus cuentas. Como cualquier pedido web,
+        Aptabase ve la dirección IP desde la que llega el evento.
+      </p>
+      <div class="note">
+        <p>
+          <strong>Cómo desactivarlo:</strong> en la pantalla de inicio de inplaize, entrá en <em>Ajustes</em> y destildá
+          <em>Enviar estadísticas de uso anónimas</em>. Desde ese momento no se genera ni se envía ningún evento más.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Lo que nunca sale de tu equipo</h2>
+      <ul class="list">
+        <li><strong>Contraseñas guardadas:</strong> se cifran con el sistema operativo (DPAPI, vía <code>safeStorage</code> de Electron), así que el archivo solo se puede leer con tu cuenta de usuario en esa máquina.</li>
+        <li><strong>Cookies y sesiones:</strong> cada acceso guarda las suyas por separado, en disco.</li>
+        <li><strong>Notas, tareas, documentos, marcadores e historial:</strong> archivos locales.</li>
+        <li><strong>Descargas y miniaturas:</strong> se generan y se guardan en tu equipo.</li>
+        <li><strong>Lo que se importa de Chrome:</strong> al copiar sesiones o marcadores, la app lee el perfil de Chrome en tu disco y se comunica con el navegador por <code>127.0.0.1</code>. Nada de eso sale de la máquina.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Desinstalar y borrar los datos</h2>
+      <p>
+        inplaize se desinstala desde <em>Configuración de Windows → Aplicaciones</em>, como cualquier programa. El
+        desinstalador deja tus datos por si volvés a instalarla; para borrarlos del todo, eliminá la carpeta
+        <code>%APPDATA%\inplaize</code>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Este sitio web</h2>
+      <p>
+        Este sitio es un conjunto de páginas estáticas. El servidor donde están alojadas registra la visita, como
+        cualquier servidor web, y la tipografía se carga desde Google Fonts, así que Google también la ve. No hay
+        analítica, ni cookies, ni píxeles de seguimiento en el sitio.
+      </p>
+    </section>
+
+    <section>
+      <h2>Verificarlo</h2>
+      <p>
+        El código de inplaize es abierto: todo lo que dice esta página se puede comprobar leyéndolo. El envío de
+        estadísticas vive entero en
+        <a href="https://github.com/ignacioHourquescos/inplaize/blob/main/main/analytics.js" rel="noopener">main/analytics.js</a>
+        y el cifrado de contraseñas en
+        <a href="https://github.com/ignacioHourquescos/inplaize/blob/main/main/password-store.js" rel="noopener">main/password-store.js</a>.
+      </p>
+    </section>
+
+    <div class="doc-footer">
+      <p>
+        Dudas o reclamos: abrí un
+        <a href="https://github.com/ignacioHourquescos/inplaize/issues" rel="noopener">issue en GitHub</a>.
+      </p>
+      <p>
+        <a href="../">Inicio</a> · <a href="../manual/">Manual</a> ·
+        <a href="../code-signing-policy/">Code signing policy</a>
+      </p>
+    </div>
+  </main>
+</body>
+</html>

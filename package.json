@@ -1,6 +1,6 @@
 {
   "name": "inplaize",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
@@ -12,7 +12,9 @@
     "preview:onboarding": "node scripts/onboarding-preview-server.js",
     "build:editor": "node scripts/bundle-document-editor.js",
     "test:docs": "node scripts/test-document-content.js",
-    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && node scripts/build-win.js",
+    "sync:download-links": "node scripts/sync-download-links.js",
+    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && node scripts/sync-download-links.js && node scripts/build-win.js",
+    "build:ci": "node scripts/bundle-document-editor.js && node scripts/sync-download-links.js && node scripts/build-win.js",
     "build:mac": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
   },
   "build": {
@@ -44,7 +46,7 @@
       "signAndEditExecutable": false,
       "artifactName": "inplaize.Setup.${version}.${ext}",
       "signtoolOptions": {
-        "publisherName": "Ignacio Hourquescos",
+        "publisherName": "SignPath Foundation",
         "rfc3161TimeStampServer": "http://timestamp.digicert.com"
       }
     },

@@ -25,7 +25,6 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
   setUrlPromptOpen: (open) => ipcRenderer.invoke('url-prompt-open', open === true),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
   openAppearance: () => ipcRenderer.invoke('chrome-open-appearance'),
-  openSettings: () => ipcRenderer.invoke('chrome-open-settings'),
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
   closeApp: () => ipcRenderer.invoke('close-app'),

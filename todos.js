@@ -412,7 +412,7 @@
   function overlayBlocksHistory() {
     if (document.documentElement.classList.contains('doc-modal-open')) return true;
     if (document.documentElement.classList.contains('onboarding-active')) return true;
-    return ['modal-overlay', 'settings-modal-overlay', 'dock-inline-editor'].some((id) => {
+    return ['modal-overlay', 'appearance-modal-overlay', 'dock-inline-editor'].some((id) => {
       const el = document.getElementById(id);
       return el && !el.classList.contains('hidden');
     });
@@ -1197,7 +1197,8 @@
   function sideDrop(x, y) {
     let best = null;
     let bestDist = 36;
-    rootEl.querySelectorAll('.notion-column').forEach((el) => {
+    const columnEls = [...rootEl.querySelectorAll('.notion-column')];
+    columnEls.forEach((el) => {
       const rect = el.getBoundingClientRect();
       if (y < rect.top || y > rect.bottom) return;
       const zone = Math.min(42, Math.max(22, rect.width * 0.18));
@@ -1212,7 +1213,20 @@
         best = { kind: 'new-column', columnId: el.dataset.columnId, side: 'after', top: rect.top, left: rect.right, height: rect.height };
       }
     });
-    return best;
+    if (best || !columnEls.length) return best;
+    // Soltar en el espacio libre a los costados del lienzo también abre columna.
+    const first = columnEls[0].getBoundingClientRect();
+    const last = columnEls[columnEls.length - 1].getBoundingClientRect();
+    if (y < first.top - 24 || y > Math.max(first.bottom, last.bottom) + 120) return null;
+    if (x > last.right && x <= last.right + 360) {
+      const el = columnEls[columnEls.length - 1];
+      return { kind: 'new-column', columnId: el.dataset.columnId, side: 'after', top: last.top, left: last.right, height: last.height };
+    }
+    if (x < first.left && x >= first.left - 200) {
+      const el = columnEls[0];
+      return { kind: 'new-column', columnId: el.dataset.columnId, side: 'before', top: first.top, left: first.left, height: first.height };
+    }
+    return null;
   }
 
   function hitTest(x, y) {

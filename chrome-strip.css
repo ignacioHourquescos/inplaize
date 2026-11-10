@@ -26,6 +26,35 @@
   --ud-chrome-action-color: #e4e4ec;
   --ud-chrome-canvas: #000000;
   --ud-chrome-edit-tab: #7c6cff;
+  /* Borde de los iconos y perfiles en modo edición. */
+  --ud-chrome-edit-border: #ffffff;
+  --ud-chrome-seg-bg: #1c1c22;
+  --ud-chrome-seg-muted: #8e8ea0;
+  --ud-chrome-soft-hover: rgba(255, 255, 255, 0.07);
+}
+
+html[data-canvas-theme='light'] {
+  --ud-chrome-strip-bg: #f7f7fa;
+  --ud-chrome-strip-border: #e3e3ea;
+  --ud-chrome-icon-bg: #ededf2;
+  --ud-chrome-icon-bg-hover: #ebebf1;
+  --ud-chrome-icon-border: #e1e1e8;
+  --ud-chrome-icon-border-hover: #c9c9d4;
+  --ud-chrome-icon-active-bg: #ffffff;
+  --ud-chrome-icon-active-border: #b9b9c8;
+  --ud-chrome-icon-muted: #5a5a68;
+  --ud-chrome-text: #1f1f2b;
+  --ud-chrome-action-hover: #e9e9ef;
+  --ud-chrome-action-color: #2a2a35;
+  --ud-chrome-canvas: #ffffff;
+  --ud-chrome-seg-bg: #ececf2;
+  --ud-chrome-edit-border: #1f1f2b;
+  --ud-chrome-seg-muted: #6b6b7a;
+  --ud-chrome-soft-hover: rgba(20, 20, 40, 0.06);
+}
+
+html[data-canvas-theme='light'] .strip-mode-seg {
+  border-color: #7c3aed;
 }
 
 /* ==========================================================================
@@ -88,6 +117,95 @@
 .shell-shortcut-item.strip-add-shortcut:active {
   border-color: #b3a8ff;
   color: #b3a8ff;
+}
+
+html[data-canvas-theme='light'] .shell-shortcut-item.strip-add-shortcut:hover,
+html[data-canvas-theme='light'] .shell-shortcut-item.strip-add-shortcut:active {
+  border-color: #5b4bd6;
+  color: #5b4bd6;
+}
+
+/* Acciones al final de la franja: lápiz en uso normal; "+" y "listo" en modo
+   edición. El grupo es el que queda fijo, no cada botón. */
+.strip-end-actions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--ud-chrome-strip-gap);
+  flex-shrink: 0;
+  align-self: center;
+  background: var(--ud-chrome-strip-bg);
+  -webkit-app-region: no-drag;
+}
+
+html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
+.shortcut-strip > .strip-end-actions {
+  margin-left: auto;
+}
+
+.strip-end-actions .shell-shortcut-item.strip-add-shortcut {
+  position: static;
+}
+
+.strip-end-actions [hidden],
+.shell-shortcut-item.strip-add-inline[hidden] {
+  display: none !important;
+}
+
+/* El "+" de modo edición va pegado al último icono, no fijo a la derecha. */
+.shell-shortcut-item.strip-add-shortcut.strip-add-inline {
+  position: static;
+}
+
+/* Agregar en modo edición: botón violeta con texto. */
+.shell-shortcut-item.strip-add-shortcut.strip-add-secondary {
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  height: var(--ud-chrome-icon);
+  min-height: var(--ud-chrome-icon);
+  max-height: var(--ud-chrome-icon);
+  gap: 6px;
+  padding: 0 14px 0 11px;
+  border: 1px solid var(--ud-chrome-edit-tab);
+  border-radius: 10px;
+  background: var(--ud-chrome-edit-tab);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.shell-shortcut-item.strip-add-shortcut.strip-add-secondary:hover {
+  background: #8b7dff;
+  border-color: #8b7dff;
+  color: #fff;
+}
+
+.shell-shortcut-item.strip-add-shortcut.strip-add-secondary:active {
+  background: #6b5bf0;
+  border-color: #6b5bf0;
+}
+
+.strip-add-secondary .shell-shortcut-icon-wrap {
+  display: flex;
+  width: auto;
+  height: auto;
+}
+
+.strip-add-secondary .strip-add-plus {
+  width: 16px;
+  height: 16px;
+}
+
+.shell-shortcut-item.strip-edit-done,
+.shell-shortcut-item.strip-edit-done:hover,
+.shell-shortcut-item.strip-edit-done:active {
+  background: var(--ud-chrome-edit-tab) !important;
+  border-color: var(--ud-chrome-edit-tab);
+  color: #fff;
 }
 
 .strip-add-plus {
@@ -235,8 +353,9 @@
 /* Segmented "inplaize | www": dónde estás, la app o internet. Solo un lado encendido.
    Todo el control es un switch: el clic en cualquier parte lo alterna. */
 .strip-mode-seg {
-  --strip-seg-w: 48px;
+  /* Lados cuadrados: con padding y borde el control mide 40px, como los iconos de la franja. */
   --strip-seg-h: 32px;
+  --strip-seg-w: var(--strip-seg-h);
   --strip-seg-gap: 2px;
   display: flex;
   align-items: center;
@@ -245,8 +364,9 @@
   align-self: center;
   padding: 3px;
   border-radius: 12px;
-  background: #1c1c22;
-  border: 1px solid var(--ud-chrome-strip-border);
+  background: var(--ud-chrome-seg-bg);
+  /* Violeta para que el logo y "www" se lean como un solo control. */
+  border: 1px solid #a78bfa;
   position: relative;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -304,8 +424,8 @@
 }
 
 .strip-mode-seg .open-url-icon {
-  font-size: 12px;
-  letter-spacing: -0.02em;
+  font-size: 10px;
+  letter-spacing: -0.03em;
 }
 
 .strip-mode-seg .open-url-icon,
@@ -337,7 +457,7 @@
 
 .strip-mode-seg .open-url-btn:not(.is-active) .open-url-icon {
   background: transparent;
-  color: #8e8ea0;
+  color: var(--ud-chrome-seg-muted);
   box-shadow: none;
 }
 
@@ -347,24 +467,24 @@
 }
 
 .strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark::before {
-  background: #8e8ea0;
+  background: var(--ud-chrome-seg-muted);
 }
 
 .strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark::after {
-  background: #1c1c22;
+  background: var(--ud-chrome-seg-bg);
 }
 
 .strip-mode-seg .open-url-btn:not(.is-active):hover .open-url-icon,
 .strip-mode-seg .shell-shortcut-item:not(.is-active):hover .dock-home-logo-mark {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--ud-chrome-soft-hover);
 }
 
 .strip-mode-seg .open-url-btn:not(.is-active):hover .open-url-icon {
-  color: #e8e8ef;
+  color: var(--ud-chrome-text);
 }
 
 .strip-mode-seg .shell-shortcut-item:not(.is-active):hover .dock-home-logo-mark::before {
-  background: #e8e8ef;
+  background: var(--ud-chrome-text);
 }
 
 /* Internet invertido respecto de tareas y descargas: fondo blanco, "www" violeta. */
@@ -416,7 +536,7 @@
   width: 30px;
   height: 26px;
   border-radius: 8px;
-  color: #8e8ea0;
+  color: var(--ud-chrome-seg-muted);
 }
 
 .dock-history-strip-icon svg {
@@ -425,13 +545,13 @@
 }
 
 .dock-history-strip-btn:hover .dock-history-strip-icon {
-  background: rgba(255, 255, 255, 0.07);
-  color: #e8e8ef;
+  background: var(--ud-chrome-soft-hover);
+  color: var(--ud-chrome-text);
 }
 
 .dock-history-strip-btn.is-active .dock-history-strip-icon {
   background: rgba(124, 92, 255, 0.18);
-  color: #fff;
+  color: var(--ud-chrome-text);
 }
 
 .dock-history-strip-btn:focus-visible {

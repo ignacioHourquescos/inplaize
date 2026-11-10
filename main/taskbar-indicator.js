@@ -4,7 +4,6 @@ const path = require('path');
 const { BrowserWindow, app, screen } = require('electron');
 const { log } = require('./logger');
 const { dockWindowBoundsForWorkArea } = require('./window-bounds');
-const { loadAppSettings } = require('./app-settings-store');
 const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
 
 const WIN_SIZE = 36;
@@ -82,8 +81,7 @@ function fallbackFloatingAboveBottom(display) {
  * @param {Electron.Rectangle} dot
  */
 function avoidDockStripOverlap(wa, dot) {
-  const pos = loadAppSettings().dockPosition || 'left';
-  const dock = dockWindowBoundsForWorkArea(wa, false, pos);
+  const dock = dockWindowBoundsForWorkArea(wa);
   const overlaps =
     dot.x < dock.x + dock.width &&
     dot.x + dot.width > dock.x &&

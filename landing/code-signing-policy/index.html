@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code signing policy de inplaize</title>
+  <meta
+    name="description"
+    content="Cómo se firman los instaladores de inplaize, quién aprueba cada release y cómo verificar la firma del archivo que descargaste."
+  />
+  <meta name="theme-color" content="#ffffff" />
+  <meta property="og:title" content="Code signing policy de inplaize" />
+  <meta property="og:description" content="Cómo se firman los instaladores de inplaize y cómo verificar la firma." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%236d28d9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='256' height='256' rx='56' fill='url(%23g)'/%3E%3Crect x='74' y='74' width='108' height='108' rx='30' fill='rgba(255,255,255,0.95)'/%3E%3Ccircle cx='128' cy='128' r='20' fill='%238b5cf6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../doc.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="sh-inner">
+      <a class="sh-brand" href="../" aria-label="inplaize, inicio">
+        <span class="sh-mark" aria-hidden="true"></span>
+        <span>inplaize</span>
+      </a>
+      <span class="sh-spacer"></span>
+      <a class="sh-cta" href="https://github.com/ignacioHourquescos/inplaize/releases/latest">Descargar</a>
+    </div>
+  </header>
+
+  <main class="doc">
+    <p class="doc-kicker">Legal</p>
+    <h1>Code signing policy</h1>
+    <p class="doc-updated">Última actualización: 10 de noviembre de 2026</p>
+
+    <section>
+      <p>
+        Free code signing provided by <a href="https://signpath.io/" rel="noopener">SignPath.io</a>, certificate by
+        <a href="https://signpath.org/" rel="noopener">SignPath Foundation</a>.
+      </p>
+      <p>
+        Los instaladores de inplaize se firman con un certificado emitido a nombre de SignPath Foundation, una
+        fundación que presta su certificado a proyectos de código abierto. Eso significa que Windows muestra
+        <strong>SignPath Foundation</strong> como editor del archivo: no es un error, es el modelo del programa. La
+        clave privada no la tiene nadie del proyecto, vive en el módulo de seguridad (HSM) de SignPath.
+      </p>
+      <p>
+        Lo que la firma garantiza es el vínculo entre el instalador y este código: SignPath verifica, de forma
+        automática y en cada release, que el archivo salió de una compilación de GitHub Actions hecha a partir del
+        repositorio público <a href="https://github.com/ignacioHourquescos/inplaize" rel="noopener">ignacioHourquescos/inplaize</a>,
+        y no de la máquina de alguien.
+      </p>
+    </section>
+
+    <section>
+      <h2>Cómo se compila y se firma cada versión</h2>
+      <ol class="steps">
+        <li>Se publica una etiqueta de versión (por ejemplo <code>v1.5.3</code>) en el repositorio.</li>
+        <li>GitHub Actions compila el instalador en un runner propio de GitHub, con el flujo definido en <code>.github/workflows/release-win.yml</code>.</li>
+        <li>El instalador sin firmar se sube como artefacto de la compilación y se manda a firmar a SignPath.</li>
+        <li>Un aprobador del proyecto revisa y autoriza la solicitud a mano. Ninguna firma es automática.</li>
+        <li>El instalador firmado vuelve al flujo y se publica como adjunto del release en GitHub.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Roles del equipo</h2>
+      <ul class="roles">
+        <li>
+          <strong>Autores y revisores:</strong>
+          <a href="https://github.com/ignacioHourquescos" rel="noopener">Ignacio Hourquescos (@ignacioHourquescos)</a>
+          — único mantenedor del proyecto, responsable del código fuente y de los scripts de compilación.
+        </li>
+        <li>
+          <strong>Aprobadores:</strong>
+          <a href="https://github.com/ignacioHourquescos" rel="noopener">Ignacio Hourquescos (@ignacioHourquescos)</a>
+          — autoriza cada solicitud de firma en SignPath.
+        </li>
+      </ul>
+      <p>
+        inplaize es un proyecto de una sola persona, así que ambos roles recaen hoy en el mismo mantenedor. Si se
+        suman colaboradores con permiso de escritura, esta página se actualiza para separar quién revisa y quién
+        aprueba.
+      </p>
+    </section>
+
+    <section>
+      <h2>Privacidad</h2>
+      <p>
+        inplaize manda estadísticas de uso anónimas, que se pueden desactivar desde los ajustes de la app, y no
+        transfiere ningún otro dato a sistemas que el usuario no haya pedido expresamente. El detalle completo está en
+        la <a href="../privacidad/">política de privacidad</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Licencia</h2>
+      <p>
+        Todo el código de inplaize se publica bajo licencia
+        <a href="https://github.com/ignacioHourquescos/inplaize/blob/main/LICENSE" rel="noopener">MIT</a>, sin
+        componentes propietarios ni doble licenciamiento comercial.
+      </p>
+    </section>
+
+    <section>
+      <h2>Verificar el archivo que descargaste</h2>
+      <p>
+        Hacé clic derecho en el <code>.exe</code> → <em>Propiedades</em> → pestaña <em>Firmas digitales</em>. Tiene que
+        aparecer una firma de <strong>SignPath Foundation</strong>, y al abrirla, un certificado válido y con fecha de
+        sellado de tiempo. Si esa pestaña no existe o el nombre es otro, no bajaste el archivo de este proyecto:
+        descargalo de nuevo desde la
+        <a href="https://github.com/ignacioHourquescos/inplaize/releases" rel="noopener">página de versiones</a>.
+      </p>
+      <p>
+        Desde PowerShell es una línea:
+      </p>
+      <p>
+        <code>Get-AuthenticodeSignature .\inplaize.Setup.exe | Format-List Status, SignerCertificate</code>
+      </p>
+    </section>
+
+    <section>
+      <h2>Versiones todavía sin firmar</h2>
+      <div class="note">
+        <p>
+          La solicitud a SignPath Foundation está en trámite. Hasta que se apruebe, los instaladores publicados
+          (<strong>1.5.3 y anteriores</strong>) no tienen firma, y Windows muestra la pantalla
+          <em>«Windows protegió tu PC»</em> al ejecutarlos.
+        </p>
+        <p>
+          No es señal de que el archivo esté dañado ni de que tenga un virus: es SmartScreen avisando que no puede
+          verificar quién publica el programa. Para instalarlo igual, hacé clic en <em>Más información</em> y después
+          en <em>Ejecutar de todas formas</em>. Si el navegador dejó el archivo bloqueado, antes de eso entrá en
+          <em>Propiedades</em> y tildá <em>Desbloquear</em>.
+        </p>
+      </div>
+    </section>
+
+    <div class="doc-footer">
+      <p>
+        Para reportar un archivo que diga ser de inplaize y no verifique, abrí un
+        <a href="https://github.com/ignacioHourquescos/inplaize/issues" rel="noopener">issue en GitHub</a>.
+      </p>
+      <p>
+        <a href="../">Inicio</a> · <a href="../manual/">Manual</a> · <a href="../privacidad/">Privacidad</a>
+      </p>
+    </div>
+  </main>
+</body>
+</html>

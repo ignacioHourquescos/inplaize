@@ -171,15 +171,17 @@ function renderChrome(payload) {
   const items = payload && Array.isArray(payload.items) ? payload.items : [];
   syncStripModeSeg(items);
   if (!strip) return;
-  const addBtn = document.getElementById('strip-add-shortcut');
-  if (addBtn) addBtn.remove();
+  stripAddInlineEl?.remove();
+  stripEndActionsEl?.remove();
   strip.innerHTML = '';
+  stripHasShortcuts = items.length > 0;
+  syncStripEndActions();
   if (items.length === 0) {
     const span = document.createElement('span');
     span.className = 'shortcut-strip-empty';
     span.textContent = 'Sin accesos directos';
     strip.appendChild(span);
-    if (addBtn) strip.appendChild(addBtn);
+    appendStripTrailing();
     return;
   }
   for (const it of items) {
@@ -257,8 +259,35 @@ function renderChrome(payload) {
 
     strip.appendChild(cell);
   }
-  if (addBtn) strip.appendChild(addBtn);
+  appendStripTrailing();
 }
+
+const stripAddInlineEl = document.getElementById('strip-add-shortcut');
+const stripEndActionsEl = document.getElementById('strip-end-actions');
+let stripHasShortcuts = false;
+let stripEditMode = false;
+
+function appendStripTrailing() {
+  if (stripAddInlineEl) strip.appendChild(stripAddInlineEl);
+  if (stripEndActionsEl) strip.appendChild(stripEndActionsEl);
+}
+
+/**
+ * Lápiz a la derecha en uso normal; mientras el dock está en modo edición,
+ * "+" tras el último icono y "listo" a la derecha.
+ */
+function syncStripEndActions() {
+  const editBtn = stripEndActionsEl?.querySelector('#strip-edit-toggle');
+  const doneBtn = stripEndActionsEl?.querySelector('#strip-edit-done');
+  if (editBtn) editBtn.hidden = !stripHasShortcuts || stripEditMode;
+  if (stripAddInlineEl) stripAddInlineEl.hidden = stripHasShortcuts && !stripEditMode;
+  if (doneBtn) doneBtn.hidden = !stripEditMode;
+}
+
+window.usualDeskShell.onShortcutsEditModeSync?.((on) => {
+  stripEditMode = on === true;
+  syncStripEndActions();
+});
 
 async function refreshChromeFromMain() {
   try {
@@ -312,6 +341,14 @@ if (stripAddShortcutBtn) {
   });
 }
 
+document.getElementById('strip-edit-toggle')?.addEventListener('click', () => {
+  window.usualDeskShell.enterShortcutsEditMode?.().catch(() => {});
+});
+
+document.getElementById('strip-edit-done')?.addEventListener('click', () => {
+  window.usualDeskShell.requestExitShortcutEditMode?.().catch(() => {});
+});
+
 const shellHomeBtn = document.getElementById('shell-home-btn');
 if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
   shellHomeBtn.addEventListener('click', () => {
@@ -327,7 +364,6 @@ function initShellHomeMenuChrome(api) {
     enterShortcutsEditMode: () => api.enterShortcutsEditMode?.().catch(() => {}),
     exitShortcutsEditMode: () => api.requestExitShortcutEditMode?.().catch(() => {}),
     openAppearance: () => api.openAppearance?.().catch(() => {}),
-    openSettings: () => api.openSettings?.().catch(() => {}),
     hidePanel: () => api.collapseDockSidebar?.().catch(() => {}),
     quitApp: () => api.closeApp?.().catch(() => {}),
     onShortcutsEditModeSync: (cb) => api.onShortcutsEditModeSync?.(cb),

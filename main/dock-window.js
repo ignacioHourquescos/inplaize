@@ -4,7 +4,6 @@ const path = require('path');
 const { BrowserWindow, app } = require('electron');
 const { log } = require('./logger');
 const { dockWindowBoundsForWorkArea, applyDockWindowBounds } = require('./window-bounds');
-const { loadAppSettings } = require('./app-settings-store');
 const { setDockWindow } = require('./dock-window-bridge');
 const { lockWindowZoom } = require('./lock-window-zoom');
 const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
@@ -27,11 +26,10 @@ function appRoot() {
  */
 function createDockWindow(display, state) {
   const wa = display.workArea;
-  const dockPos = loadAppSettings().dockPosition || 'left';
-  const initial = dockWindowBoundsForWorkArea(wa, false, dockPos);
+  const initial = dockWindowBoundsForWorkArea(wa);
   const root = appRoot();
   log(
-    `Dock window: ${initial.width}x${initial.height} at (${initial.x},${initial.y}) displayId=${display.id} dock=${dockPos}`,
+    `Dock window: ${initial.width}x${initial.height} at (${initial.x},${initial.y}) displayId=${display.id}`,
   );
 
   const win = new BrowserWindow({

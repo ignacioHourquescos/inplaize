@@ -58,16 +58,6 @@
         onOnboardingHotkeyPress: function (callback) {
           pressListeners.push(callback);
         },
-        getChromeImportStatus: function () {
-          return Promise.resolve({
-            platformSupported: true,
-            chromeFound: true,
-            chromeRunning: false,
-          });
-        },
-        listChromeProfiles: function () {
-          return Promise.resolve([{ directory: 'Default', name: 'Personal', userName: '' }]);
-        },
         getShortcuts: function () {
           return Promise.resolve([
             { id: 'gmail', type: 'web', name: 'Gmail', url: 'https://mail.google.com' },
@@ -75,9 +65,6 @@
           ]);
         },
         addShortcut: function () { return Promise.resolve(); },
-        importChromeSessionsForShortcuts: function () {
-          return Promise.resolve({ importedByShortcut: [{ name: 'Gmail', imported: 1 }] });
-        },
       };
 
       window.addEventListener('keydown', function (e) {
@@ -112,7 +99,6 @@
       window.addEventListener('DOMContentLoaded', function () {
         const opts = { preview: true };
         if (params.get('step')) opts.step = params.get('step');
-        if (params.get('stage') === 'desk') opts.hotkeyStage = 'desk';
         window.UsualDeskOnboarding.start(opts);
       });
     })();

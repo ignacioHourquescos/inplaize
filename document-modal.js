@@ -9,6 +9,8 @@
   const TITLE_MAX = 200;
   const DESCRIPTION_MAX = 500;
   const SAVE_DELAY = 700;
+  const VIEW_KEY = 'inplaize.docViews';
+  const VIEW_MAX = 200;
 
   const overlay = document.createElement('div');
   overlay.className = 'doc-modal-overlay';
@@ -129,6 +131,7 @@
   let pickToken = 0;
   let exporting = false;
   let exportingPdf = false;
+  let scrollHold = null;
 
   function emptyContent() {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
@@ -424,10 +427,78 @@
     if (editorApi) editorApi.focus(where || 'end');
   }
 
-  function focusInitial(block) {
+  function readViews() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}');
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function savedView(id) {
+    const view = id ? readViews()[id] : null;
+    return view && Number.isFinite(view.top) ? view : null;
+  }
+
+  function rememberView(id) {
+    if (!id || !editorApi || !overlay.classList.contains('is-open')) return;
+    const views = readViews();
+    delete views[id];
+    const selection = typeof editorApi.getSelection === 'function' ? editorApi.getSelection() : null;
+    views[id] = { top: Math.max(0, Math.round(scrollEl.scrollTop)), from: selection ? selection.from : null };
+    const keys = Object.keys(views);
+    for (let i = 0; i < keys.length - VIEW_MAX; i += 1) delete views[keys[i]];
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify(views));
+    } catch {
+      // Sin espacio: el documento abre arriba como antes.
+    }
+  }
+
+  function releaseScrollHold() {
+    if (!scrollHold) return;
+    const hold = scrollHold;
+    scrollHold = null;
+    hold.stop();
+  }
+
+  // Las imágenes sin tamaño guardado crecen al cargar y correrían la vista.
+  function holdScroll(top) {
+    releaseScrollHold();
+    const apply = () => { scrollEl.scrollTop = top; };
+    const pending = [...editorHost.querySelectorAll('img')].filter((img) => !img.complete);
+    const kinds = ['wheel', 'pointerdown', 'keydown', 'touchstart'];
+    const release = () => releaseScrollHold();
+    pending.forEach((img) => img.addEventListener('load', apply));
+    kinds.forEach((kind) => scrollEl.addEventListener(kind, release, { passive: true }));
+    const timer = setTimeout(release, 1500);
+    scrollHold = {
+      stop() {
+        clearTimeout(timer);
+        pending.forEach((img) => img.removeEventListener('load', apply));
+        kinds.forEach((kind) => scrollEl.removeEventListener(kind, release));
+      },
+    };
+    apply();
+    requestAnimationFrame(() => {
+      if (scrollHold) apply();
+    });
+  }
+
+  function focusInitial(block, view) {
     const title = (block.doc && block.doc.title) || '';
     const blank = bodyBlank(block.doc && block.doc.content);
     requestAnimationFrame(() => {
+      if (view) {
+        if (Number.isFinite(view.from) && editorApi && typeof editorApi.restoreSelection === 'function') {
+          editorApi.restoreSelection({ from: view.from });
+        } else {
+          titleEl.focus({ preventScroll: true });
+        }
+        holdScroll(view.top);
+        return;
+      }
       if (!String(title).trim() && blank) titleEl.focus();
       else focusEditor('end');
     });
@@ -504,6 +575,8 @@
     card.setAttribute('aria-label', titleValue.trim() || 'Documento sin título');
     notify('');
     resetExportLabel();
+    releaseScrollHold();
+    scrollEl.scrollTop = 0;
     mountEditor(block);
     rev = 0;
     savedRev = 0;
@@ -518,7 +591,7 @@
     setModalAway(false);
     syncModalPresence(true);
     document.dispatchEvent(new CustomEvent('inplaize-doc-modal'));
-    focusInitial(block);
+    focusInitial(block, savedView(currentId));
   }
 
   function restoreFocus(id) {
@@ -530,6 +603,8 @@
   function hide() {
     const token = generation;
     const id = currentId;
+    rememberView(id);
+    releaseScrollHold();
     overlay.classList.remove('is-open');
     overlay.setAttribute('aria-hidden', 'true');
     overlay.inert = true;
@@ -568,6 +643,7 @@
     if (overlay.classList.contains('is-open')) {
       const ok = await flush();
       if (!ok) return;
+      rememberView(currentId);
       teardownEditor();
     }
     const block = hooks.getBlock(id);
@@ -715,6 +791,8 @@
     if (event.target !== scrollEl && event.target !== pageEl) return;
     focusEditor('end');
   });
+
+  window.addEventListener('pagehide', () => { rememberView(currentId); });
 
   window.addEventListener('blur', () => {
     if (!overlay.classList.contains('is-open')) return;

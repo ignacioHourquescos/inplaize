@@ -6,16 +6,10 @@ const { app } = require('electron');
 const { DEFAULT_HOTKEY, normalizeDockHotkey } = require('./hotkey-accelerator');
 
 const DEFAULTS = {
-  dockPosition: 'left',
   /** 'normal' = filas con nombre; 'minimal' = solo iconos en la lista */
   sidebarDensity: 'normal',
   /** false = toasts nativos de Windows/Chromium; true = tarjetas en el panel */
   inAppWebNotifications: false,
-  /**
-   * Siempre ventana propia por acceso web (Alt+Tab / barra de tareas como varias ventanas).
-   * Valores legacy "shell" en disco se migran a "separate" al cargar.
-   */
-  webHostMode: 'separate',
   /**
    * Onboarding de primera vez: cuando es false y la lista de shortcuts está
    * vacía, el renderer dispara el wizard que guía al usuario a crear su
@@ -39,11 +33,15 @@ const DEFAULTS = {
    * (vuelve a cargarse al enfocarla). 0 = nunca.
    */
   webIdleHibernateMinutes: 15,
+  /** Estadísticas de uso anónimas (Aptabase). El usuario puede apagarlas en Configuración. */
+  analyticsEnabled: true,
+  /** Último día (YYYY-MM-DD) en que se mandó la foto diaria de uso. */
+  analyticsInventoryDay: '',
+  /** UUID aleatorio de esta instalación: cuenta usuarios reales sin datos personales. */
+  analyticsInstallId: '',
 };
 
-const ALLOWED_DOCK = new Set(['left', 'center', 'right']);
 const ALLOWED_SIDEBAR_DENSITY = new Set(['normal', 'minimal']);
-const ALLOWED_WEB_HOST = new Set(['separate']);
 
 function settingsFilePath() {
   return path.join(app.getPath('userData'), 'app-settings.json');
@@ -51,21 +49,14 @@ function settingsFilePath() {
 
 function normalize(raw) {
   const merged = { ...DEFAULTS, ...(raw && typeof raw === 'object' ? raw : {}) };
-  if (!ALLOWED_DOCK.has(merged.dockPosition)) {
-    merged.dockPosition = DEFAULTS.dockPosition;
-  }
   if (!ALLOWED_SIDEBAR_DENSITY.has(merged.sidebarDensity)) {
     merged.sidebarDensity = DEFAULTS.sidebarDensity;
   }
   if (typeof merged.inAppWebNotifications !== 'boolean') {
     merged.inAppWebNotifications = DEFAULTS.inAppWebNotifications;
   }
-  if (merged.webHostMode === 'shell') {
-    merged.webHostMode = 'separate';
-  }
-  if (!ALLOWED_WEB_HOST.has(merged.webHostMode)) {
-    merged.webHostMode = DEFAULTS.webHostMode;
-  }
+  delete merged.webHostMode;
+  delete merged.dockPosition;
   if (typeof merged.onboardingCompleted !== 'boolean') {
     merged.onboardingCompleted = DEFAULTS.onboardingCompleted;
   }
@@ -86,6 +77,15 @@ function normalize(raw) {
   if (merged.webIdleHibernateMinutes > 0 && merged.webIdleHibernateMinutes < 5) {
     merged.webIdleHibernateMinutes = 5;
   }
+  if (typeof merged.analyticsEnabled !== 'boolean') {
+    merged.analyticsEnabled = DEFAULTS.analyticsEnabled;
+  }
+  if (typeof merged.analyticsInventoryDay !== 'string') {
+    merged.analyticsInventoryDay = DEFAULTS.analyticsInventoryDay;
+  }
+  if (typeof merged.analyticsInstallId !== 'string') {
+    merged.analyticsInstallId = DEFAULTS.analyticsInstallId;
+  }
   merged.dockHotkey = normalizeDockHotkey(merged.dockHotkey);
   return merged;
 }
@@ -94,16 +94,7 @@ function loadAppSettings() {
   try {
     const p = settingsFilePath();
     if (fs.existsSync(p)) {
-      const raw = JSON.parse(fs.readFileSync(p, 'utf-8'));
-      const next = normalize(raw);
-      if (raw && typeof raw === 'object' && raw.webHostMode === 'shell') {
-        try {
-          fs.writeFileSync(p, JSON.stringify(next, null, 2), 'utf-8');
-        } catch {
-          /* noop */
-        }
-      }
-      return next;
+      return normalize(JSON.parse(fs.readFileSync(p, 'utf-8')));
     }
   } catch {
     /* fall through */
@@ -112,7 +103,7 @@ function loadAppSettings() {
 }
 
 /**
- * @param {Partial<{ dockPosition: string, sidebarDensity: string, inAppWebNotifications: boolean, webHostMode: string }>} partial
+ * @param {Partial<{ sidebarDensity: string, inAppWebNotifications: boolean }>} partial
  * @returns {ReturnType<loadAppSettings>}
  */
 function saveAppSettings(partial) {
@@ -125,7 +116,5 @@ module.exports = {
   loadAppSettings,
   saveAppSettings,
   normalize,
-  ALLOWED_DOCK,
   ALLOWED_SIDEBAR_DENSITY,
-  ALLOWED_WEB_HOST,
 };

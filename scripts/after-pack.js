@@ -17,11 +17,15 @@ exports.default = async function afterPack(context) {
     return;
   }
   const { rcedit } = await import('rcedit');
-  const { productFilename } = context.packager.appInfo;
+  const { productFilename, version } = context.packager.appInfo;
   const exe = path.join(context.appOutDir, `${productFilename}.exe`);
   const root = path.join(__dirname, '..');
   await rcedit(exe, {
     icon: path.join(root, 'assets', 'icon.ico'),
+    // Sin esto el .exe queda con la versión de Electron. SignPath exige que el
+    // nombre y la versión de producto sean los del proyecto en cada build.
+    'product-version': version,
+    'file-version': version,
     'version-string': {
       ProductName: productFilename,
       FileDescription: productFilename,

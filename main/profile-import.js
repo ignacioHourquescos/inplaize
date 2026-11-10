@@ -18,19 +18,7 @@ const bookmarksStore = require('./bookmarks-store');
 const passwordsStore = require('./passwords-store');
 const { partitionFromSessionId } = require('./session-partition');
 const { LOOSE_NAV_SESSION_ID } = require('./constants');
-
-function mapSameSite(s) {
-  switch (s) {
-    case 'Strict':
-      return 'strict';
-    case 'Lax':
-      return 'lax';
-    case 'None':
-      return 'no_restriction';
-    default:
-      return 'unspecified';
-  }
-}
+const { toSetDetails, removeCookies, hostOf } = require('./cookie-jar');
 
 /**
  * Inyecta TODAS las cookies en la partition (sin filtro de dominio).
@@ -39,33 +27,25 @@ function mapSameSite(s) {
  * @returns {Promise<number>} cuántas se setearon
  */
 async function setAllCookies(cookies, targetPartition) {
+  const { baseDomainOf } = require('./session-router');
   const ses = session.fromPartition(targetPartition);
-  let imported = 0;
+  const siteOf = (c) => baseDomainOf(`https://${hostOf(c)}`);
+
+  // De los sitios que trae el perfil importado queda la sesión importada y
+  // nada más: media sesión vieja mezclada con media nueva no sirve en ninguno
+  // de los dos lados. Los demás sitios de la partition no se tocan.
+  const incoming = new Set();
   for (const c of cookies) {
     if (!c || typeof c !== 'object') continue;
-    const sameSite = mapSameSite(c.sameSite);
-    const secure = !!c.secure || sameSite === 'no_restriction';
-    const proto = secure ? 'https' : 'http';
-    const rawDomain = String(c.domain || '');
-    const host = rawDomain.replace(/^\./, '');
-    if (!host) continue;
-    const cookiePath = typeof c.path === 'string' && c.path ? c.path : '/';
-    const name = String(c.name || '');
-    const isHostPrefixed = /^__Host-/.test(name);
-    /** @type {Electron.CookiesSetDetails} */
-    const details = {
-      url: `${proto}://${host}${cookiePath}`,
-      name,
-      value: String(c.value || ''),
-      path: cookiePath,
-      secure,
-      httpOnly: !!c.httpOnly,
-      sameSite,
-    };
-    if (!isHostPrefixed && rawDomain) details.domain = rawDomain;
-    if (typeof c.expires === 'number' && c.expires > 0 && !c.session) {
-      details.expirationDate = c.expires;
-    }
+    const domain = siteOf(c);
+    if (domain) incoming.add(domain);
+  }
+  await removeCookies(ses, (c) => incoming.has(siteOf(c)));
+
+  let imported = 0;
+  for (const c of cookies) {
+    const details = toSetDetails(c);
+    if (!details) continue;
     try {
       await ses.cookies.set(details);
       imported += 1;

@@ -2,17 +2,13 @@ const toggleArea = document.getElementById('toggle-area');
 const toggleBtn = document.getElementById('toggle-btn');
 const sidebarBackdrop = document.getElementById('sidebar-backdrop');
 const sidebar = document.getElementById('sidebar');
-const dockHomeAddBtn = document.getElementById('dock-home-add-btn');
 const shortcutsEditToggleBtn = document.getElementById('shortcuts-edit-toggle');
-const dockEditModeBanner = document.getElementById('dock-edit-mode-banner');
-const dockExitEditModeBtn = document.getElementById('dock-exit-edit-mode-btn');
 const shortcutsContainer = document.getElementById('shortcuts-container');
 const dockHomeBtn = document.getElementById('dock-home-btn');
 const dockDownloadsBtn = document.getElementById('dock-downloads-btn');
 const modalOverlay = document.getElementById('modal-overlay');
 const dockInlineEditor = document.getElementById('dock-inline-editor');
 const shortcutModalCard = document.getElementById('modal');
-const settingsModalOverlay = document.getElementById('settings-modal-overlay');
 const appearanceModalOverlay = document.getElementById('appearance-modal-overlay');
 const dockToastStack = document.getElementById('dock-toast-stack');
 /** @type {Map<string, object>} descargas por id (más reciente primero al render) */
@@ -100,6 +96,11 @@ let editingId = null;
 let dragOperationActive = false;
 /** Panel de accesos: en modo edición se reordenan los iconos, el lápiz abre el editor y el tacho elimina. */
 let shortcutsEditMode = false;
+/** Cruz para quitar en modo edición: accesos y perfiles de la navegación libre. */
+const LOOSE_NAV_REMOVE_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>' +
+  '</svg>';
 /** Sesión de arrastre para reordenar iconos. Null si no hay un dedo/puntero apoyado. */
 let shortcutReorder = null;
 /** Ignora el click que dispara el navegador al soltar un arrastre. */
@@ -139,7 +140,6 @@ function syncPointerPassthrough(clientX, clientY) {
     (document.documentElement.classList.contains('doc-modal-open') &&
       !document.documentElement.classList.contains('doc-modal-away')) ||
     document.documentElement.classList.contains('gesture-coach-open') ||
-    !!(settingsModalOverlay && !settingsModalOverlay.classList.contains('hidden')) ||
     !!(appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden'));
   let overUi = modalOpen;
   if (!overUi) {
@@ -202,7 +202,10 @@ function applyHomeView(view) {
   homeView =
     view === 'downloads' ? 'downloads' : view === 'history' ? 'history' : 'todos';
   const panel = document.getElementById('dock-home-panel');
-  if (panel) panel.setAttribute('data-home-view', homeView);
+  if (panel) {
+    panel.setAttribute('data-home-view', homeView);
+    panel.classList.remove('is-file-preview');
+  }
   kickDownloadPreviews();
   if (homeView !== 'downloads') pauseDrawerVideo();
   if (homeView === 'history') {
@@ -248,48 +251,10 @@ async function goToDockWelcomeHome(view) {
   }
 }
 
-function applyDockPositionToDom(pos) {
-  const p = pos === 'right' || pos === 'center' ? pos : 'left';
-  document.documentElement.setAttribute('data-dock-position', p);
-  document.documentElement.setAttribute('data-dock-layout', p === 'center' ? 'modal' : 'topbar');
-  const formOpen =
-    (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) ||
-    !modalOverlay.classList.contains('hidden');
-  if (formOpen && shortcutModalCard) {
-    showShortcutFormShell();
-  }
-}
-
 function applySidebarDensityToDom(density) {
   const d = density === 'minimal' ? 'minimal' : 'normal';
   document.documentElement.setAttribute('data-sidebar-density', d);
   refreshShortcutCardsAccessibility();
-}
-
-function syncDockPositionSegmentedUI(selected) {
-  const seg = document.getElementById('dock-position-segmented');
-  if (!seg) return;
-  const v = selected === 'right' || selected === 'center' ? selected : 'left';
-  seg.querySelectorAll('.type-segment').forEach((btn) => {
-    const on = btn.dataset.value === v;
-    btn.setAttribute('aria-checked', on ? 'true' : 'false');
-    btn.classList.toggle('is-selected', on);
-  });
-}
-
-function syncSidebarDensitySegmentedUI(selected) {
-  const seg = document.getElementById('sidebar-density-segmented');
-  if (!seg) return;
-  const v = selected === 'minimal' ? 'minimal' : 'normal';
-  seg.querySelectorAll('.type-segment').forEach((btn) => {
-    const on = btn.dataset.value === v;
-    btn.setAttribute('aria-checked', on ? 'true' : 'false');
-    btn.classList.toggle('is-selected', on);
-  });
-}
-
-function applyWebHostModeToDom() {
-  document.documentElement.setAttribute('data-web-host-mode', 'separate');
 }
 
 function refreshShortcutCardsAccessibility() {
@@ -298,17 +263,21 @@ function refreshShortcutCardsAccessibility() {
     const s = shortcuts.find((x) => x.id === id);
     if (!s) return;
     const hint = shortcutsEditMode
-      ? `${s.name}. Arrastra para mover de lugar. Clic para editar.`
+      ? `${s.name}. Arrastra para mover de lugar; la cruz lo elimina.`
       : s.name;
     card.setAttribute('aria-label', hint);
     card.setAttribute('data-tooltip', hint);
   });
 }
 
-function closeSettingsModal() {
-  if (!settingsModalOverlay) return;
-  settingsModalOverlay.classList.add('hidden');
-  schedulePointerPassthroughSync();
+let dockModalHidesLooseNav = false;
+
+/** La navegación suelta es una vista nativa: tapa cualquier modal HTML, así que se despega mientras hay uno abierto. */
+function syncLooseNavForDockModals() {
+  const open = !!appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden');
+  if (open === dockModalHidesLooseNav) return;
+  dockModalHidesLooseNav = open;
+  window.usualDesk.setUrlPromptOpen?.(open)?.catch?.(() => {});
 }
 
 function currentCanvasTheme() {
@@ -348,7 +317,12 @@ function applyCanvasTheme(theme) {
 function openAppearanceModal() {
   if (!appearanceModalOverlay) return;
   syncAppearanceThemeUI(currentCanvasTheme());
+  window.usualDesk
+    .getAppSettings()
+    .then(syncAnalyticsCheckboxFromSettings)
+    .catch(() => syncAnalyticsCheckboxFromSettings({ analyticsEnabled: true }));
   appearanceModalOverlay.classList.remove('hidden');
+  syncLooseNavForDockModals();
   schedulePointerPassthroughSync();
   appearanceModalOverlay.querySelector('.appearance-theme-option.is-selected')?.focus();
 }
@@ -356,13 +330,14 @@ function openAppearanceModal() {
 function closeAppearanceModal() {
   if (!appearanceModalOverlay) return;
   appearanceModalOverlay.classList.add('hidden');
+  syncLooseNavForDockModals();
   schedulePointerPassthroughSync();
 }
 
-function syncInAppNotificationCheckboxFromSettings(s) {
-  const el = document.getElementById('settings-in-app-notifications');
+function syncAnalyticsCheckboxFromSettings(s) {
+  const el = document.getElementById('settings-analytics-enabled');
   if (!el || !s) return;
-  el.checked = s.inAppWebNotifications !== false;
+  el.checked = s.analyticsEnabled !== false;
 }
 
 function removeDockToast(id) {
@@ -585,7 +560,7 @@ function swapInDocThumb(tile, extChip, url) {
   tile.prepend(img);
 }
 
-/** ¿El panel de descargas está a la vista (vista completa o columna angosta)?
+/** ¿El panel de descargas está a la vista (vista completa o franja)?
  *  Ahí recién se piden miniaturas. */
 function downloadsPanelVisible() {
   const sidebarEl = document.getElementById('sidebar');
@@ -956,6 +931,9 @@ function buildDownloadTile(d) {
   tile.type = 'button';
   tile.className = 'download-tile';
   tile.title = d.filename || '';
+  if (imageDrawerState.download && String(imageDrawerState.download.id) === String(d.id)) {
+    tile.classList.add('is-selected');
+  }
 
   // Recién salida del cajón mágico: pulso destacado hasta que el usuario la toca.
   if (window.MagicDrawerUI?.isFreshDownload(d.id)) {
@@ -1049,8 +1027,8 @@ function buildDownloadTile(d) {
     if (d.state === 'completed') {
       // Ver el archivo no cambia el orden: la grilla queda por fecha de descarga.
       if (isPreviewableDownload(d) && d.savePath) {
-        // Desde la columna angosta el visor no se ve: pasamos a la vista completa.
-        if (homeView !== 'downloads') {
+        // Desde la franja el visor ocupa el lugar de la página, arriba.
+        if (homeView === 'history') {
           applyHomeView('downloads');
           syncDockHomeStripBtn();
         }
@@ -1246,6 +1224,18 @@ function imageDrawerIsOpen() {
   return !!imageDrawerState.download;
 }
 
+/** Marca la tarjeta del archivo abierto en el visor y activa el modo vista previa. */
+function syncFilePreviewSelection() {
+  const d = imageDrawerState.download;
+  const selectedId = d ? String(d.id) : null;
+  for (const cell of document.querySelectorAll('.download-tile-cell[data-download-id]')) {
+    cell
+      .querySelector('.download-tile')
+      ?.classList.toggle('is-selected', cell.dataset.downloadId === selectedId);
+  }
+  document.getElementById('dock-home-panel')?.classList.toggle('is-file-preview', !!d);
+}
+
 /** Redibuja el canvas aplicando rotación y espejado sobre el tamaño natural. */
 function drawImageDrawerCanvas() {
   const canvas = document.getElementById('image-drawer-canvas');
@@ -1419,6 +1409,8 @@ function openImageDrawer(d) {
   }
 
   drawer.classList.remove('is-empty');
+  syncFilePreviewSelection();
+  schedulePointerPassthroughSync();
 }
 
 /** Vuelve el visor al estado vacío (placeholder), sin archivo seleccionado. */
@@ -1443,6 +1435,8 @@ function closeImageDrawer() {
   imageDrawerState.mode = 'image';
   imageDrawerState.img = null;
   imageDrawerState.dirty = false;
+  syncFilePreviewSelection();
+  schedulePointerPassthroughSync();
 }
 
 async function saveImageDrawerEdit() {
@@ -1521,195 +1515,23 @@ function initImageDrawer() {
   document.getElementById('image-drawer-save')?.addEventListener('click', saveImageDrawerEdit);
 }
 
-async function refreshChromeCookieImportUi() {
-  const section = document.getElementById('chrome-import-section');
-  const select = document.getElementById('chrome-import-profile');
-  const btn = document.getElementById('chrome-import-btn');
-  const statusEl = document.getElementById('chrome-import-status');
-  if (!section || !select || !btn || !statusEl) return;
-
-  const api = window.usualDesk;
-  if (!api || typeof api.getChromeImportStatus !== 'function') {
-    section.classList.add('hidden');
-    return;
-  }
-
-  let status;
-  try {
-    status = await api.getChromeImportStatus();
-  } catch {
-    status = { platformSupported: false, chromeFound: false, chromeRunning: false };
-  }
-
-  if (!status.platformSupported) {
-    section.classList.add('hidden');
-    return;
-  }
-  section.classList.remove('hidden');
-
-  if (!status.chromeFound) {
-    select.innerHTML = '<option value="">No se encontró Chrome instalado</option>';
-    select.disabled = true;
-    btn.disabled = true;
-    statusEl.textContent = 'No se detectó Google Chrome en este equipo.';
-    return;
-  }
-
-  let profiles = [];
-  try {
-    profiles = await api.listChromeProfiles();
-  } catch {
-    profiles = [];
-  }
-  if (!Array.isArray(profiles) || profiles.length === 0) {
-    profiles = [{ directory: 'Default', name: 'Default', userName: '' }];
-  }
-
-  const previous = select.value;
-  select.innerHTML = '';
-  for (const p of profiles) {
-    const opt = document.createElement('option');
-    opt.value = p.directory;
-    const labelName = p.name || p.directory;
-    opt.textContent = p.userName ? `${labelName} (${p.userName})` : labelName;
-    select.appendChild(opt);
-  }
-  if (previous && profiles.some((p) => p.directory === previous)) {
-    select.value = previous;
-  }
-  select.disabled = false;
-
-  btn.disabled = false;
-  statusEl.textContent = status.chromeRunning
-    ? 'Chrome está abierto: te vamos a pedir permiso para cerrarlo un momento y lo reabrimos con tus pestañas.'
-    : '';
-}
-
-function initChromeCookieImportUI() {
-  const btn = document.getElementById('chrome-import-btn');
-  const select = document.getElementById('chrome-import-profile');
-  const statusEl = document.getElementById('chrome-import-status');
-  if (!btn || !select || !statusEl) return;
-
-  const api = window.usualDesk;
-  if (!api || typeof api.importChromeGoogleCookies !== 'function') return;
-
-  btn.addEventListener('click', async () => {
-    const profile = select.value || 'Default';
-    btn.disabled = true;
-    const previousLabel = btn.textContent;
-    btn.textContent = 'Importando…';
-    statusEl.textContent = 'Lanzando Chrome en segundo plano y leyendo cookies…';
-    try {
-      const res = await api.importChromeGoogleCookies(profile);
-      if (res && res.ok) {
-        statusEl.textContent = `Listo. Importadas ${res.imported} cookies de Google (${res.considered} candidatas, ${res.total} totales). Recargá la pestaña para que el sitio las vea.`;
-      } else {
-        const code = res && res.error ? res.error : 'IMPORT_FAILED';
-        statusEl.textContent = friendlyChromeImportError(code);
-      }
-    } catch (err) {
-      console.error('chrome-import-google-cookies', err);
-      statusEl.textContent = 'No se pudo completar la importación.';
-    } finally {
-      btn.textContent = previousLabel;
-      refreshChromeCookieImportUi();
-    }
-  });
-}
-
-function friendlyChromeImportError(code) {
-  switch (code) {
-    case 'CANCELLED':
-      return 'Importación cancelada.';
-    case 'CHROME_RUNNING':
-      return 'Cerrá todas las ventanas de Chrome y volvé a intentarlo.';
-    case 'CHROME_CLOSE_FAILED':
-      return 'No se pudo cerrar Chrome. Cerralo a mano y volvé a intentarlo.';
-    case 'CHROME_NOT_FOUND':
-      return 'No se encontró el ejecutable de Chrome.';
-    case 'CHROME_PROFILE_DIR_NOT_FOUND':
-      return 'No se encontró la carpeta de perfiles de Chrome (User Data).';
-    case 'NOT_SUPPORTED_PLATFORM':
-      return 'La importación solo está disponible en Windows.';
-    case 'MISSING_PARTITION':
-      return 'Error interno: falta el destino de las cookies.';
-    default:
-      return `No se pudo completar la importación (${code}).`;
-  }
-}
-
-async function openSettingsModalFromMenu() {
-  try {
-    const s = await window.usualDesk.getAppSettings();
-    syncDockPositionSegmentedUI(s.dockPosition);
-    syncSidebarDensitySegmentedUI(s.sidebarDensity);
-    applyWebHostModeToDom();
-    syncInAppNotificationCheckboxFromSettings(s);
-  } catch {
-    syncDockPositionSegmentedUI('left');
-    syncSidebarDensitySegmentedUI('normal');
-    applyWebHostModeToDom();
-    syncInAppNotificationCheckboxFromSettings({ inAppWebNotifications: true });
-  }
-  settingsModalOverlay.classList.remove('hidden');
-  refreshChromeCookieImportUi();
-  schedulePointerPassthroughSync();
-}
-
 function initAppSettingsUI() {
-  const seg = document.getElementById('dock-position-segmented');
-  const closeBtn = document.getElementById('settings-modal-close');
-
-  seg?.querySelectorAll('.type-segment').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const v = btn.dataset.value;
-      if (!v) return;
-      try {
-        await window.usualDesk.setAppSettings({ dockPosition: v });
-      } catch (err) {
-        console.error('set-app-settings', err);
-      }
-      applyDockPositionToDom(v);
-      syncDockPositionSegmentedUI(v);
-      schedulePointerPassthroughSync();
-    });
-  });
-
-  const densitySeg = document.getElementById('sidebar-density-segmented');
-  densitySeg?.querySelectorAll('.type-segment').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const v = btn.dataset.value;
-      if (!v || (v !== 'normal' && v !== 'minimal')) return;
-      try {
-        await window.usualDesk.setAppSettings({ sidebarDensity: v });
-      } catch (err) {
-        console.error('set-app-settings sidebarDensity', err);
-      }
-      applySidebarDensityToDom(v);
-      syncSidebarDensitySegmentedUI(v);
-      schedulePointerPassthroughSync();
-    });
-  });
-
-  const inAppNotifyCb = document.getElementById('settings-in-app-notifications');
-  inAppNotifyCb?.addEventListener('change', async () => {
+  const analyticsCb = document.getElementById('settings-analytics-enabled');
+  analyticsCb?.addEventListener('change', async () => {
     try {
-      await window.usualDesk.setAppSettings({ inAppWebNotifications: !!inAppNotifyCb.checked });
+      await window.usualDesk.setAppSettings({ analyticsEnabled: !!analyticsCb.checked });
     } catch (err) {
-      console.error('set-app-settings inAppWebNotifications', err);
+      console.error('set-app-settings analyticsEnabled', err);
     }
   });
-
-  initChromeCookieImportUI();
 
   const replayBtn = document.getElementById('onboarding-replay-btn');
   replayBtn?.addEventListener('click', async () => {
     if (!window.UsualDeskOnboarding || typeof window.UsualDeskOnboarding.start !== 'function') {
       return;
     }
-    closeSettingsModal();
-    // El panel ya estaba abierto (estábamos en Internal); aseguramos
+    closeAppearanceModal();
+    // El panel ya estaba abierto (estábamos en Configuración); aseguramos
     // que siga así por si algún listener lo hubiese colapsado.
     try {
       if (window.usualDesk.expandSidebar) {
@@ -1725,12 +1547,6 @@ function initAppSettingsUI() {
         console.error('onboarding-preview-start', err);
       }
     }, 120);
-  });
-
-  closeBtn?.addEventListener('click', () => closeSettingsModal());
-
-  settingsModalOverlay?.addEventListener('click', (e) => {
-    if (e.target === settingsModalOverlay) closeSettingsModal();
   });
 
   const appearanceGroup = document.getElementById('appearance-theme-options');
@@ -1750,29 +1566,18 @@ function initAppSettingsUI() {
     if (e.key !== 'Escape') return;
     if (appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden')) {
       closeAppearanceModal();
-      return;
-    }
-    if (settingsModalOverlay && !settingsModalOverlay.classList.contains('hidden')) {
-      closeSettingsModal();
     }
   });
 
   window.usualDesk.onAppSettingsChanged((s) => {
-    if (s && s.dockPosition) {
-      applyDockPositionToDom(s.dockPosition);
-      syncDockPositionSegmentedUI(s.dockPosition);
-      schedulePointerPassthroughSync();
-    }
     if (s && s.sidebarDensity) {
       applySidebarDensityToDom(s.sidebarDensity);
-      syncSidebarDensitySegmentedUI(s.sidebarDensity);
     }
-    if (s && typeof s.inAppWebNotifications === 'boolean') {
-      syncInAppNotificationCheckboxFromSettings(s);
+    if (s && typeof s.analyticsEnabled === 'boolean') {
+      syncAnalyticsCheckboxFromSettings(s);
     }
     if (s) {
       applyDockHotkeyLabel(s);
-      applyWebHostModeToDom();
       window.usualDesk
         .getOpenWebWindowKeys()
         .then((keys) => {
@@ -1805,21 +1610,13 @@ function applyDockHotkeyLabel(settings) {
   }
 }
 
-async function loadInitialDockPosition() {
+async function loadInitialDockSettings() {
   try {
     const s = await window.usualDesk.getAppSettings();
-    applyDockPositionToDom(s.dockPosition);
-    syncDockPositionSegmentedUI(s.dockPosition);
     applySidebarDensityToDom(s.sidebarDensity);
-    syncSidebarDensitySegmentedUI(s.sidebarDensity);
-    applyWebHostModeToDom();
     applyDockHotkeyLabel(s);
   } catch {
-    applyDockPositionToDom('left');
-    syncDockPositionSegmentedUI('left');
     applySidebarDensityToDom('normal');
-    syncSidebarDensitySegmentedUI('normal');
-    applyWebHostModeToDom();
   }
 }
 
@@ -2128,7 +1925,8 @@ async function lookupWebFavicon() {
   const seq = ++faviconSeq;
   faviconLookupPending = true;
   if (!current) updateTriggerDisplay();
-  const pending = window.usualDesk.fetchWebFavicon(raw).catch(() => null);
+  const iconHint = addShortcutPageFavicon && addShortcutPageFavicon.pageUrl === raw ? addShortcutPageFavicon.iconUrl : '';
+  const pending = window.usualDesk.fetchWebFavicon(raw, iconHint).catch(() => null);
   faviconWait = pending;
   let result = null;
   try {
@@ -2214,9 +2012,9 @@ async function exitDockShortcutEditModeFromChrome() {
 
 async function init() {
   try {
-    await loadInitialDockPosition();
+    await loadInitialDockSettings();
   } catch (err) {
-    console.error('init-dock-position', err);
+    console.error('init-dock-settings', err);
   }
   try {
     shortcuts = await window.usualDesk.getShortcuts();
@@ -2750,7 +2548,7 @@ function bindUrlDropTargets() {
 function shouldSkipFileDropTarget(target) {
   if (!target || typeof target.closest !== 'function') return false;
   return !!target.closest(
-    '.magic-zone, .magic-drawer, .loose-nav-bar, .doc-modal-overlay, '
+    '.magic-zone, .magic-drawer, .loose-nav-bar, .loose-nav-top-tabs, .doc-modal-overlay, '
     + '#dock-inline-editor, .modal, .download-tile',
   );
 }
@@ -2904,22 +2702,6 @@ function bindTypeSegmented() {
   });
 }
 
-const SHORTCUT_EDIT_PENCIL_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20h4.2L19.4 8.8a2.2 2.2 0 0 0-3.1-3.1L5.1 16.9V20z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13.6 6.4l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-
-const SHORTCUT_EDIT_TRASH_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 7h15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 7V5.4A1.4 1.4 0 0 1 10.4 4h3.2A1.4 1.4 0 0 1 15 5.4V7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M7.4 7l.7 12.1a1.4 1.4 0 0 0 1.4 1.3h5a1.4 1.4 0 0 0 1.4-1.3L16.6 7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
-
-function shortcutEditActionsMarkup(name) {
-  const label = escapeAttr((name || '').trim() || 'acceso');
-  return (
-    '<span class="shortcut-edit-actions">' +
-    `<button type="button" class="shortcut-edit-action shortcut-edit-pencil" data-tooltip="Editar" data-tooltip-placement="bottom" aria-label="Editar ${label}">${SHORTCUT_EDIT_PENCIL_SVG}</button>` +
-    `<button type="button" class="shortcut-edit-action shortcut-edit-trash" data-tooltip="Eliminar" data-tooltip-placement="bottom" aria-label="Eliminar ${label}">${SHORTCUT_EDIT_TRASH_SVG}</button>` +
-    '</span>'
-  );
-}
-
 function shortcutCardsInStrip() {
   if (!shortcutsContainer) return [];
   return [...shortcutsContainer.querySelectorAll('.shortcut-card[data-shortcut-id]')];
@@ -2942,7 +2724,9 @@ function commitShortcutOrderFromDom() {
 
 function restoreShortcutDomOrder(ids) {
   if (!shortcutsContainer || !Array.isArray(ids)) return;
-  const addBtn = document.getElementById('strip-add-shortcut');
+  const anchor = ['strip-add-shortcut', 'strip-end-actions']
+    .map((id) => document.getElementById(id))
+    .find((el) => el && el.parentElement === shortcutsContainer);
   const byId = new Map();
   shortcutCardsInStrip().forEach((el) => {
     byId.set(el.dataset.shortcutId, el);
@@ -2950,8 +2734,8 @@ function restoreShortcutDomOrder(ids) {
   for (const id of ids) {
     const el = byId.get(id);
     if (!el) continue;
-    if (addBtn && addBtn.parentElement === shortcutsContainer) {
-      shortcutsContainer.insertBefore(el, addBtn);
+    if (anchor) {
+      shortcutsContainer.insertBefore(el, anchor);
     } else {
       shortcutsContainer.appendChild(el);
     }
@@ -2971,54 +2755,95 @@ function autoScrollShortcutsForReorder(x, y) {
   const rect = shortcutsContainer.getBoundingClientRect();
   const edge = 32;
   const maxStep = 16;
-  if (isDockTopbarLayout()) {
-    if (x < rect.left + edge) {
-      const t = Math.min(1, (rect.left + edge - x) / edge);
-      shortcutsContainer.scrollLeft -= Math.ceil(maxStep * t);
-    } else if (x > rect.right - edge) {
-      const t = Math.min(1, (x - (rect.right - edge)) / edge);
-      shortcutsContainer.scrollLeft += Math.ceil(maxStep * t);
-    }
-    return;
+  if (x < rect.left + edge) {
+    const t = Math.min(1, (rect.left + edge - x) / edge);
+    shortcutsContainer.scrollLeft -= Math.ceil(maxStep * t);
+  } else if (x > rect.right - edge) {
+    const t = Math.min(1, (x - (rect.right - edge)) / edge);
+    shortcutsContainer.scrollLeft += Math.ceil(maxStep * t);
   }
-  if (y < rect.top + edge) {
-    const t = Math.min(1, (rect.top + edge - y) / edge);
-    shortcutsContainer.scrollTop -= Math.ceil(maxStep * t);
-  } else if (y > rect.bottom - edge) {
-    const t = Math.min(1, (y - (rect.bottom - edge)) / edge);
-    shortcutsContainer.scrollTop += Math.ceil(maxStep * t);
+}
+
+const SHORTCUT_REORDER_SHIFT_MS = 180;
+
+/** Rect de layout: sin el desplazamiento de la animación que esté corriendo. */
+function shortcutLayoutRect(el) {
+  const rect = el.getBoundingClientRect();
+  const t = getComputedStyle(el).translate;
+  if (!t || t === 'none') return rect;
+  const [tx = 0, ty = 0] = t.split(/\s+/).map((v) => parseFloat(v) || 0);
+  return new DOMRect(rect.left - tx, rect.top - ty, rect.width, rect.height);
+}
+
+/** Mueve tarjetas en el DOM y las desliza desde donde se veían hasta su nuevo lugar. */
+function moveShortcutCardsAnimated(mutate) {
+  const cards = shortcutCardsInStrip();
+  const first = new Map(cards.map((el) => [el, el.getBoundingClientRect()]));
+  cards.forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
+  mutate();
+  for (const el of cards) {
+    const from = first.get(el);
+    const to = el.getBoundingClientRect();
+    const dx = from.left - to.left;
+    const dy = from.top - to.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+    // `translate` y no `transform`: las tarjetas fijan `transform: none !important`.
+    el.animate(
+      [{ translate: `${dx}px ${dy}px` }, { translate: '0px 0px' }],
+      { duration: SHORTCUT_REORDER_SHIFT_MS, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
+    );
   }
 }
 
 function placeShortcutCardAtPointer(card, x, y) {
   const cards = shortcutCardsInStrip().filter((el) => el !== card);
   if (!cards.length || !card.parentElement) return;
-  const horizontal = isDockTopbarLayout();
   let best = cards[0];
+  let bestRect = null;
   let bestDist = Infinity;
   for (const other of cards) {
-    const rect = other.getBoundingClientRect();
+    const rect = shortcutLayoutRect(other);
     const cx = Math.max(rect.left, Math.min(x, rect.right));
     const cy = Math.max(rect.top, Math.min(y, rect.bottom));
     const dist = (x - cx) * (x - cx) + (y - cy) * (y - cy);
     if (dist < bestDist) {
       bestDist = dist;
       best = other;
+      bestRect = rect;
     }
   }
-  const rect = best.getBoundingClientRect();
-  const sameRow = y >= rect.top && y <= rect.bottom;
-  const before = horizontal || sameRow ? x < rect.left + rect.width / 2 : y < rect.top + rect.height / 2;
+  const before = x < bestRect.left + bestRect.width / 2;
   const parent = card.parentElement;
   if (before) {
     if (card.nextElementSibling === best) return;
-    parent.insertBefore(card, best);
+    moveShortcutCardsAnimated(() => parent.insertBefore(card, best));
     return;
   }
   const after = best.nextElementSibling;
   if (after === card) return;
-  if (after) parent.insertBefore(card, after);
-  else parent.appendChild(card);
+  moveShortcutCardsAnimated(() => {
+    if (after) parent.insertBefore(card, after);
+    else parent.appendChild(card);
+  });
+}
+
+/** Al soltar, el fantasma vuela hasta el hueco en vez de desaparecer de golpe. */
+function settleReorderGhost(ghost, card) {
+  if (!ghost) return;
+  if (!card || !card.isConnected) {
+    ghost.remove();
+    return;
+  }
+  const target = shortcutLayoutRect(card);
+  const anim = ghost.animate(
+    [
+      { left: ghost.style.left, top: ghost.style.top },
+      { left: `${target.left}px`, top: `${target.top}px` },
+    ],
+    { duration: 160, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' },
+  );
+  anim.onfinish = () => ghost.remove();
+  anim.oncancel = () => ghost.remove();
 }
 
 function finishShortcutReorder(session, opts) {
@@ -3034,10 +2859,8 @@ function finishShortcutReorder(session, opts) {
   if (session.raf) cancelAnimationFrame(session.raf);
   session.raf = 0;
   session.active = false;
-  if (session.ghost) {
-    session.ghost.remove();
-    session.ghost = null;
-  }
+  const ghost = session.ghost;
+  session.ghost = null;
   if (session.card) {
     session.card.classList.remove('reorder-placeholder');
     session.card.removeAttribute('aria-grabbed');
@@ -3049,7 +2872,10 @@ function finishShortcutReorder(session, opts) {
   }
   if (shortcutsContainer) shortcutsContainer.classList.remove('reorder-active');
   document.documentElement.classList.remove('is-shortcut-reordering');
-  if (restore && session.originalIds) restoreShortcutDomOrder(session.originalIds);
+  if (restore && session.originalIds) {
+    moveShortcutCardsAnimated(() => restoreShortcutDomOrder(session.originalIds));
+  }
+  settleReorderGhost(ghost, session.card);
   const changed = save ? commitShortcutOrderFromDom() : false;
   setDragOperationActive(false);
   if (changed && window.usualDesk && window.usualDesk.saveShortcuts) {
@@ -3069,7 +2895,7 @@ function activateShortcutReorder(session) {
   const ghost = session.card.cloneNode(true);
   ghost.classList.add('reorder-ghost');
   ghost.classList.remove('reorder-placeholder');
-  ghost.querySelectorAll('.shortcut-badge').forEach((el) => el.remove());
+  ghost.querySelectorAll('.shortcut-badge, .shortcut-card-remove').forEach((el) => el.remove());
   ghost.removeAttribute('data-tooltip');
   ghost.removeAttribute('data-onboarding-target');
   ghost.style.left = `${rect.left}px`;
@@ -3120,8 +2946,8 @@ function onShortcutReorderEnd(session, event) {
 function bindShortcutReorder(card, suppressClick) {
   card.addEventListener('pointerdown', (event) => {
     if (!shortcutsEditMode || event.button !== 0) return;
-    if (event.target.closest && event.target.closest('.shortcut-edit-action')) return;
     if (shortcutReorder) return;
+    if (event.target instanceof Element && event.target.closest('.shortcut-card-remove')) return;
     const session = {
       card,
       pointerId: event.pointerId,
@@ -3181,33 +3007,6 @@ async function deleteShortcutById(id) {
   renderShortcuts();
 }
 
-function bindShortcutEditActions(card, shortcut, suppressClick) {
-  const pencil = card.querySelector('.shortcut-edit-pencil');
-  const trash = card.querySelector('.shortcut-edit-trash');
-  const stopPointer = (event) => {
-    event.stopPropagation();
-  };
-  if (pencil) {
-    pencil.addEventListener('pointerdown', stopPointer);
-    pencil.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (Date.now() < shortcutReorderSuppressClicksUntil) return;
-      openEditModal(shortcut);
-    });
-  }
-  if (trash) {
-    trash.addEventListener('pointerdown', stopPointer);
-    trash.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (Date.now() < shortcutReorderSuppressClicksUntil) return;
-      deleteShortcutById(shortcut.id).catch((err) => console.error('shortcut-delete', err));
-    });
-  }
-  bindShortcutReorder(card, suppressClick);
-}
-
 function applyShortcutsEditModeUi() {
   shortcutsContainer.classList.toggle('shortcuts-edit-mode', shortcutsEditMode);
   document.documentElement.setAttribute(
@@ -3227,10 +3026,6 @@ function applyShortcutsEditModeUi() {
         ? 'Modo edición activo: arrastra los iconos para moverlos. Desactivar para volver a abrir las ventanas'
         : 'Modo edición inactivo: activar para mover, editar o eliminar accesos',
     );
-  }
-  if (dockEditModeBanner) {
-    const bannerVisible = shortcutsEditMode && isDockTopbarLayout();
-    dockEditModeBanner.setAttribute('aria-hidden', bannerVisible ? 'false' : 'true');
   }
   requestAnimationFrame(() => {
     if (typeof window.__dockInvalidateLooseNavViewport === 'function') {
@@ -3253,33 +3048,26 @@ function renderShortcuts() {
       restore: false,
     });
   }
-  const stripAddBtn = document.getElementById('strip-add-shortcut');
-  if (stripAddBtn) stripAddBtn.remove();
+  const addBtn = document.getElementById('strip-add-shortcut');
+  const endActions = document.getElementById('strip-end-actions');
+  if (addBtn) addBtn.remove();
+  if (endActions) endActions.remove();
   shortcutsContainer.innerHTML = '';
+  syncStripEndActions(addBtn, endActions);
 
   if (shortcuts.length === 0) {
-    // En topbar dejamos el strip totalmente vacío: durante el onboarding el
-    // spotlight apunta al menú (≡) de la cabecera, donde se crean ventanas.
-    // En sidebar/center mantenemos el CTA chiquito como fallback útil.
-    if (!isDockTopbarLayout()) {
-      const wrap = document.createElement('div');
-      wrap.className = 'shortcuts-empty';
-      wrap.innerHTML =
-        '<p class="shortcuts-empty-text">Aún no tienes accesos directos. Ve a Inicio (logo de inplaize arriba) y pulsa «Añadir acceso directo», o el botón de abajo.</p>'
-        + '<button type="button" class="btn-empty-add">+ Añadir acceso directo</button>';
-      wrap.querySelector('.btn-empty-add').addEventListener('click', () => openAddModal());
-      shortcutsContainer.appendChild(wrap);
-    }
+    // El strip queda vacío: durante el onboarding el spotlight apunta al
+    // menú (≡) de la cabecera, donde se crean ventanas.
     applyShortcutsEditModeUi();
     syncDockHomeStripBtn();
-    if (stripAddBtn) shortcutsContainer.appendChild(stripAddBtn);
+    if (addBtn) shortcutsContainer.appendChild(addBtn);
+    if (endActions) shortcutsContainer.appendChild(endActions);
     return;
   }
 
-  const isTopbar = isDockTopbarLayout();
   shortcuts.forEach((shortcut, index) => {
     const card = document.createElement('div');
-    card.className = isTopbar ? 'shortcut-card shell-shortcut-item' : 'shortcut-card';
+    card.className = 'shortcut-card shell-shortcut-item';
     card.dataset.shortcutId = shortcut.id;
     card.dataset.shortcutType = shortcut.type || '';
     if (index === 0) {
@@ -3297,32 +3085,28 @@ function renderShortcuts() {
       : ' aria-hidden="true"';
     const iconHtml = shortcut.icon
       ? shortcutIconMarkup(shortcut.icon)
-      : isTopbar
-        ? shortcutFallbackMarkup(shortcut.name)
-        : '<span class="shortcut-icon-slot" aria-hidden="true"></span>';
-    const editActions = shortcutsEditMode ? shortcutEditActionsMarkup(shortcut.name) : '';
-    if (isTopbar) {
-      card.innerHTML = `
-        <span class="shell-shortcut-icon-wrap">${iconHtml}</span>
-        <span class="shortcut-badge shell-strip-badge"${badgeHidden}${badgeAria}>${badgeText}</span>
-        ${editActions}
-      `;
-    } else {
-      card.innerHTML = `
-        ${iconHtml}
-        <span class="shortcut-name">${shortcut.name}</span>
-        <span class="shortcut-badge"${badgeHidden}${badgeAria}>${badgeText}</span>
-        ${editActions}
-      `;
+      : shortcutFallbackMarkup(shortcut.name);
+    card.innerHTML = `
+      <span class="shell-shortcut-icon-wrap">${iconHtml}</span>
+      <span class="shortcut-badge shell-strip-badge"${badgeHidden}${badgeAria}>${badgeText}</span>
+    `;
+    if (shortcutsEditMode) {
+      const remove = document.createElement('span');
+      remove.className = 'shortcut-card-remove';
+      remove.setAttribute('role', 'button');
+      remove.setAttribute('aria-label', `Eliminar ${shortcut.name}`);
+      remove.innerHTML = LOOSE_NAV_REMOVE_SVG;
+      card.appendChild(remove);
     }
 
     let ignoreClickUntil = 0;
-    card.addEventListener('click', (event) => {
-      if (event.target.closest && event.target.closest('.shortcut-edit-action')) return;
+    card.addEventListener('click', (ev) => {
       if (Date.now() < ignoreClickUntil) return;
       if (Date.now() < shortcutReorderSuppressClicksUntil) return;
       if (shortcutsEditMode) {
-        openEditModal(shortcut);
+        if (ev.target instanceof Element && ev.target.closest('.shortcut-card-remove')) {
+          deleteShortcutById(shortcut.id).catch((err) => console.error('shortcut-delete', err));
+        }
         return;
       }
       // Left-click sobre un icono que NO es miembro del Modo Foco lo cancela
@@ -3347,7 +3131,7 @@ function renderShortcuts() {
       card.classList.add('shortcut-card-editing');
     }
     if (shortcutsEditMode) {
-      bindShortcutEditActions(card, shortcut, () => {
+      bindShortcutReorder(card, () => {
         ignoreClickUntil = Date.now() + 500;
       });
     } else if (shortcut.type === 'web') {
@@ -3373,7 +3157,21 @@ function renderShortcuts() {
     window.UsualDeskOnboarding.advance('shortcuts-non-empty');
   }
   syncDockHomeStripBtn();
-  if (stripAddBtn) shortcutsContainer.appendChild(stripAddBtn);
+  if (addBtn) shortcutsContainer.appendChild(addBtn);
+  if (endActions) shortcutsContainer.appendChild(endActions);
+}
+
+/**
+ * Lápiz a la derecha en uso normal; en modo edición, "+" tras el último icono
+ * y "listo" a la derecha. Sin accesos, solo el "+".
+ */
+function syncStripEndActions(addBtn, endActions) {
+  const empty = shortcuts.length === 0;
+  const editBtn = endActions && endActions.querySelector('#strip-edit-toggle');
+  const doneBtn = endActions && endActions.querySelector('#strip-edit-done');
+  if (editBtn) editBtn.hidden = empty || shortcutsEditMode;
+  if (addBtn) addBtn.hidden = !(empty || shortcutsEditMode);
+  if (doneBtn) doneBtn.hidden = !shortcutsEditMode;
 }
 
 function applyFocusMemberClassToCard(card, shortcut) {
@@ -3459,7 +3257,6 @@ if (sidebarBackdrop) {
     if (window.UsualDeskOnboarding?.isActive?.()) return;
     if (!modalOverlay.classList.contains('hidden')) return;
     if (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) return;
-    if (settingsModalOverlay && !settingsModalOverlay.classList.contains('hidden')) return;
     if (appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden')) return;
     e.preventDefault();
     try {
@@ -3498,7 +3295,6 @@ function initDockHomeMenu() {
     },
     exitShortcutsEditMode: () => exitShortcutsEditModeFromUi(),
     openAppearance: () => openAppearanceModal(),
-    openSettings: () => openSettingsModalFromMenu(),
     openHistory: () => goToDockWelcomeHome('history').catch(() => {}),
     quitApp: () => window.usualDesk.closeApp(),
     onDrawerOpenChange: (open, editMode) => {
@@ -3556,6 +3352,17 @@ if (dockDownloadsBtn) {
 
 let historyHomeWired = false;
 let historySearchTimer = 0;
+const HISTORY_PAGE_SIZE = 300;
+/** Entradas ya cargadas, de la visita más reciente a la más vieja. */
+let historyItems = [];
+/** Posición en la lista del proceso principal hasta donde ya pedimos. */
+let historyOffset = 0;
+let historyHasMore = false;
+let historyLoading = false;
+let historyLoadSeq = 0;
+/** Grupos de un mismo sitio desplegados (clave: día + host + primera URL). */
+const historyExpandedGroups = new Set();
+let historyMoreObserver = null;
 
 function formatHistoryTime(ts) {
   if (!ts) return '';
@@ -3573,8 +3380,11 @@ function historyDayLabel(ts) {
   const day = startOf(d);
   if (day === today) return 'Hoy';
   if (day === today - 86400000) return 'Ayer';
+  const opts = { weekday: 'long', day: 'numeric', month: 'long' };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
   try {
-    return d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+    const s = d.toLocaleDateString([], opts);
+    return s.charAt(0).toUpperCase() + s.slice(1);
   } catch {
     return '';
   }
@@ -3588,78 +3398,254 @@ function openHistoryUrl(url) {
   }
 }
 
-async function renderHistoryHome() {
+function historyFavEl(host) {
+  const fav = document.createElement('span');
+  fav.className = 'history-row-fav';
+  fav.textContent = (host || '?').charAt(0).toUpperCase();
+  if (host) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.addEventListener('load', () => fav.classList.add('has-img'));
+    img.addEventListener('error', () => img.remove());
+    img.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
+    fav.appendChild(img);
+  }
+  return fav;
+}
+
+function historyDelButton(label, onDelete) {
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'history-row-del';
+  del.textContent = '\u00d7';
+  del.setAttribute('aria-label', label);
+  del.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    onDelete();
+  });
+  return del;
+}
+
+async function removeHistoryUrls(urls) {
+  try {
+    await window.usualDesk.removeHistory(urls.length === 1 ? urls[0] : urls);
+  } catch {
+    /* noop */
+  }
+  const gone = new Set(urls);
+  const before = historyItems.length;
+  historyItems = historyItems.filter((it) => !gone.has(it.url));
+  historyOffset = Math.max(0, historyOffset - (before - historyItems.length));
+  paintHistoryHome();
+}
+
+/**
+ * Agrupa por día y, dentro del día, junta las visitas seguidas al mismo sitio
+ * (p. ej. varias notas de infobae una tras otra).
+ */
+function groupHistoryItems(items) {
+  const days = [];
+  for (const it of items) {
+    const label = (it.lastVisit && historyDayLabel(it.lastVisit)) || 'Sin fecha';
+    let day = days[days.length - 1];
+    if (!day || day.label !== label) {
+      day = { label, blocks: [] };
+      days.push(day);
+    }
+    const last = day.blocks[day.blocks.length - 1];
+    if (last && it.host && last.host === it.host) last.items.push(it);
+    else day.blocks.push({ host: it.host, items: [it] });
+  }
+  return days;
+}
+
+function buildHistoryRow(it, nested) {
+  const row = document.createElement('div');
+  row.className = nested ? 'history-row is-nested' : 'history-row';
+  row.title = it.url;
+
+  const body = document.createElement('div');
+  body.className = 'history-row-body';
+  const title = document.createElement('span');
+  title.className = 'history-row-title';
+  title.textContent = it.title || it.host || it.url;
+  const url = document.createElement('span');
+  url.className = 'history-row-url';
+  url.textContent = it.url.replace(/^https?:\/\/(www\.)?/i, '');
+  body.append(title, url);
+
+  const time = document.createElement('span');
+  time.className = 'history-row-time';
+  time.textContent = formatHistoryTime(it.lastVisit);
+
+  const del = historyDelButton('Quitar del historial', () => removeHistoryUrls([it.url]));
+  if (nested) row.append(time, body, del);
+  else row.append(time, historyFavEl(it.host), body, del);
+  row.addEventListener('click', () => openHistoryUrl(it.url));
+  return row;
+}
+
+function buildHistoryGroup(block, key) {
+  const { items, host } = block;
+  const wrap = document.createElement('div');
+  wrap.className = 'history-group';
+
+  const head = document.createElement('div');
+  head.className = 'history-row history-group-head';
+  head.tabIndex = 0;
+  head.setAttribute('role', 'button');
+
+  const body = document.createElement('div');
+  body.className = 'history-row-body';
+  const title = document.createElement('span');
+  title.className = 'history-row-title';
+  const name = document.createElement('span');
+  name.textContent = host;
+  const count = document.createElement('span');
+  count.className = 'history-group-count';
+  count.textContent = `${items.length} páginas`;
+  title.append(name, count);
+  const preview = document.createElement('span');
+  preview.className = 'history-row-url';
+  preview.textContent = items
+    .slice(0, 3)
+    .map((it) => it.title || it.url)
+    .join('  ·  ');
+  body.append(title, preview);
+
+  const time = document.createElement('span');
+  time.className = 'history-row-time';
+  const newest = formatHistoryTime(items[0].lastVisit);
+  const oldest = formatHistoryTime(items[items.length - 1].lastVisit);
+  if (oldest && oldest !== newest) {
+    time.classList.add('is-range');
+    const top = document.createElement('span');
+    top.textContent = newest;
+    const bottom = document.createElement('span');
+    bottom.textContent = oldest;
+    time.append(top, bottom);
+    time.title = `${oldest} – ${newest}`;
+  } else {
+    time.textContent = newest;
+  }
+
+  const chevron = document.createElement('span');
+  chevron.className = 'history-group-chevron';
+  chevron.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  const del = historyDelButton(`Quitar las ${items.length} páginas de ${host}`, () =>
+    removeHistoryUrls(items.map((it) => it.url)),
+  );
+  head.append(time, historyFavEl(host), body, del, chevron);
+
+  const children = document.createElement('div');
+  children.className = 'history-group-items';
+
+  const setExpanded = (on) => {
+    if (on) historyExpandedGroups.add(key);
+    else historyExpandedGroups.delete(key);
+    wrap.classList.toggle('is-expanded', on);
+    head.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on && !children.childElementCount) {
+      for (const it of items) children.appendChild(buildHistoryRow(it, true));
+    }
+  };
+  head.addEventListener('click', () => setExpanded(!wrap.classList.contains('is-expanded')));
+  head.addEventListener('keydown', (ev) => {
+    if (ev.target !== head || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+    ev.preventDefault();
+    setExpanded(!wrap.classList.contains('is-expanded'));
+  });
+
+  wrap.append(head, children);
+  setExpanded(historyExpandedGroups.has(key));
+  return wrap;
+}
+
+function paintHistoryHome() {
   const list = document.getElementById('history-home-list');
   const empty = document.getElementById('history-home-empty');
   if (!list) return;
-  const query = (document.getElementById('history-search-input')?.value || '').trim();
-  let items = [];
-  try {
-    items = (await window.usualDesk.listHistory(query, 500)) || [];
-  } catch {
-    items = [];
-  }
+  const scrollTop = list.scrollTop;
+  if (historyMoreObserver) historyMoreObserver.disconnect();
   list.innerHTML = '';
-  if (!items.length) {
-    if (empty) empty.hidden = false;
-    return;
-  }
-  if (empty) empty.hidden = true;
+  if (empty) empty.hidden = historyItems.length > 0 || historyLoading;
+  if (!historyItems.length) return;
 
-  let lastDay = '';
-  for (const it of items) {
-    const dayLabel = it.lastVisit ? historyDayLabel(it.lastVisit) : '';
-    if (dayLabel && dayLabel !== lastDay) {
-      lastDay = dayLabel;
-      const sep = document.createElement('div');
-      sep.className = 'history-day-sep';
-      sep.textContent = dayLabel;
-      list.appendChild(sep);
-    }
-    const row = document.createElement('div');
-    row.className = 'history-row';
-    row.title = it.url;
-
-    const fav = document.createElement('span');
-    fav.className = 'history-row-fav';
-    fav.textContent = (it.host || it.url || '?').charAt(0).toUpperCase();
-
-    const body = document.createElement('div');
-    body.className = 'history-row-body';
-    const title = document.createElement('span');
-    title.className = 'history-row-title';
-    title.textContent = it.title || it.host || it.url;
-    const url = document.createElement('span');
-    url.className = 'history-row-url';
-    url.textContent = it.url;
-    body.append(title, url);
-
-    const time = document.createElement('span');
-    time.className = 'history-row-time';
-    time.textContent = formatHistoryTime(it.lastVisit);
-
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'history-row-del';
-    del.textContent = '\u00d7';
-    del.setAttribute('aria-label', 'Quitar del historial');
-
-    row.append(fav, body, time, del);
-    row.addEventListener('click', (ev) => {
-      if (ev.target === del) return;
-      openHistoryUrl(it.url);
-    });
-    del.addEventListener('click', async (ev) => {
-      ev.stopPropagation();
-      try {
-        await window.usualDesk.removeHistory(it.url);
-      } catch {
-        /* noop */
+  for (const day of groupHistoryItems(historyItems)) {
+    const section = document.createElement('section');
+    section.className = 'history-day';
+    const sep = document.createElement('div');
+    sep.className = 'history-day-sep';
+    sep.textContent = day.label;
+    const card = document.createElement('div');
+    card.className = 'history-day-card';
+    for (const block of day.blocks) {
+      if (block.items.length > 1) {
+        card.appendChild(buildHistoryGroup(block, `${day.label}|${block.host}|${block.items[0].url}`));
+      } else {
+        card.appendChild(buildHistoryRow(block.items[0], false));
       }
-      renderHistoryHome();
-    });
-    list.appendChild(row);
+    }
+    section.append(sep, card);
+    list.appendChild(section);
   }
+
+  if (historyHasMore) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'history-load-more';
+    more.textContent = 'Cargar historial más antiguo';
+    more.addEventListener('click', () => loadHistoryPage(false));
+    list.appendChild(more);
+    if (!historyMoreObserver && typeof IntersectionObserver === 'function') {
+      historyMoreObserver = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((e) => e.isIntersecting)) loadHistoryPage(false);
+        },
+        { root: list, rootMargin: '600px 0px' },
+      );
+    }
+    historyMoreObserver?.observe(more);
+  }
+  list.scrollTop = scrollTop;
+}
+
+async function loadHistoryPage(reset) {
+  if (historyLoading && !reset) return;
+  const seq = reset ? ++historyLoadSeq : historyLoadSeq;
+  const query = (document.getElementById('history-search-input')?.value || '').trim();
+  historyLoading = true;
+  let page = [];
+  try {
+    page =
+      (await window.usualDesk.listHistory(query, HISTORY_PAGE_SIZE, reset ? 0 : historyOffset)) || [];
+  } catch {
+    page = [];
+  }
+  if (seq !== historyLoadSeq) return;
+  historyLoading = false;
+  historyHasMore = page.length === HISTORY_PAGE_SIZE;
+  historyOffset = (reset ? 0 : historyOffset) + page.length;
+  if (reset) {
+    historyItems = page;
+  } else {
+    // Una visita nueva entre páginas corre los offsets: evitamos duplicados.
+    const seen = new Set(historyItems.map((it) => it.url));
+    historyItems = historyItems.concat(page.filter((it) => !seen.has(it.url)));
+  }
+  paintHistoryHome();
+  if (reset) {
+    const list = document.getElementById('history-home-list');
+    if (list) list.scrollTop = 0;
+  }
+}
+
+function renderHistoryHome() {
+  return loadHistoryPage(true);
 }
 
 function wireHistoryHome() {
@@ -3690,93 +3676,94 @@ document.getElementById('downloads-expand-btn')?.addEventListener('click', () =>
   goToDockWelcomeHome('downloads').catch(() => {});
 });
 
-/** Columna de archivos en la vista de tareas: el borde derecho se arrastra y,
- *  al soltar, el ancho encaja en un número entero de columnas de tiles. */
-const DOWNLOADS_COL_KEY = 'inplaize.downloadsColumns';
-const DOWNLOADS_COL_MIN_WIDTH = 132;
-const DOWNLOADS_COL_STEP = 120;
-
-function downloadsColWidthFor(cols) {
-  return DOWNLOADS_COL_MIN_WIDTH + (cols - 1) * DOWNLOADS_COL_STEP;
-}
-
-function downloadsColMaxWidth(panel) {
-  return Math.max(DOWNLOADS_COL_MIN_WIDTH, Math.round(panel.clientWidth * 0.6));
-}
-
-function applyDownloadsColWidth(panel, px) {
-  panel.style.setProperty('--downloads-col-width', `${Math.round(px)}px`);
-}
-
-(function initDownloadsColResizer() {
+/** Franja de archivos en la vista de tareas: la rueda vertical la desplaza
+ *  de lado. */
+(function initDownloadsStripWheel() {
   const panel = document.getElementById('dock-home-panel');
-  const handle = document.getElementById('downloads-col-resizer');
-  const home = document.getElementById('downloads-home');
-  if (!panel || !handle || !home) return;
+  const grid = document.getElementById('downloads-home-grid');
+  if (!panel || !grid) return;
+  grid.addEventListener(
+    'wheel',
+    (e) => {
+      if (panel.dataset.homeView !== 'todos') return;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      grid.scrollLeft += e.deltaY;
+    },
+    { passive: false },
+  );
+})();
 
-  let savedCols = 1;
-  try {
-    savedCols = Math.max(1, parseInt(localStorage.getItem(DOWNLOADS_COL_KEY), 10) || 1);
-  } catch {
-    /* noop */
-  }
-  applyDownloadsColWidth(panel, downloadsColWidthFor(savedCols));
+/** Alto de la franja de archivos: el borde superior se arrastra y los tiles
+ *  acompañan el tamaño. Doble clic vuelve al tamaño por defecto. */
+const DOWNLOADS_STRIP_KEY = 'inplaize.downloadsStripTile';
+const DOWNLOADS_STRIP_DEFAULT = 96;
+const DOWNLOADS_STRIP_MIN = 56;
+const DOWNLOADS_STRIP_MAX = 260;
 
-  const snapTo = (cols) => {
-    const maxCols = Math.max(
-      1,
-      Math.floor((downloadsColMaxWidth(panel) - DOWNLOADS_COL_MIN_WIDTH) / DOWNLOADS_COL_STEP) + 1,
-    );
-    const n = Math.min(Math.max(1, cols), maxCols);
-    panel.classList.add('is-col-snapping');
-    applyDownloadsColWidth(panel, downloadsColWidthFor(n));
-    setTimeout(() => panel.classList.remove('is-col-snapping'), 200);
+(function initDownloadsStripResizer() {
+  const panel = document.getElementById('dock-home-panel');
+  const handle = document.getElementById('downloads-strip-resizer');
+  if (!panel || !handle) return;
+
+  const clamp = (px) => Math.min(DOWNLOADS_STRIP_MAX, Math.max(DOWNLOADS_STRIP_MIN, Math.round(px)));
+  const apply = (px) => panel.style.setProperty('--downloads-strip-tile', `${px}px`);
+  const save = (px) => {
     try {
-      localStorage.setItem(DOWNLOADS_COL_KEY, String(n));
+      localStorage.setItem(DOWNLOADS_STRIP_KEY, String(px));
     } catch {
       /* noop */
     }
   };
 
+  let size = DOWNLOADS_STRIP_DEFAULT;
+  try {
+    size = clamp(parseInt(localStorage.getItem(DOWNLOADS_STRIP_KEY), 10) || DOWNLOADS_STRIP_DEFAULT);
+  } catch {
+    /* noop */
+  }
+  apply(size);
+
   handle.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = home.getBoundingClientRect().width;
-    const maxWidth = downloadsColMaxWidth(panel);
-    let width = startWidth;
+    const startY = e.clientY;
+    const startSize = size;
     handle.classList.add('is-dragging');
-    panel.classList.add('is-col-resizing');
+    panel.classList.add('is-strip-resizing');
     try {
       handle.setPointerCapture(e.pointerId);
     } catch {
       /* noop */
     }
     const move = (ev) => {
-      width = Math.min(maxWidth, Math.max(DOWNLOADS_COL_MIN_WIDTH, startWidth + ev.clientX - startX));
-      applyDownloadsColWidth(panel, width);
+      size = clamp(startSize + startY - ev.clientY);
+      apply(size);
     };
     const end = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', end);
       handle.removeEventListener('pointercancel', end);
       handle.classList.remove('is-dragging');
-      panel.classList.remove('is-col-resizing');
-      snapTo(Math.round((width - DOWNLOADS_COL_MIN_WIDTH) / DOWNLOADS_COL_STEP) + 1);
+      panel.classList.remove('is-strip-resizing');
+      save(size);
     };
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', end);
     handle.addEventListener('pointercancel', end);
   });
 
-  handle.addEventListener('dblclick', () => snapTo(1));
+  handle.addEventListener('dblclick', () => {
+    size = DOWNLOADS_STRIP_DEFAULT;
+    apply(size);
+    save(size);
+  });
 })();
 
 async function exitShortcutsEditModeFromUi() {
   const formWasOpen =
-    isDockTopbarLayout() &&
-    ((dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) ||
-      (modalOverlay && !modalOverlay.classList.contains('hidden')));
+    (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) ||
+    (modalOverlay && !modalOverlay.classList.contains('hidden'));
   const looseNavOpen = looseNavSurface && !looseNavSurface.classList.contains('hidden');
   shortcutsEditMode = false;
   closeModal();
@@ -3787,13 +3774,6 @@ async function exitShortcutsEditModeFromUi() {
       /* noop */
     }
   }
-}
-
-if (dockExitEditModeBtn) {
-  dockExitEditModeBtn.addEventListener('click', () => {
-    if (!shortcutsEditMode) return;
-    exitShortcutsEditModeFromUi().catch(() => {});
-  });
 }
 
 function clearShortcutNameError() {
@@ -3811,8 +3791,15 @@ function showShortcutNameError(message) {
   if (inputName) inputName.focus();
 }
 
+/** Sesión del perfil de la página desde la que se abrió el alta; si no, el acceso estrena la suya. */
+let addShortcutPageSessionId = '';
+/** Favicon que ya mostró la pestaña: vale solo mientras la URL del formulario siga siendo la de la página. */
+let addShortcutPageFavicon = null;
+
 function openAddModal() {
   editingId = null;
+  addShortcutPageSessionId = '';
+  addShortcutPageFavicon = null;
   cancelFaviconLookup();
   autoFaviconValue = '';
   suppressAutoFavicon = false;
@@ -3830,6 +3817,70 @@ function openAddModal() {
   showShortcutFormShell();
   lastPassthroughIgnore = null;
   syncPointerPassthrough(lastPointer.x, lastPointer.y);
+}
+
+/** El alta de acceso se abrió encima de la navegación libre, con la página de fondo. */
+let addShortcutCoversLooseNav = false;
+
+/** La vista nativa tapa el modal: se cambia por una foto de la página mientras está abierto. */
+async function coverLooseNavPage() {
+  let shot = '';
+  try {
+    shot = (await window.usualDesk.looseNavCoverPage?.(true)) || '';
+  } catch {
+    shot = '';
+  }
+  addShortcutCoversLooseNav = true;
+  if (looseNavSurface && shot) {
+    looseNavSurface.style.backgroundImage = `url("${shot}")`;
+    looseNavSurface.classList.add('is-covered');
+  }
+}
+
+function clearLooseNavCover() {
+  if (!looseNavSurface) return;
+  looseNavSurface.style.backgroundImage = '';
+  looseNavSurface.classList.remove('is-covered');
+}
+
+/** Al cancelar, la página real vuelve a su lugar. */
+function uncoverLooseNavPage() {
+  if (!addShortcutCoversLooseNav) return;
+  addShortcutCoversLooseNav = false;
+  clearLooseNavCover();
+  window.usualDesk.looseNavCoverPage?.(false)?.catch?.(() => {});
+}
+
+/**
+ * "Añadir a accesos directos" desde la navegación libre: el formulario se abre
+ * encima de la página; recién al guardar se pasa a los accesos.
+ * @param {{ url?: string, title?: string, sessionId?: string, favicon?: string } | null} page
+ */
+async function openAddShortcutForPage(page) {
+  const url = page && typeof page.url === 'string' ? page.url : '';
+  if (!url) return;
+  if (looseNavState?.active) await coverLooseNavPage();
+  else await goToDockWelcomeHome();
+  openAddModal();
+  addShortcutPageSessionId = String((page && page.sessionId) || '');
+  const favicon = String((page && page.favicon) || '');
+  if (inputType) {
+    inputType.value = 'web';
+    updateFormTypeUI();
+  }
+  if (inputName) inputName.value = String((page && page.title) || '').trim().slice(0, 60);
+  if (inputUrl) {
+    inputUrl.value = url.trim();
+    if (favicon.startsWith('data:image/')) {
+      dropStaleSiteIconRows(favicon);
+      autoFaviconValue = favicon;
+      setSelectedIcon(favicon);
+    } else {
+      addShortcutPageFavicon = favicon ? { pageUrl: url.trim(), iconUrl: favicon } : null;
+      inputUrl.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  inputName?.focus();
 }
 
 function openEditModal(shortcut) {
@@ -3867,7 +3918,7 @@ function openEditModal(shortcut) {
  */
 function applyLooseEditUiLock(locked) {
   const typeRow = document.querySelector('.form-row-type');
-  if (typeRow) typeRow.classList.toggle('hidden', !!locked);
+  if (typeRow) typeRow.classList.add('hidden');
   const urlGroup = inputUrl ? inputUrl.closest('.form-group') : null;
   if (urlGroup) urlGroup.classList.toggle('hidden', !!locked);
   if (inputUrl) inputUrl.required = !locked;
@@ -3880,6 +3931,7 @@ function applyLooseEditUiLock(locked) {
 }
 
 function closeModal() {
+  uncoverLooseNavPage();
   clearShortcutNameError();
   modalOverlay.classList.add('hidden');
   if (dockInlineEditor && shortcutModalCard && dockInlineEditor.contains(shortcutModalCard)) {
@@ -3898,6 +3950,7 @@ function closeModal() {
 }
 
 modalCancel.addEventListener('click', closeModal);
+document.getElementById('modal-close')?.addEventListener('click', closeModal);
 
 modalOverlay.addEventListener('click', (e) => {
   if (e.target === modalOverlay) closeModal();
@@ -3909,14 +3962,10 @@ if (dockInlineEditor) {
   });
 }
 
-function isDockTopbarLayout() {
-  return document.documentElement.getAttribute('data-dock-layout') === 'topbar';
-}
-
 /** Muestra el formulario de acceso directo en un modal centrado. */
 function showShortcutFormShell() {
   if (!shortcutModalCard || !modalOverlay) return;
-  shortcutModalCard.classList.toggle('shortcut-modal-embed', isDockTopbarLayout());
+  shortcutModalCard.classList.add('shortcut-modal-embed');
   if (shortcutModalCard.parentElement !== modalOverlay) {
     modalOverlay.appendChild(shortcutModalCard);
   }
@@ -3953,6 +4002,31 @@ const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
 if (stripAddShortcutBtn) {
   stripAddShortcutBtn.addEventListener('click', () => openAddModal());
 }
+
+document.getElementById('strip-edit-toggle')?.addEventListener('click', () => {
+  if (shortcutsEditMode) return;
+  shortcutsEditMode = true;
+  renderShortcuts();
+});
+
+document.getElementById('strip-edit-done')?.addEventListener('click', () => {
+  if (!shortcutsEditMode) return;
+  exitShortcutsEditModeFromUi().catch(() => {});
+});
+
+// En captura: corre antes que el Escape que cierra el formulario, así ese
+// primer Escape solo cierra el formulario y no también el modo edición.
+document.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key !== 'Escape' || !shortcutsEditMode || shortcutReorder) return;
+    if (!modalOverlay.classList.contains('hidden')) return;
+    if (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) return;
+    if (appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden')) return;
+    exitShortcutsEditModeFromUi().catch(() => {});
+  },
+  true,
+);
 
 shortcutForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -4005,6 +4079,8 @@ shortcutForm.addEventListener('submit', async (e) => {
     const prevForSession = editingId ? shortcuts.find((s) => s.id === editingId) : null;
     if (prevForSession && prevForSession.type === 'web' && prevForSession.sessionId) {
       data.sessionId = prevForSession.sessionId;
+    } else if (!editingId && addShortcutPageSessionId) {
+      data.sessionId = addShortcutPageSessionId;
     } else {
       data.sessionId = webSessionIdForShortcut(data.name, data.id);
     }
@@ -4045,6 +4121,14 @@ shortcutForm.addEventListener('submit', async (e) => {
     }
   }
   renderShortcuts();
+  if (addShortcutCoversLooseNav) {
+    // La página no vuelve a aparecer: se sale directo a los accesos, donde quedó el nuevo.
+    addShortcutCoversLooseNav = false;
+    await goToDockWelcomeHome();
+    clearLooseNavCover();
+    window.usualDesk.looseNavCoverPage?.(false)?.catch?.(() => {});
+    return;
+  }
   closeModal();
 });
 
@@ -4056,10 +4140,6 @@ modalDelete.addEventListener('click', () => {
 
 window.usualDesk.onOpenAddShortcutModal(() => {
   openAddModal();
-});
-
-window.usualDesk.onOpenSettingsModal(() => {
-  openSettingsModalFromMenu();
 });
 
 window.usualDesk.onOpenAppearanceModal(() => {
@@ -4127,7 +4207,7 @@ const looseNavSurface = document.getElementById('loose-nav-surface');
 const looseNavAccountsRail = document.getElementById('loose-nav-accounts');
 const looseNavOmnibox = document.getElementById('loose-nav-omnibox');
 const looseNavOmniboxInput = document.getElementById('loose-nav-omnibox-input');
-const looseNavOmniboxProfile = document.getElementById('loose-nav-omnibox-profile');
+const looseNavAddShortcutBtn = document.getElementById('loose-nav-add-shortcut-btn');
 
 /** Último estado recibido del main. */
 let looseNavState = {
@@ -4146,11 +4226,6 @@ let looseNavResumePending = false;
 let lastSentViewportBounds = null;
 let viewportBoundsFrame = 0;
 let looseNavActiveShortcutId = null;
-
-/** Borrador al pulsar “+”: el enlace se escribe donde irían favicon y nombre. */
-let looseNavComposer = null;
-let looseNavComposerFocusGen = 0;
-
 const LOOSE_NAV_BACK_SVG =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
   '<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
@@ -4256,9 +4331,7 @@ function positionLooseNavSuggest() {
   // Verticalmente va en el hueco al tope del área de contenido (donde empujamos
   // la vista nativa). Horizontalmente se alinea al ancho de la barra de
   // direcciones, como la omnibox de Chrome (no ocupa toda la pantalla).
-  const anchor = looseNavSuggest.inputEl.closest('.loose-nav-omnibox')
-    || looseNavSuggest.inputEl.closest('.loose-nav-tab')
-    || looseNavSuggest.inputEl;
+  const anchor = looseNavSuggest.inputEl.closest('.loose-nav-omnibox') || looseNavSuggest.inputEl;
   const ar = anchor.getBoundingClientRect();
   const vr = dockViewport.getBoundingClientRect();
   const left = Math.max(vr.left, Math.round(ar.left));
@@ -4527,6 +4600,17 @@ function renderLooseNavControls(state) {
   looseNavControlButtons.reload.disabled = !active;
 }
 
+const LOOSE_NAV_AUDIBLE_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>' +
+  '<path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+  '</svg>';
+const LOOSE_NAV_MUTED_SVG =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>' +
+  '<path d="m15.5 9.5 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+  '</svg>';
+
 function appendLooseNavClose(el, label, onClose) {
   const closeEl = document.createElement('button');
   closeEl.type = 'button';
@@ -4546,203 +4630,29 @@ function looseNavProfileHue(partition) {
   return h % 360;
 }
 
-function paintLooseNavProfileChip(chip, profile) {
-  const label = (profile && profile.label) || 'Perfil';
-  const avatar = profile && typeof profile.avatar === 'string' && profile.avatar.startsWith('data:image/')
-    ? profile.avatar
-    : '';
-  chip.textContent = avatar ? '' : label.trim().charAt(0).toUpperCase() || '?';
-  chip.style.backgroundImage = avatar ? `url("${avatar}")` : '';
-  chip.classList.toggle('has-avatar', !!avatar);
-  chip.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(profile && profile.partition)));
-  const tip = profile && profile.email && profile.email !== label ? `${label} (${profile.email})` : label;
-  chip.setAttribute('aria-label', `Perfil: ${tip}. Cambiar perfil`);
-  chip.dataset.tooltip = `Perfil: ${tip}`;
+/** Pone el cursor en la barra de dirección; `clear` la deja vacía para escribir de cero. */
+function focusLooseNavOmnibox({ clear = false } = {}) {
+  if (!looseNavOmniboxInput || !looseNavState.active) return;
+  looseNavOmniboxInput.focus();
+  if (clear) looseNavOmniboxInput.value = '';
+  else looseNavOmniboxInput.select();
 }
 
-async function pickLooseNavComposerProfile(chip, input) {
-  if (!looseNavComposer) return;
-  looseNavComposer.picking = true;
-  let picked = null;
-  try {
-    picked = await window.usualDesk.looseNavPickProfile();
-  } catch {
-    picked = null;
-  }
-  if (!looseNavComposer) return;
-  looseNavComposer.picking = false;
-  if (picked && picked.partition) {
-    looseNavComposer.profile = picked;
-    paintLooseNavProfileChip(chip, picked);
-  }
-  if (input.isConnected) input.focus();
-}
-
-function buildLooseNavComposer() {
-  const el = document.createElement('div');
-  el.className = 'loose-nav-tab is-composing';
-  const editing = looseNavComposer?.mode === 'edit';
-
-  const input = document.createElement('input');
-
-  const chip = document.createElement('button');
-  chip.type = 'button';
-  chip.className = 'loose-nav-profile-chip';
-  chip.dataset.tooltipPlacement = 'bottom';
-  paintLooseNavProfileChip(chip, looseNavComposer?.profile);
-  chip.addEventListener('mousedown', (ev) => ev.preventDefault());
-  chip.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    pickLooseNavComposerProfile(chip, input);
-  });
-  el.appendChild(chip);
-
-  input.type = 'text';
-  input.className = 'loose-nav-tab-url';
-  input.placeholder = 'Buscá en Google o escribí un enlace';
-  input.spellcheck = false;
-  input.autocomplete = 'off';
-  input.setAttribute('aria-label', editing ? 'Dirección de esta pestaña' : 'Búsqueda o enlace de la pestaña nueva');
-  input.addEventListener('input', () => {
-    refreshLooseNavSuggest(input, (val, opts) => commitLooseNavComposer(val, opts));
-  });
-  input.addEventListener('keydown', (ev) => {
-    if (looseNavSuggestKeydown(ev, input)) return;
-    if (ev.key === 'Escape') {
-      ev.preventDefault();
-      cancelLooseNavComposer();
-    } else if (ev.key === 'Enter') {
-      ev.preventDefault();
-      commitLooseNavComposer(input.value, { forceNewTab: ev.altKey });
-    }
-  });
-  input.addEventListener('blur', () => {
-    setTimeout(() => closeLooseNavSuggest(), 150);
-    if (!editing) return;
-    setTimeout(() => {
-      if (looseNavComposer?.mode === 'edit' && !looseNavComposer.picking && document.activeElement !== input) {
-        cancelLooseNavComposer();
-      }
-    }, 120);
-  });
-  el.appendChild(input);
-  appendLooseNavClose(el, editing ? 'Cancelar edición' : 'Cancelar pestaña', () => cancelLooseNavComposer());
-  return el;
-}
-
-function focusLooseNavComposerInput(input, justOpened, selStart, selEnd) {
-  const gen = ++looseNavComposerFocusGen;
-  requestAnimationFrame(() => {
-    if (gen !== looseNavComposerFocusGen || !input.isConnected) return;
-    input.focus();
-    if (!justOpened && selStart != null && selEnd != null) {
-      try { input.setSelectionRange(selStart, selEnd); } catch { /* noop */ }
-    } else if (justOpened && input.value) {
-      if (looseNavComposer?.mode === 'edit') {
-        input.select();
-      } else {
-        const end = input.value.length;
-        try { input.setSelectionRange(end, end); } catch { /* noop */ }
-      }
-    }
-  });
-}
-
-/**
- * `new`: pestaña nueva con el perfil elegido en el chip.
- * `edit`: reemplaza la pestaña activa por su dirección para buscar o navegar ahí mismo.
- * @param {'new' | 'edit'} [mode]
- */
-function openLooseNavComposer(mode = 'new') {
+/** Como Chrome: el "+" abre la pestaña y lleva a la barra de dirección para escribir ahí. */
+function openLooseNavBlankTab() {
   if (!looseNavState.active) return;
-  const active = looseNavState.tabs.find((t) => t.isActive);
-  const wantEdit = mode === 'edit' && !!active;
-  if (looseNavComposer && (looseNavComposer.mode === 'edit') === wantEdit) {
-    const input = looseNavTabsStrip?.querySelector('.loose-nav-tab-url');
-    input?.focus();
-    input?.select();
-    return;
-  }
-  const sessionProfile = looseNavState.activeProfile || looseNavState.defaultProfile || null;
-  looseNavComposer = wantEdit
-    ? {
-        focus: true,
-        mode: 'edit',
-        value: active.url || '',
-        profile: { partition: active.partition, label: active.profileLabel, avatar: active.profileAvatar },
-      }
-    : { focus: true, mode: 'new', profile: sessionProfile };
-  looseNavTabsStrip?.querySelector('.loose-nav-tab.is-composing')?.remove();
-  renderLooseNavTabs(looseNavState);
-}
-
-function cancelLooseNavComposer() {
-  if (!looseNavComposer) return;
-  closeLooseNavSuggest();
-  looseNavComposer = null;
-  looseNavComposerFocusGen += 1;
-  renderLooseNavTabs(looseNavState);
-}
-
-async function commitLooseNavComposer(raw, opts = {}) {
-  const val = String(raw || '').trim();
-  if (!val || !looseNavComposer) return;
-  const composer = looseNavComposer;
-  const active = looseNavState.tabs.find((t) => t.isActive);
-  const sameProfileAsActive =
-    !!active && (!composer.profile || composer.profile.partition === active.partition);
-  const navigateInPlace = composer.mode === 'edit' && sameProfileAsActive && !opts.forceNewTab;
-  closeLooseNavSuggest();
-  looseNavComposer = null;
-  looseNavComposerFocusGen += 1;
-  renderLooseNavTabs(looseNavState);
-  try {
-    if (navigateInPlace) {
-      await window.usualDesk.looseNavNavigate(val);
-    } else {
-      await window.usualDesk.looseNavNewTab(val, { partition: composer.profile?.partition });
-    }
-  } catch {
-    looseNavComposer = { ...composer, focus: true, value: val };
-    renderLooseNavTabs(looseNavState);
-  }
+  focusLooseNavOmnibox({ clear: true });
+  window.usualDesk.looseNavNewTab('', { partition: looseNavOmniboxPartition(), nextToActive: true }).catch(() => {});
 }
 
 function renderLooseNavTabs(state) {
   if (!looseNavTabsStrip) return;
   renderLooseNavControls(state);
 
-  const previousComposer = looseNavTabsStrip.querySelector('.loose-nav-tab.is-composing');
-  const previousInput = previousComposer?.querySelector('.loose-nav-tab-url');
-  const composerWasFocused = !!(previousInput && document.activeElement === previousInput);
-  const composerSelStart = previousInput ? previousInput.selectionStart : null;
-  const composerSelEnd = previousInput ? previousInput.selectionEnd : null;
-  if (previousComposer && looseNavComposer) previousComposer.remove();
-
   looseNavTabsStrip.innerHTML = '';
-
-  const editingActive = looseNavComposer?.mode === 'edit' && state.tabs.some((t) => t.isActive);
-  if (looseNavComposer) {
-    const node = previousComposer || buildLooseNavComposer();
-    looseNavTabsStrip.appendChild(node);
-    const input = node.querySelector('.loose-nav-tab-url');
-    const justOpened = !!looseNavComposer.focus;
-    const pendingValue = looseNavComposer.value || '';
-    looseNavComposer.focus = false;
-    looseNavComposer.value = '';
-    if (input && justOpened && pendingValue) input.value = pendingValue;
-    if (input && (justOpened || composerWasFocused)) {
-      focusLooseNavComposerInput(input, justOpened, composerSelStart, composerSelEnd);
-    }
-  }
-  const composerNode = looseNavTabsStrip.querySelector('.loose-nav-tab.is-composing');
 
   const sessionTabs = state.tabs.filter((t) => !state.activePartition || t.partition === state.activePartition);
   for (const tab of sessionTabs) {
-    if (composerNode && editingActive && tab.isActive) {
-      looseNavTabsStrip.appendChild(composerNode);
-      continue;
-    }
     const el = document.createElement('div');
     el.className = 'loose-nav-tab';
     el.setAttribute('role', 'tab');
@@ -4755,10 +4665,6 @@ function renderLooseNavTabs(state) {
       'data-tooltip',
       tab.isDefaultProfile ? tabTip : `${tabTip} · Perfil: ${tab.profileLabel || ''}`
     );
-    if (!tab.isDefaultProfile) {
-      el.classList.add('has-profile');
-      el.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(tab.partition)));
-    }
     if (tab.loading) {
       const spin = document.createElement('span');
       spin.className = 'loose-nav-tab-fav is-loading';
@@ -4778,21 +4684,44 @@ function renderLooseNavTabs(state) {
       el.appendChild(faviconFallbackEl(tab.title || tab.url));
     }
 
-    const titleEl = document.createElement('span');
-    titleEl.className = 'loose-nav-tab-title';
-    titleEl.textContent = tab.title || tab.url || 'Pestaña';
-    el.appendChild(titleEl);
+    if (tab.pinned) {
+      el.classList.add('is-pinned');
+    } else {
+      const titleEl = document.createElement('span');
+      titleEl.className = 'loose-nav-tab-title';
+      titleEl.textContent = tab.title || tab.url || 'Pestaña';
+      el.appendChild(titleEl);
+    }
 
-    appendLooseNavClose(el, 'Cerrar pestaña', () => {
-      window.usualDesk.looseNavCloseTab(tab.id).catch(() => {});
+    if (tab.audible || tab.muted) {
+      const audio = document.createElement('button');
+      audio.type = 'button';
+      audio.className = 'loose-nav-tab-audio';
+      const audioLabel = tab.muted ? 'Activar sonido del sitio' : 'Silenciar sitio';
+      audio.setAttribute('aria-label', audioLabel);
+      audio.setAttribute('data-tooltip', audioLabel);
+      audio.setAttribute('data-tooltip-placement', 'bottom');
+      audio.innerHTML = tab.muted ? LOOSE_NAV_MUTED_SVG : LOOSE_NAV_AUDIBLE_SVG;
+      audio.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        window.usualDesk.looseNavToggleMute(tab.id).catch(() => {});
+      });
+      el.appendChild(audio);
+    }
+
+    if (!tab.pinned) {
+      appendLooseNavClose(el, 'Cerrar pestaña', () => {
+        window.usualDesk.looseNavCloseTab(tab.id).catch(() => {});
+      });
+    }
+
+    el.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      window.usualDesk.looseNavOpenTabMenu(tab.id, ev.clientX, ev.clientY).catch(() => {});
     });
 
     el.addEventListener('click', () => {
-      if (tab.isActive) {
-        openLooseNavComposer('edit');
-        return;
-      }
-      if (looseNavComposer) cancelLooseNavComposer();
+      if (tab.isActive) return;
       window.usualDesk.looseNavSelectTab(tab.id).catch(() => {});
     });
     el.addEventListener('auxclick', (e) => {
@@ -4805,18 +4734,110 @@ function renderLooseNavTabs(state) {
     looseNavTabsStrip.appendChild(el);
   }
 
-  if (composerNode && !editingActive) {
-    looseNavTabsStrip.appendChild(composerNode);
-    looseNavTabsStrip.scrollLeft = looseNavTabsStrip.scrollWidth;
-  } else {
-    looseNavTabsStrip
-      .querySelector('.loose-nav-tab.is-active, .loose-nav-tab.is-composing')
-      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }
+  looseNavTabsStrip
+    .querySelector('.loose-nav-tab.is-active')
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 let looseNavAccountBusy = '';
 let looseNavAccountsSig = '';
+/** Modo edición del riel de perfiles: se reordenan arrastrando, la cruz quita y el "+" agrega. */
+let looseNavProfilesEditMode = false;
+/** @type {{ el: HTMLElement, pointerId: number, startX: number, active: boolean } | null} */
+let looseNavProfileDrag = null;
+let looseNavAccountsRenderPending = false;
+const looseNavProfilesEditBtn = document.getElementById('loose-nav-profiles-edit');
+const looseNavProfilesDoneBtn = document.getElementById('loose-nav-profiles-done');
+function setLooseNavProfilesEditMode(on) {
+  const next = on === true;
+  if (looseNavProfilesEditMode === next) return;
+  looseNavProfilesEditMode = next;
+  if (looseNavProfilesEditBtn) looseNavProfilesEditBtn.hidden = next;
+  if (looseNavProfilesDoneBtn) looseNavProfilesDoneBtn.hidden = !next;
+  looseNavAccountsRail?.classList.toggle('is-editing', next);
+  document.documentElement.setAttribute('data-profiles-edit', next ? 'on' : 'off');
+  // Mientras se editan los perfiles la página no se ve, como la home en los accesos.
+  window.usualDesk.setUrlPromptOpen?.(next)?.catch?.(() => {});
+  renderLooseNavAccounts(looseNavState);
+}
+
+function looseNavReorderableProfiles() {
+  return looseNavAccountsRail
+    ? [...looseNavAccountsRail.querySelectorAll('.loose-nav-account[data-partition]')]
+    : [];
+}
+
+function moveLooseNavProfileToPointer(btn, x) {
+  const others = looseNavReorderableProfiles().filter((el) => el !== btn);
+  const next = others.find((el) => {
+    const r = el.getBoundingClientRect();
+    return x < r.left + r.width / 2;
+  });
+  if (next) {
+    if (btn.nextElementSibling !== next) looseNavAccountsRail.insertBefore(btn, next);
+    return;
+  }
+  const last = others[others.length - 1];
+  if (last && last.nextElementSibling !== btn) last.after(btn);
+}
+
+function bindLooseNavProfileReorder(btn) {
+  btn.addEventListener('pointerdown', (ev) => {
+    if (!looseNavProfilesEditMode || ev.button !== 0 || looseNavProfileDrag) return;
+    if (ev.target instanceof Element && ev.target.closest('.loose-nav-account-remove')) return;
+    const drag = { el: btn, pointerId: ev.pointerId, startX: ev.clientX, active: false };
+    looseNavProfileDrag = drag;
+    const onMove = (e) => {
+      if (e.pointerId !== drag.pointerId) return;
+      if (!drag.active) {
+        if (Math.abs(e.clientX - drag.startX) < 5) return;
+        drag.active = true;
+        btn.classList.add('is-dragging');
+        document.documentElement.classList.add('is-shortcut-reordering');
+      }
+      if (e.cancelable) e.preventDefault();
+      moveLooseNavProfileToPointer(btn, e.clientX);
+    };
+    const finish = (e) => {
+      if (e && e.pointerId != null && e.pointerId !== drag.pointerId) return;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      window.removeEventListener('blur', finish);
+      btn.classList.remove('is-dragging');
+      document.documentElement.classList.remove('is-shortcut-reordering');
+      looseNavProfileDrag = null;
+      if (drag.active) {
+        const order = looseNavReorderableProfiles().map((el) => el.dataset.partition);
+        window.usualDesk.looseNavReorderProfiles?.(order).catch(() => {});
+      }
+      if (looseNavAccountsRenderPending) {
+        looseNavAccountsRenderPending = false;
+        renderLooseNavAccounts(looseNavState);
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    window.addEventListener('blur', finish);
+  });
+}
+
+function looseNavAddProfileButton() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'shell-shortcut-item strip-add-shortcut strip-add-inline strip-add-secondary';
+  btn.innerHTML =
+    '<span class="shell-shortcut-icon-wrap" aria-hidden="true">' +
+    '<svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">' +
+    '<path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' +
+    '</svg></span><span>Agregar perfil</span>';
+  btn.addEventListener('click', () => {
+    const r = btn.getBoundingClientRect();
+    window.usualDesk.looseNavOpenAddProfileMenu?.(r.left, r.bottom).catch(() => {});
+  });
+  return btn;
+}
 
 const LOOSE_NAV_INCOGNITO_SVG =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
@@ -4842,11 +4863,16 @@ async function runLooseNavAccountAction(key, el, action) {
 }
 
 function looseNavAccountButton({
-  key, label, tooltip, avatar, seed, incognito, active, isDefault, count = 0, onClick, onSetDefault,
+  key, label, tooltip, avatar, seed, incognito, active, isDefault, count = 0, partition, onClick, onSetDefault, onRemove,
 }) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'loose-nav-account';
+  if (partition) btn.dataset.partition = partition;
+  if (looseNavProfilesEditMode) {
+    const hints = [partition ? 'arrastrá para moverlo' : '', onRemove ? 'la cruz lo quita' : ''].filter(Boolean);
+    tooltip = hints.length ? `${label} · ${hints.join(' · ')}` : label;
+  }
   btn.title = tooltip;
   btn.setAttribute('aria-label', tooltip);
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -4877,11 +4903,27 @@ function looseNavAccountButton({
     badge.textContent = count > 99 ? '99+' : String(count);
     btn.appendChild(badge);
   }
-  btn.addEventListener('click', () => runLooseNavAccountAction(key, btn, onClick));
+  if (looseNavProfilesEditMode && onRemove) {
+    const remove = document.createElement('span');
+    remove.className = 'loose-nav-account-remove';
+    remove.title = `Quitar ${label}`;
+    remove.innerHTML = LOOSE_NAV_REMOVE_SVG;
+    btn.appendChild(remove);
+  }
+  if (looseNavProfilesEditMode && partition) bindLooseNavProfileReorder(btn);
+  btn.addEventListener('click', (ev) => {
+    if (!looseNavProfilesEditMode) {
+      runLooseNavAccountAction(key, btn, onClick);
+      return;
+    }
+    if (onRemove && ev.target instanceof Element && ev.target.closest('.loose-nav-account-remove')) {
+      runLooseNavAccountAction(key, btn, onRemove);
+    }
+  });
   if (onSetDefault) {
     btn.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
-      if (isDefault) return;
+      if (isDefault || looseNavProfilesEditMode) return;
       runLooseNavAccountAction(key, btn, onSetDefault);
     });
   }
@@ -4900,19 +4942,19 @@ function renderLooseNavAccounts(state) {
   const counts = state.tabCounts || {};
   const defaultPartition = (state.defaultProfile && state.defaultProfile.partition) || '';
   const show = !!state.active;
+  if (looseNavProfileDrag) {
+    looseNavAccountsRenderPending = true;
+    return;
+  }
   const sig = show
-    ? JSON.stringify([state.activePartition, defaultPartition, looseNavAccountBusy, counts, accounts, chrome])
+    ? JSON.stringify([
+      state.activePartition, defaultPartition, looseNavAccountBusy, looseNavProfilesEditMode, counts, accounts, chrome,
+    ])
     : '';
   if (sig === looseNavAccountsSig) return;
   looseNavAccountsSig = sig;
   looseNavAccountsRail.innerHTML = '';
-  if (looseNavOmniboxProfile) looseNavOmniboxProfile.innerHTML = '';
   if (!show) return;
-
-  const leadPartition = accounts.some((a) => a.partition === state.activePartition)
-    ? state.activePartition
-    : defaultPartition;
-  let othersCount = 0;
 
   for (const a of accounts) {
     const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
@@ -4930,24 +4972,14 @@ function renderLooseNavAccounts(state) {
       active: a.partition === state.activePartition,
       isDefault,
       count,
+      partition: a.partition,
       onClick: () => window.usualDesk.looseNavUseAccount({ partition: a.partition }),
       onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ partition: a.partition }),
+      onRemove: a.incognito ? null : () => window.usualDesk.looseNavRemoveProfile({ partition: a.partition }),
     };
-    const btn = looseNavAccountButton(opts);
-    if (a.partition === leadPartition && looseNavOmniboxProfile) {
-      looseNavOmniboxProfile.appendChild(btn);
-    } else {
-      looseNavAccountsRail.appendChild(btn);
-      othersCount += 1;
-    }
+    looseNavAccountsRail.appendChild(looseNavAccountButton(opts));
   }
   if (chrome.length) {
-    if (othersCount) {
-      const sep = document.createElement('span');
-      sep.className = 'loose-nav-accounts-sep';
-      sep.setAttribute('aria-hidden', 'true');
-      looseNavAccountsRail.appendChild(sep);
-    }
     for (const c of chrome) {
       const who = c.email || c.name;
       const opts = {
@@ -4959,10 +4991,12 @@ function renderLooseNavAccounts(state) {
         active: false,
         onClick: () => window.usualDesk.looseNavUseAccount({ chromeDirectory: c.directory }),
         onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ chromeDirectory: c.directory }),
+        onRemove: () => window.usualDesk.looseNavRemoveProfile({ chromeDirectory: c.directory }),
       };
       looseNavAccountsRail.appendChild(looseNavAccountButton(opts));
     }
   }
+  if (looseNavProfilesEditMode) looseNavAccountsRail.appendChild(looseNavAddProfileButton());
 }
 
 function looseNavDisplayUrl(state) {
@@ -4970,10 +5004,106 @@ function looseNavDisplayUrl(state) {
   return /^about:blank/i.test(url) ? '' : url;
 }
 
-/**
- * Barra de la franja: muestra la URL de la pestaña activa. Lo que se escribe se abre
- * en una pestaña nueva del perfil seleccionado, a la derecha de la activa.
- */
+function looseNavOmniboxPartition() {
+  return looseNavState.activePartition
+    || (looseNavState.activeProfile && looseNavState.activeProfile.partition)
+    || '';
+}
+
+/** Navega en la pestaña activa; si no hay ninguna, abre una con el perfil seleccionado. */
+function looseNavOmniboxGo(value) {
+  if (looseNavState.tabs.some((t) => t.isActive)) return window.usualDesk.looseNavNavigate(value);
+  return window.usualDesk.looseNavNewTab(value, { partition: looseNavOmniboxPartition(), nextToActive: true });
+}
+
+/** El acceso abre con la misma sesión que el perfil de la pestaña: `persist:<sessionId>`. */
+function looseNavTabSessionId(tab) {
+  return String((tab && tab.partition) || '').replace(/^persist:/, '');
+}
+
+function looseNavActivePage() {
+  const tab = looseNavState.tabs.find((t) => t.isActive);
+  if (!tab || !/^https?:\/\//i.test(String(tab.url || ''))) return null;
+  return tab;
+}
+
+function findShortcutForLooseNavTab(tab) {
+  const key = normalizeUrlKey(tab.url);
+  const sessionId = looseNavTabSessionId(tab);
+  return shortcuts.find(
+    (s) => s.type === 'web' && normalizeUrlKey(s.url || '') === key && (s.sessionId || '') === sessionId,
+  ) || null;
+}
+
+function syncLooseNavAddShortcutBtn() {
+  if (!looseNavAddShortcutBtn) return;
+  const tab = looseNavState.active ? looseNavActivePage() : null;
+  looseNavAddShortcutBtn.hidden = !tab;
+  if (!tab) return;
+  const saved = !!findShortcutForLooseNavTab(tab);
+  looseNavAddShortcutBtn.classList.toggle('is-saved', saved);
+  looseNavAddShortcutBtn.querySelector('.loose-nav-add-shortcut-label').textContent = saved ? 'Fijado' : 'Fijar';
+  const profile = tab.profileLabel ? ` con el perfil ${tab.profileLabel}` : '';
+  const hint = saved ? 'Esta página ya está fijada en inplaize' : `Fijar esta página en inplaize${profile}`;
+  looseNavAddShortcutBtn.setAttribute('aria-label', hint);
+  looseNavAddShortcutBtn.dataset.tooltip = hint;
+}
+
+/** El favicon sube del botón al logo de inplaize: muestra adónde va a parar la página. */
+function flyLooseNavPageToHome(tab) {
+  const from = looseNavAddShortcutBtn?.querySelector('.loose-nav-add-shortcut-icon');
+  const target = document.getElementById('dock-home-btn');
+  if (!from || !target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return Promise.resolve();
+  }
+  const a = from.getBoundingClientRect();
+  const b = target.getBoundingClientRect();
+  const size = 20;
+  const fav = /^(https?:|data:image\/)/i.test(String(tab.favicon || '')) ? tab.favicon : '';
+  const ghost = document.createElement(fav ? 'img' : 'span');
+  ghost.className = 'loose-nav-fly-ghost';
+  if (fav) ghost.src = fav;
+  ghost.style.left = `${a.left + a.width / 2 - size / 2}px`;
+  ghost.style.top = `${a.top + a.height / 2 - size / 2}px`;
+  document.body.appendChild(ghost);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+  const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  const flight = ghost.animate(
+    [
+      { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+      { transform: `translate(${dx * 0.35}px, ${dy * 0.75}px) scale(1.15)`, opacity: 1, offset: 0.45 },
+      { transform: `translate(${dx}px, ${dy}px) scale(0.4)`, opacity: 0.2 },
+    ],
+    { duration: 380, easing: 'cubic-bezier(0.4, 0, 0.2, 1)' },
+  );
+  return flight.finished
+    .catch(() => {})
+    .then(() => {
+      ghost.remove();
+      return target
+        .animate(
+          [{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }],
+          { duration: 180, easing: 'ease-out' },
+        )
+        .finished.catch(() => {});
+    });
+}
+
+/** Abre el alta de acceso con la página actual y su perfil de Google ya cargados. */
+async function addLooseNavPageShortcut() {
+  const tab = looseNavActivePage();
+  if (!tab || findShortcutForLooseNavTab(tab)) return;
+  await flyLooseNavPageToHome(tab);
+  const title = String(tab.title || '').trim();
+  return openAddShortcutForPage({
+    url: tab.url,
+    title: ensureUniqueDisplayName(title && title !== 'Cargando…' ? title : suggestNameFromUrl(tab.url)),
+    sessionId: looseNavTabSessionId(tab),
+    favicon: tab.favicon,
+  });
+}
+
+/** Barra de dirección bajo las pestañas: muestra la URL de la pestaña activa y navega en ella. */
 function renderLooseNavOmnibox(state) {
   if (!looseNavOmniboxInput) return;
   const profile = state.activeProfile || state.defaultProfile || null;
@@ -4986,50 +5116,25 @@ function renderLooseNavOmnibox(state) {
   if (document.activeElement !== looseNavOmniboxInput) {
     looseNavOmniboxInput.value = looseNavDisplayUrl(state);
   }
-}
-
-/** La primera pestaña arranca en el mismo x que la barra de arriba. */
-function alignLooseNavTabsToOmnibox() {
-  if (!looseNavControls || !looseNavTabsStrip || !looseNavOmnibox) return;
-  const target = looseNavOmnibox.getBoundingClientRect();
-  if (!target.width || looseNavBar?.classList.contains('hidden')) return;
-  const buttons = looseNavControls.children;
-  if (!buttons.length) return;
-  const content = buttons[buttons.length - 1].getBoundingClientRect().right
-    - buttons[0].getBoundingClientRect().left;
-  const delta = target.left - looseNavTabsStrip.getBoundingClientRect().left;
-  const width = Math.max(content, looseNavControls.getBoundingClientRect().width + delta);
-  looseNavControls.style.width = `${Math.round(width)}px`;
-}
-
-function initLooseNavTabsAlignment() {
-  if (!looseNavOmnibox) return;
-  const schedule = () => requestAnimationFrame(alignLooseNavTabsToOmnibox);
-  const ro = new ResizeObserver(schedule);
-  ro.observe(looseNavOmnibox);
-  if (looseNavControls) ro.observe(looseNavControls);
-  looseNavOmnibox.addEventListener('transitionend', schedule);
-  window.addEventListener('resize', schedule);
+  syncLooseNavAddShortcutBtn();
 }
 
 function initLooseNavOmnibox() {
   if (!looseNavOmnibox || !looseNavOmniboxInput) return;
-  initLooseNavTabsAlignment();
   looseNavOmnibox.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const val = looseNavOmniboxInput.value.trim();
     if (!val || !looseNavState.active) return;
     looseNavOmniboxInput.blur();
-    if (val === looseNavDisplayUrl(looseNavState)) return;
     try {
-      const partition = looseNavState.activePartition
-        || (looseNavState.activeProfile && looseNavState.activeProfile.partition)
-        || '';
-      await window.usualDesk.looseNavNewTab(val, { partition, nextToActive: true });
+      await looseNavOmniboxGo(val);
     } catch {
       looseNavOmniboxInput.value = val;
       looseNavOmniboxInput.focus();
     }
+  });
+  looseNavAddShortcutBtn?.addEventListener('click', () => {
+    addLooseNavPageShortcut().catch(() => {});
   });
   looseNavOmnibox.addEventListener('mousedown', (ev) => {
     if (ev.target !== looseNavOmnibox) return;
@@ -5040,10 +5145,7 @@ function initLooseNavOmnibox() {
     const value = String(val || '').trim();
     if (!value || !looseNavState.active) return;
     looseNavOmniboxInput.blur();
-    const partition = looseNavState.activePartition
-      || (looseNavState.activeProfile && looseNavState.activeProfile.partition)
-      || '';
-    window.usualDesk.looseNavNewTab(value, { partition, nextToActive: true }).catch(() => {});
+    looseNavOmniboxGo(value).catch(() => {});
   };
   looseNavOmniboxInput.addEventListener('focus', () => {
     looseNavOmniboxInput.select();
@@ -5101,6 +5203,7 @@ function renderLooseNavBar(state) {
   }
 
   const show = !!looseNavState.active;
+  if (!show) setLooseNavProfilesEditMode(false);
   looseNavBar.classList.toggle('hidden', !show);
   if (looseNavSurface) looseNavSurface.classList.toggle('hidden', !show);
   document.documentElement.setAttribute('data-loose-nav', show ? 'on' : 'off');
@@ -5124,7 +5227,6 @@ function renderLooseNavBar(state) {
   if (show) {
     renderLooseNavTabs(looseNavState);
     scheduleLooseNavViewportSync();
-    if (!wasLoose) requestAnimationFrame(alignLooseNavTabsToOmnibox);
     if (!wasLoose && document.documentElement.getAttribute('data-home-menu-open') === 'on') {
       const toggle = document.getElementById('shortcuts-edit-toggle');
       const editOn = !!(
@@ -5134,8 +5236,6 @@ function renderLooseNavBar(state) {
       window.usualDesk.setMenuOverlayOpen?.(true, editOn);
     }
   } else {
-    looseNavComposer = null;
-    looseNavComposerFocusGen += 1;
     lastSentViewportBounds = null;
     if (wasLoose) window.usualDesk.hideMenuOverlay?.();
   }
@@ -5146,7 +5246,17 @@ function initLooseNavUiEvents() {
   if (!looseNavBar) return;
 
   looseNavNewTabBtn?.addEventListener('click', () => {
-    openLooseNavComposer();
+    openLooseNavBlankTab();
+  });
+
+  looseNavProfilesEditBtn?.addEventListener('click', () => setLooseNavProfilesEditMode(true));
+  looseNavProfilesDoneBtn?.addEventListener('click', () => setLooseNavProfilesEditMode(false));
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !looseNavProfilesEditMode || looseNavProfileDrag) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (target && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    ev.preventDefault();
+    setLooseNavProfilesEditMode(false);
   });
 
   initLooseNavOmnibox();
@@ -5170,6 +5280,14 @@ function initLooseNavUiEvents() {
     if (msg.command === 'find-open') looseNavFindBar?.open();
     else if (msg.command === 'find-result') looseNavFindBar?.showResult(msg.payload);
     else if (msg.command === 'downloads') goToDockWelcomeHome('downloads').catch(() => {});
+    else if (msg.command === 'add-shortcut') {
+      const tab = looseNavActivePage();
+      openAddShortcutForPage({
+        ...msg.payload,
+        sessionId: looseNavTabSessionId(tab),
+        favicon: tab && tab.url === msg.payload?.url ? tab.favicon : '',
+      }).catch(() => {});
+    }
   });
   document.addEventListener('keydown', (ev) => {
     if (!looseNavState.active || !looseNavFindBar) return;
@@ -5180,22 +5298,28 @@ function initLooseNavUiEvents() {
   });
 
   const runLooseNavShortcut = (action) => {
-    if (action === 'edit-address') openLooseNavComposer('edit');
-    else if (action === 'new-tab') openLooseNavComposer('new');
+    if (action === 'edit-address') focusLooseNavOmnibox();
+    else if (action === 'new-tab') openLooseNavBlankTab();
+    else if (action === 'exit-profiles-edit') setLooseNavProfilesEditMode(false);
   };
   window.usualDesk.onLooseNavShortcut?.(runLooseNavShortcut);
   document.addEventListener('keydown', (ev) => {
     if (!looseNavState.active) return;
     const target = ev.target instanceof Element ? ev.target : null;
-    if (target && !target.classList.contains('loose-nav-tab-url')
+    if (target && target !== looseNavOmniboxInput
       && target.closest('input, textarea, select, [contenteditable="true"]')) return;
     const mod = ev.ctrlKey || ev.metaKey;
     const key = String(ev.key || '').toLowerCase();
     let action = '';
     if ((mod && key === 'l') || (ev.altKey && key === 'd') || key === 'f6') action = 'edit-address';
+    else if (mod && ev.shiftKey && key === 't') action = 'reopen-tab';
     else if (mod && key === 't') action = 'new-tab';
     if (!action) return;
     ev.preventDefault();
+    if (action === 'reopen-tab') {
+      window.usualDesk.looseNavReopenClosedTab?.().catch(() => {});
+      return;
+    }
     runLooseNavShortcut(action);
   });
 

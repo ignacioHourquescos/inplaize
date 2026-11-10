@@ -248,6 +248,10 @@
       }
       case 'taskList':
         return `<ul class="tasks">${htmlBlocks(node.content)}</ul>`;
+      case 'columns':
+        return `<div class="cols">${htmlBlocks(node.content)}</div>`;
+      case 'column':
+        return `<div class="col">${htmlBlocks(node.content)}</div>`;
       case 'listItem':
         return `<li>${htmlBlocks(node.content)}</li>`;
       case 'taskItem': {
@@ -285,6 +289,8 @@
     li.task.is-done > div { color: #8c959f; text-decoration: line-through; }
     .box { flex: none; width: 13px; height: 13px; margin-top: 4px; border: 1.5px solid #8c959f; border-radius: 3px; font-size: 9px; line-height: 10px; text-align: center; }
     figure { margin: 10px 0; break-inside: avoid; }
+    .cols { display: flex; gap: 18px; align-items: flex-start; margin: 0 0 8px; break-inside: avoid; }
+    .col { flex: 1 1 0; min-width: 0; }
     img { display: block; max-width: 100%; height: auto; border-radius: 4px; }
   `;
 

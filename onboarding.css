@@ -891,24 +891,14 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   overflow: hidden;
 }
 
-/* Atajo: el teclado se pliega al pasar a la segunda parte. */
 .onb-below .onboarding-hotkey-stack {
   gap: 8px;
 }
 
+/* Cambiar las teclas: el teclado baja junto a los selectores. */
 .onb-below .kb-with-check {
   width: min(100%, 350px);
   margin-bottom: 14px;
-  transition:
-    max-height 260ms ease,
-    opacity 200ms ease,
-    margin-bottom 260ms ease;
-}
-
-.onb-below .kb-with-check.is-leaving {
-  overflow: hidden;
-  margin-bottom: 0;
-  opacity: 0;
 }
 
 .onb-below .onboarding-hotkey-keys {
@@ -919,49 +909,51 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   margin-bottom: 0;
 }
 
-/* Atajo, primera parte: el teclado flota encima de la computadora (que se ve de fondo).
-   Comparte celda con el monitor y se mide con el mismo ancho. */
-.onb-monitor-slot > .onboarding-monitor,
-.onb-monitor-slot > .onb-kb-overlay {
-  grid-area: 1 / 1;
-}
-
-.onb-kb-overlay {
-  z-index: 3;
-  justify-self: center;
-  align-self: center;
-  translate: 0 -4%;
-  width: min(100cqw, calc(min(100cqw, max(0px, 100cqh * 560 / 354), 880px) * 1.1));
-  min-width: 0;
-  pointer-events: none;
-  animation: onb-kb-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.onb-kb-overlay .kb-with-check {
+/* Atajo: debajo de la computadora, las teclas del atajo y, al lado, el teclado
+   sin marco. AsÃ­ la pantalla queda del mismo tamaÃ±o que en los otros pasos. */
+.onb-hotkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
   width: 100%;
-  max-width: none;
+  height: 100%;
+  animation: onb-hotkey-row-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Mientras el teclado estÃ¡ arriba no hay computadora de fondo: aparece en la parte 2. */
-.onb-stage.is-keys .onb-monitor-slot > .onboarding-monitor {
-  visibility: hidden;
+.onb-hotkey-row .onboarding-hotkey-stack {
+  flex: 0 0 auto;
 }
 
-.onb-stage.is-desk .onb-monitor-slot > .onboarding-monitor {
-  animation: onb-monitor-in 360ms ease both;
+.onb-hotkey-row .kb-with-check {
+  flex: 0 0 auto;
+  /* El alto de la zona manda: con este ancho el teclado entra justo. */
+  width: min(50%, calc(var(--below-h) * 2.95));
+  margin-bottom: 0;
 }
 
-@keyframes onb-monitor-in {
+/* Sin marco ni fondo: el teclado es una referencia, no una pieza mÃ¡s. */
+.onb-hotkey-row .kb-shell {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+/* A este tamaÃ±o las palabras (Caps, Enter, Ctrl) no entran con el cuerpo normal
+   y les salÃ­a el puntito suspensivo. */
+.onb-hotkey-row .kb-key.is-word {
+  font-size: max(6.5px, calc(var(--ku) * 0.3));
+  letter-spacing: -0.03em;
+}
+
+.onb-hotkey-row .kb-key span {
+  padding: 0;
+}
+
+@keyframes onb-hotkey-row-in {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-/* El teclado queda centrado en vertical entre las manitos (que ocupan los primeros ~28px
-   de la zona) y las teclas del atajo de abajo. */
-.onb-stage.is-keys .onb-kb-overlay {
-  align-self: center;
-  margin-top: 28px;
-  translate: 0 0;
 }
 
 .onboarding-bubble[data-kind][data-step-id='hotkey'] .onboarding-bubble-header {
@@ -969,24 +961,26 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   z-index: 2;
 }
 
-/* Contador del atajo: una manito mÃ¡s por cada apretada (1, 2 y 3 dedos).
-   Va fuera del flujo del encabezado, justo debajo: no mueve el tÃ­tulo ni el resto. */
-.onboarding-hotkey-count {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+/* Contador del atajo: una manito mÃ¡s por cada apretada. Va al lado del copy,
+   a su derecha, sin empujarlo a otra lÃ­nea. */
+.onboarding-bubble-body.has-count {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  margin-top: -2px;
+  gap: 12px;
+}
+
+.onboarding-hotkey-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
   pointer-events: none;
 }
 
 .onboarding-hotkey-hand {
   display: inline-block;
-  font-size: 36px;
+  font-size: 26px;
   line-height: 1;
   filter: grayscale(1);
   opacity: 0.4;
@@ -1015,37 +1009,6 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 
 @media (prefers-reduced-motion: reduce) {
   .onboarding-hotkey-hand.is-pop { animation: none; }
-}
-
-.onb-kb-overlay .kb-shell {
-  max-width: none;
-  box-shadow: none;
-}
-
-.onb-kb-overlay.is-leaving {
-  animation: onb-kb-out 260ms ease both;
-}
-
-@keyframes onb-kb-out {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(14px) scale(0.97);
-  }
-}
-
-@keyframes onb-kb-in {
-  from {
-    opacity: 0;
-    transform: translateY(28px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 /* Cambiar el atajo necesita su propio lugar: ahi la zona de abajo crece. */

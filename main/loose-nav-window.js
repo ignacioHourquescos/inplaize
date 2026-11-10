@@ -6,7 +6,9 @@
  * las coordenadas que el renderer del dock envía por IPC (`loose-nav-set-viewport-bounds`).
  */
 
-const { BrowserView, shell, ipcMain } = require('electron');
+const path = require('path');
+const { pathToFileURL } = require('url');
+const { app, BrowserView, Menu, nativeImage, shell, ipcMain } = require('electron');
 const { LOOSE_NAV_NEW_TAB_URL } = require('./constants');
 const { getDockWindow } = require('./dock-window-bridge');
 const { setEmbeddedPageBackground } = require('./embedded-page-background');
@@ -15,6 +17,7 @@ const { isLoopbackHost, withScheme } = require('./load-web-url');
 const browseProfiles = require('./browse-profiles');
 const historyStore = require('./history-store');
 const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
+const passwordManager = require('./password-manager');
 
 /**
  * Registra una visita en el historial de la app (alimenta las sugerencias de la
@@ -50,11 +53,20 @@ function recordHistoryVisit(url, wc) {
  *   canGoForward: boolean,
  *   lastActiveAt: number,
  *   sleeping: boolean,
+ *   pinned: boolean,
+ *   freshLogin?: boolean,
  * }} LooseTab
  */
 
 /** @type {Map<string, LooseTab>} */
 const tabs = new Map();
+/** Sitios silenciados con "Silenciar sitio": aplica a todas sus pestañas, también las nuevas. */
+/** @type {Set<string>} */
+const mutedSites = new Set();
+const CLOSED_TABS_MAX = 10;
+/** Cerradas recientemente, la última primero. */
+/** @type {Array<{ url: string, title: string, partition: string }>} */
+const closedTabs = [];
 /** @type {string | null} */
 let activeTabId = null;
 /** Última pestaña usada en cada sesión, para volver a ella desde el riel. */
@@ -116,6 +128,31 @@ function refreshProfilesInBackground() {
     .catch(() => {});
 }
 
+/** @type {ReturnType<typeof setTimeout> | null} */
+let accountRefreshTimer = null;
+
+/**
+ * Tras iniciar sesión en Google en una sesión que todavía no tiene cuenta,
+ * se vuelve a leer para que el perfil aparezca en el riel con su foto.
+ * @param {LooseTab} tab
+ */
+function maybeRefreshAccountsAfterLogin(tab) {
+  if (tab.partition === browseProfiles.guestPartition()) return;
+  let host = '';
+  try {
+    host = new URL(tab.url).hostname;
+  } catch {
+    return;
+  }
+  if (!/(^|\.)google\.com$/i.test(host)) return;
+  if (cachedProfiles().rail.accounts.some((a) => a.partition === tab.partition && a.email)) return;
+  if (accountRefreshTimer) clearTimeout(accountRefreshTimer);
+  accountRefreshTimer = setTimeout(() => {
+    accountRefreshTimer = null;
+    refreshProfilesInBackground();
+  }, 1500);
+}
+
 function buildStatePayload() {
   const cache = cachedProfiles();
   const labelOf = (partition) => {
@@ -128,6 +165,8 @@ function buildStatePayload() {
   const tabCounts = {};
   for (const tab of tabs.values()) {
     tabCounts[tab.partition] = (tabCounts[tab.partition] || 0) + 1;
+    const wc = tab.view.webContents;
+    const alive = !tab.sleeping && !!wc && !wc.isDestroyed();
     items.push({
       id: tab.id,
       partition: tab.partition,
@@ -141,6 +180,9 @@ function buildStatePayload() {
       canGoBack: !!tab.canGoBack,
       canGoForward: !!tab.canGoForward,
       isActive: tab.id === activeTabId,
+      pinned: !!tab.pinned,
+      audible: alive && wc.isCurrentlyAudible(),
+      muted: mutedSites.has(siteKeyOf(tab)),
     });
   }
   const active = activeTabId ? tabs.get(activeTabId) : null;
@@ -159,8 +201,17 @@ function buildStatePayload() {
       avatar: browseProfiles.avatarFor(partition),
     });
   }
-  const defaultIdx = railAccounts.findIndex((a) => a.partition === fallback);
-  if (defaultIdx > 0) railAccounts.unshift(...railAccounts.splice(defaultIdx, 1));
+  const order = browseProfiles.profileOrder();
+  if (order.length) {
+    const rank = (partition) => {
+      const i = order.indexOf(partition);
+      return i < 0 ? order.length : i;
+    };
+    railAccounts.sort((a, b) => rank(a.partition) - rank(b.partition));
+  } else {
+    const defaultIdx = railAccounts.findIndex((a) => a.partition === fallback);
+    if (defaultIdx > 0) railAccounts.unshift(...railAccounts.splice(defaultIdx, 1));
+  }
   return {
     active: modeActive,
     tabs: items,
@@ -233,6 +284,30 @@ function setUrlPromptOpen(open) {
   urlPromptOpen = open === true;
   if (urlPromptOpen) detachAllFromDock();
   else if (modeActive) attachActiveViewOnly();
+}
+
+/**
+ * Para abrir un modal HTML "sobre" la página: se saca una foto de la pestaña
+ * activa (el dock la pone de fondo) y se despega la vista nativa, que si no lo tapa.
+ * @param {boolean} cover
+ * @returns {Promise<string>} data URL de la foto, o '' si no hay página
+ */
+async function coverActivePage(cover) {
+  if (!cover) {
+    setUrlPromptOpen(false);
+    return '';
+  }
+  let shot = '';
+  const wc = activeTabWebContents();
+  if (wc && modeActive) {
+    try {
+      shot = (await wc.capturePage()).toDataURL();
+    } catch {
+      shot = '';
+    }
+  }
+  setUrlPromptOpen(true);
+  return shot;
 }
 
 function attachActiveViewOnly() {
@@ -333,8 +408,28 @@ function destroyTabView(tabId) {
   tabs.delete(tabId);
 }
 
+/** @param {LooseTab} tab */
+function siteKeyOf(tab) {
+  try {
+    const { protocol, host } = new URL(tab.url);
+    if ((protocol === 'http:' || protocol === 'https:') && host) return host;
+  } catch {
+    /* sin URL válida: la pestaña es su propio "sitio" */
+  }
+  return `tab:${tab.id}`;
+}
+
+/** @param {LooseTab} tab */
+function applySiteMute(tab) {
+  const wc = tab.view.webContents;
+  if (tab.sleeping || !wc || wc.isDestroyed()) return;
+  wc.setAudioMuted(mutedSites.has(siteKeyOf(tab)));
+}
+
 function attachTabEvents(tab) {
   const wc = tab.view.webContents;
+
+  wc.on('audio-state-changed', () => broadcastState());
 
   wc.on('page-title-updated', (_e, title) => {
     tab.title = String(title || '');
@@ -381,7 +476,9 @@ function attachTabEvents(tab) {
     } catch {
       /* noop */
     }
+    applySiteMute(tab);
     if (!/browse-guest/.test(String(tab.partition || ''))) recordHistoryVisit(tab.url, wc);
+    maybeRefreshAccountsAfterLogin(tab);
     broadcastState();
   });
 
@@ -419,10 +516,20 @@ function attachTabEvents(tab) {
     let action = '';
     if ((mod && key === 'l') || (input.alt && key === 'd') || key === 'f6') action = 'edit-address';
     else if (mod && key === 'w') action = 'close-tab';
+    else if ((mod && key === 'r') || key === 'f5') action = 'reload';
+    else if (mod && input.shift && key === 't') action = 'reopen-tab';
     if (!action) return;
     event.preventDefault();
     if (action === 'close-tab') {
       closeTab(tab.id);
+      return;
+    }
+    if (action === 'reopen-tab') {
+      reopenClosedTab().catch(() => {});
+      return;
+    }
+    if (action === 'reload') {
+      reloadTab(tab.id);
       return;
     }
     sendShortcutToDock(action);
@@ -445,6 +552,24 @@ const pageMenuContext = {
     });
   },
   newTab: () => sendShortcutToDock('new-tab'),
+  openIncognitoTab: () => {
+    openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: browseProfiles.guestPartition() }).catch(() => {});
+  },
+  profileMenu: () => profileMenuItem(),
+  recentlyClosed: () => closedTabs.map((t) => ({ title: t.title, url: t.url })),
+  reopenClosed: (index) => {
+    reopenClosedTab(index).catch(() => {});
+  },
+  addToShortcuts: (wc) => {
+    pageMenuContext.sendToChrome('add-shortcut', { url: wc.getURL(), title: wc.getTitle() });
+  },
+  openPasswordManager: () => passwordManager.openPasswordManager(getDockWindow()),
+  passwordSettings: () => passwordManager.settings(),
+  setPasswordSettings: (patch) => passwordManager.updateSettings(patch),
+  openHelp: () => {
+    const manual = path.join(app.getAppPath(), 'landing', 'manual', 'index.html');
+    pageMenuContext.openTab(pathToFileURL(manual).href).catch(() => {});
+  },
   sendToChrome: (command, payload) => {
     const dock = getDockWindow();
     if (!dock) return;
@@ -457,7 +582,7 @@ const pageMenuContext = {
   },
 };
 
-/** @param {'edit-address' | 'new-tab'} action */
+/** @param {'edit-address' | 'new-tab' | 'exit-profiles-edit'} action */
 function sendShortcutToDock(action) {
   const dock = getDockWindow();
   if (!dock) return;
@@ -483,6 +608,7 @@ function createLooseView(partition) {
       contextIsolation: true,
       sandbox: true,
       partition,
+      preload: passwordManager.PAGE_PRELOAD,
     },
   });
   setEmbeddedPageBackground(view);
@@ -495,6 +621,8 @@ function createLooseView(partition) {
  */
 function wireTab(tab, url) {
   attachTabEvents(tab);
+  // Una cuenta nueva arranca vacía a propósito: no se ofrece copiar otra sesión.
+  if (tab.freshLogin) return;
   try {
     require('./session-router').attachLoginSessionOffer(
       tab.view.webContents,
@@ -511,7 +639,7 @@ function wireTab(tab, url) {
  * Crea una pestaña y opcionalmente la activa. Si el modo está activo,
  * se ajusta el BrowserView inmediatamente.
  * @param {string} url
- * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions }} [opts]
+ * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions, afterId?: string, freshLogin?: boolean }} [opts]
  * @returns {Promise<string>} id de la pestaña creada
  */
 async function openTabFromUrl(url, opts = {}) {
@@ -532,6 +660,8 @@ async function openTabFromUrl(url, opts = {}) {
     canGoForward: false,
     lastActiveAt: Date.now(),
     sleeping: false,
+    pinned: false,
+    freshLogin: opts.freshLogin === true,
   };
   insertTab(id, tab, opts.afterId);
   wireTab(tab, url);
@@ -691,19 +821,45 @@ function selectTab(tabId) {
 /** Las pestañas nuevas van a la derecha, junto al "+", como en Chrome. */
 /** Sin `afterId` va al final; con `afterId`, justo a la derecha de esa pestaña. */
 function insertTab(id, tab, afterId) {
-  if (!afterId || !tabs.has(afterId)) {
-    tabs.set(id, tab);
-    return;
-  }
   const entries = [...tabs.entries()];
-  const idx = entries.findIndex(([key]) => key === afterId);
-  entries.splice(idx + 1, 0, [id, tab]);
+  const idx = afterId ? entries.findIndex(([key]) => key === afterId) : -1;
+  if (idx < 0) entries.push([id, tab]);
+  else entries.splice(idx + 1, 0, [id, tab]);
+  setTabOrder(entries);
+}
+
+/** Las fijadas siempre van primero; entre sí y entre las demás se respeta el orden. */
+/** @param {[string, LooseTab][]} entries */
+function setTabOrder(entries) {
+  const ordered = [...entries.filter(([, t]) => t.pinned), ...entries.filter(([, t]) => !t.pinned)];
   tabs.clear();
-  for (const [key, value] of entries) tabs.set(key, value);
+  for (const [key, value] of ordered) tabs.set(key, value);
+}
+
+/** @param {LooseTab} tab */
+function rememberClosedTab(tab) {
+  const wc = tab.view.webContents;
+  let url = tab.url;
+  try {
+    if (!tab.sleeping && wc && !wc.isDestroyed()) url = wc.getURL() || url;
+  } catch {
+    /* noop */
+  }
+  if (!/^https?:\/\//i.test(String(url || ''))) return;
+  closedTabs.unshift({ url, title: tab.title || url, partition: tab.partition });
+  closedTabs.length = Math.min(closedTabs.length, CLOSED_TABS_MAX);
+}
+
+/** @param {number} [index] 0 = la última que se cerró */
+function reopenClosedTab(index = 0) {
+  const [entry] = closedTabs.splice(index, 1);
+  if (!entry) return Promise.resolve(false);
+  return openTabFromUrl(entry.url, { partition: entry.partition }).then(() => true);
 }
 
 function closeTab(tabId) {
   if (!tabId || !tabs.has(tabId)) return false;
+  rememberClosedTab(tabs.get(tabId));
   const partition = tabs.get(tabId).partition;
   const idx = [...tabs.keys()].indexOf(tabId);
   const sessionIdx = tabIdsOfSession(partition).indexOf(tabId);
@@ -736,6 +892,157 @@ function closeTab(tabId) {
 
   if (modeActive) attachActiveViewOnly();
   broadcastState();
+  return true;
+}
+
+/** Pestañas que se ven en la tira: las de la misma sesión, en orden. */
+/** @param {LooseTab} tab */
+function stripTabsOf(tab) {
+  return [...tabs.values()].filter((t) => t.partition === tab.partition);
+}
+
+/** @param {LooseTab} tab */
+function duplicateTab(tab) {
+  return openTabFromUrl(tab.url || LOOSE_NAV_NEW_TAB_URL, { partition: tab.partition, afterId: tab.id });
+}
+
+/** @param {LooseTab} tab */
+function newTabRightOf(tab) {
+  return openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: tab.partition, afterId: tab.id });
+}
+
+/** @param {LooseTab} tab */
+function togglePinTab(tab) {
+  tab.pinned = !tab.pinned;
+  setTabOrder([...tabs.entries()]);
+  broadcastState();
+}
+
+/** @param {LooseTab} tab */
+function toggleMuteSite(tab) {
+  const key = siteKeyOf(tab);
+  if (mutedSites.has(key)) mutedSites.delete(key);
+  else mutedSites.add(key);
+  for (const t of tabs.values()) applySiteMute(t);
+  broadcastState();
+}
+
+/** Como Chrome: las fijadas no se cierran con "Cerrar las demás". */
+/** @param {LooseTab} tab */
+function closeOtherTabs(tab) {
+  selectTab(tab.id);
+  for (const t of stripTabsOf(tab)) {
+    if (t.id !== tab.id && !t.pinned) closeTab(t.id);
+  }
+}
+
+/** @param {LooseTab} tab */
+function closeTabsRightOf(tab) {
+  const strip = stripTabsOf(tab);
+  const right = strip.slice(strip.indexOf(tab) + 1);
+  if (right.some((t) => t.id === activeTabId)) selectTab(tab.id);
+  for (const t of right) closeTab(t.id);
+}
+
+/** @param {string} dataUrl */
+function menuIcon(dataUrl) {
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return undefined;
+  const img = nativeImage.createFromDataURL(dataUrl);
+  return img.isEmpty() ? undefined : img.resize({ width: 16, height: 16, quality: 'best' });
+}
+
+/**
+ * Fila del perfil en el menú de la página, como la de Chrome: el perfil de la
+ * pestaña y, adentro, los demás para cambiar.
+ * @returns {Electron.MenuItemConstructorOptions}
+ */
+function profileMenuItem() {
+  const { rail } = cachedProfiles();
+  const current = activeTabId ? tabs.get(activeTabId) : null;
+  const activePartition = current ? current.partition : defaultPartition();
+  const nameOf = (a) => (a.incognito ? `${a.name} (incógnito)` : a.name || a.email);
+  const activeAccount = rail.accounts.find((a) => a.partition === activePartition);
+  const activeName = activeAccount ? nameOf(activeAccount) : browseProfiles.labelFor(activePartition);
+  const signedIn = !!(activeAccount && activeAccount.email);
+  const escape = (text) => String(text || '').replace(/&/g, '&&');
+
+  /** @type {Electron.MenuItemConstructorOptions[]} */
+  const submenu = rail.accounts.map((a) => ({
+    label: escape(a.partition === activePartition ? `${nameOf(a)}   ✓` : nameOf(a)),
+    icon: menuIcon(a.avatar),
+    click: () => {
+      useAccount({ partition: a.partition }).catch(() => {});
+    },
+  }));
+  if (rail.chrome.length) {
+    submenu.push({ type: 'separator' });
+    for (const c of rail.chrome) {
+      submenu.push({
+        label: escape(`${c.email || c.name} · traer desde Chrome`),
+        icon: menuIcon(c.avatar),
+        click: () => {
+          useAccount({ chromeDirectory: c.directory }).catch(() => {});
+        },
+      });
+    }
+  }
+  submenu.push(
+    { type: 'separator' },
+    {
+      label: 'Elegir perfil para pestañas nuevas…',
+      click: () => {
+        browseProfiles
+          .pickProfile(getDockWindow())
+          .then(() => {
+            profilesCache = null;
+            broadcastState();
+          })
+          .catch(() => {});
+      },
+    }
+  );
+  return {
+    label: escape(signedIn ? `${activeName}   ·   Sesión iniciada` : activeName),
+    icon: menuIcon(activeAccount && activeAccount.avatar),
+    submenu,
+  };
+}
+
+/**
+ * Menú de la pestaña (clic derecho), con las opciones de Chrome que aplican acá.
+ * @param {string} tabId
+ * @param {{ x?: number, y?: number }} [at] coordenadas en la página de la franja
+ */
+function popupTabMenu(tabId, at = {}) {
+  const dock = getDockWindow();
+  const tab = tabs.get(tabId);
+  if (!dock || !tab) return false;
+  const strip = stripTabsOf(tab);
+  const hasOthers = strip.some((t) => t.id !== tab.id && !t.pinned);
+  const hasRight = strip.indexOf(tab) < strip.length - 1;
+  const muted = mutedSites.has(siteKeyOf(tab));
+  const accel = (accelerator) => ({ accelerator, registerAccelerator: false });
+  const run = (fn) => () => {
+    if (tabs.get(tab.id) === tab) Promise.resolve(fn(tab)).catch(() => {});
+  };
+  const menu = Menu.buildFromTemplate([
+    { label: 'Nueva pestaña a la derecha', click: run(newTabRightOf) },
+    { type: 'separator' },
+    { label: 'Volver a cargar', ...accel('Ctrl+R'), click: run((t) => reloadTab(t.id)) },
+    { label: 'Duplicar', click: run(duplicateTab) },
+    { label: tab.pinned ? 'No fijar' : 'Fijar', click: run(togglePinTab) },
+    { label: muted ? 'Activar sonido del sitio' : 'Silenciar sitio', click: run(toggleMuteSite) },
+    { type: 'separator' },
+    { label: 'Cerrar', ...accel('Ctrl+W'), click: run((t) => closeTab(t.id)) },
+    { label: 'Cerrar las demás pestañas', enabled: hasOthers, click: run(closeOtherTabs) },
+    { label: 'Cerrar pestañas a la derecha', enabled: hasRight, click: run(closeTabsRightOf) },
+  ]);
+  const opts = { window: dock };
+  if (Number.isFinite(at.x) && Number.isFinite(at.y)) {
+    opts.x = Math.round(at.x);
+    opts.y = Math.round(at.y);
+  }
+  menu.popup(opts);
   return true;
 }
 
@@ -843,6 +1150,117 @@ function configureHooks(hooks) {
   if (typeof hooks.collapseDock === 'function') collapseDockHook = hooks.collapseDock;
 }
 
+/** @param {unknown} payload partition o perfil de Chrome a traer */
+async function resolveAccountTarget(payload) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  let partition = typeof p.partition === 'string' ? p.partition : '';
+  if (!partition && typeof p.chromeDirectory === 'string' && p.chromeDirectory) {
+    partition = (await browseProfiles.importChromeByDirectory(getDockWindow(), p.chromeDirectory)) || '';
+    profilesCache = null;
+  }
+  return partition;
+}
+
+/**
+ * Quita un perfil del riel (o deja de ofrecer uno de Chrome) y cierra sus pestañas.
+ * @param {unknown} payload
+ */
+async function removeProfile(payload) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  if (typeof p.chromeDirectory === 'string' && p.chromeDirectory) {
+    browseProfiles.hideChromeProfile(p.chromeDirectory);
+    profilesCache = null;
+    broadcastState();
+    return true;
+  }
+  const partition = typeof p.partition === 'string' ? p.partition : '';
+  if (!(await browseProfiles.removeProfile(getDockWindow(), partition))) return false;
+  profilesCache = null;
+  const ids = tabIdsOfSession(partition);
+  if (ids.length && ids.length === tabs.size) {
+    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: defaultPartition() });
+  }
+  for (const id of ids) closeTab(id);
+  for (let i = closedTabs.length - 1; i >= 0; i -= 1) {
+    if (closedTabs[i].partition === partition) closedTabs.splice(i, 1);
+  }
+  lastTabBySession.delete(partition);
+  broadcastState();
+  return true;
+}
+
+/** @param {unknown} partitions orden nuevo del riel */
+function reorderProfiles(partitions) {
+  const list = Array.isArray(partitions) ? partitions.filter((x) => typeof x === 'string' && x) : [];
+  browseProfiles.setProfileOrder(list);
+  broadcastState();
+  return true;
+}
+
+async function addGoogleAccount() {
+  sendShortcutToDock('exit-profiles-edit');
+  const { partition, url } = browseProfiles.createAccountPartition();
+  profilesCache = null;
+  await openTabFromUrl(url, { partition, freshLogin: true });
+}
+
+/** @param {string} partition */
+function restoreProfile(partition) {
+  browseProfiles.unhideProfile(partition);
+  profilesCache = null;
+  broadcastState();
+}
+
+/** @param {string} directory */
+async function restoreChromeProfile(directory) {
+  sendShortcutToDock('exit-profiles-edit');
+  browseProfiles.unhideChromeProfile(directory);
+  await useAccount({ chromeDirectory: directory });
+}
+
+/**
+ * Menú del "+" del riel en modo edición: cuenta nueva o volver a mostrar las quitadas.
+ * @param {{ x?: number, y?: number }} [at]
+ */
+function popupAddProfileMenu(at = {}) {
+  const dock = getDockWindow();
+  if (!dock) return false;
+  const escape = (text) => String(text || '').replace(/&/g, '&&');
+  const run = (fn) => () => {
+    Promise.resolve(fn()).catch(() => {});
+  };
+  /** @type {Electron.MenuItemConstructorOptions[]} */
+  const template = [{ label: 'Iniciar sesión con otra cuenta de Google…', click: run(addGoogleAccount) }];
+  const hidden = browseProfiles.hiddenProfiles();
+  const hiddenChrome = browseProfiles.hiddenChromeProfiles();
+  if (hidden.length || hiddenChrome.length) {
+    template.push({ type: 'separator' }, { label: 'Volver a mostrar', enabled: false });
+    for (const h of hidden) {
+      template.push({ label: escape(h.label), click: run(() => restoreProfile(h.partition)) });
+    }
+    for (const c of hiddenChrome) {
+      template.push({ label: escape(`${c.label} · traer desde Chrome`), click: run(() => restoreChromeProfile(c.directory)) });
+    }
+  }
+  const opts = { window: dock };
+  if (Number.isFinite(at.x) && Number.isFinite(at.y)) {
+    opts.x = Math.round(at.x);
+    opts.y = Math.round(at.y);
+  }
+  Menu.buildFromTemplate(template).popup(opts);
+  return true;
+}
+
+/** @param {unknown} payload */
+async function useAccount(payload) {
+  const partition = await resolveAccountTarget(payload);
+  if (!partition) {
+    broadcastState();
+    return false;
+  }
+  return switchToSession(partition);
+}
+
 function registerLooseNavIpc() {
   const channels = [
     'loose-nav-open',
@@ -861,8 +1279,15 @@ function registerLooseNavIpc() {
     'loose-nav-use-account',
     'loose-nav-set-default-profile',
     'loose-nav-page-menu',
+    'loose-nav-tab-menu',
+    'loose-nav-toggle-mute',
+    'loose-nav-reopen-closed',
     'loose-nav-find',
     'loose-nav-find-stop',
+    'loose-nav-remove-profile',
+    'loose-nav-reorder-profiles',
+    'loose-nav-add-profile-menu',
+    'loose-nav-cover-page',
   ];
   for (const ch of channels) {
     try {
@@ -872,6 +1297,7 @@ function registerLooseNavIpc() {
     }
   }
 
+  passwordManager.registerPasswordIpc({ host: () => getDockWindow() });
   setTimeout(refreshProfilesInBackground, 5000);
 
   ipcMain.handle('loose-nav-open', async () => {
@@ -900,25 +1326,13 @@ function registerLooseNavIpc() {
     return true;
   });
 
-  /** @param {unknown} payload partition o perfil de Chrome a traer */
-  async function resolveAccountTarget(payload) {
-    const p = payload && typeof payload === 'object' ? payload : {};
-    let partition = typeof p.partition === 'string' ? p.partition : '';
-    if (!partition && typeof p.chromeDirectory === 'string' && p.chromeDirectory) {
-      partition = (await browseProfiles.importChromeByDirectory(getDockWindow(), p.chromeDirectory)) || '';
-      profilesCache = null;
-    }
-    return partition;
-  }
-
-  ipcMain.handle('loose-nav-use-account', async (_e, payload) => {
-    const partition = await resolveAccountTarget(payload);
-    if (!partition) {
-      broadcastState();
-      return false;
-    }
-    return switchToSession(partition);
-  });
+  ipcMain.handle('loose-nav-use-account', (_e, payload) => useAccount(payload));
+  ipcMain.handle('loose-nav-remove-profile', (_e, payload) => removeProfile(payload));
+  ipcMain.handle('loose-nav-cover-page', (_e, cover) => coverActivePage(cover === true));
+  ipcMain.handle('loose-nav-reorder-profiles', (_e, partitions) => reorderProfiles(partitions));
+  ipcMain.handle('loose-nav-add-profile-menu', (_e, at) =>
+    popupAddProfileMenu(at && typeof at === 'object' ? at : {})
+  );
 
   ipcMain.handle('loose-nav-set-default-profile', async (_e, payload) => {
     const partition = await resolveAccountTarget(payload);
@@ -960,6 +1374,17 @@ function registerLooseNavIpc() {
 
   ipcMain.handle('loose-nav-page-menu', (_e, at) => {
     popupPageMenu(pageMenuContext, at && typeof at === 'object' ? at : {});
+    return true;
+  });
+  ipcMain.handle('loose-nav-tab-menu', (_e, payload) => {
+    const p = payload && typeof payload === 'object' ? payload : {};
+    return popupTabMenu(String(p.tabId || ''), p);
+  });
+  ipcMain.handle('loose-nav-reopen-closed', () => reopenClosedTab());
+  ipcMain.handle('loose-nav-toggle-mute', (_e, tabId) => {
+    const tab = tabs.get(String(tabId || ''));
+    if (!tab) return false;
+    toggleMuteSite(tab);
     return true;
   });
   ipcMain.handle('loose-nav-find', (_e, arg) =>

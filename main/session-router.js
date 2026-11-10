@@ -123,15 +123,15 @@ async function partitionHasLoginForDomain(partition, domain) {
 }
 
 /**
- * Copia las cookies de un dominio (y subdominios) de una partition a otra.
- * Misma mecánica que chrome-cookie-import: __Host- sin domain attribute,
- * Secure forzado cuando sameSite es no_restriction.
+ * Copia las cookies de un dominio (y subdominios) de una partition a otra,
+ * reemplazando las que el destino ya tuviera para ese dominio.
  * @param {string} fromPartition
  * @param {string} toPartition
  * @param {string} domain
  * @returns {Promise<number>} cantidad copiada
  */
 async function copyDomainCookies(fromPartition, toPartition, domain) {
+  const { toSetDetails, removeCookies } = require('./cookie-jar');
   const from = session.fromPartition(fromPartition);
   const to = session.fromPartition(toPartition);
   let cookies = [];
@@ -140,45 +140,30 @@ async function copyDomainCookies(fromPartition, toPartition, domain) {
   } catch {
     return 0;
   }
+
+  // El destino está parado en una pantalla de login, así que ya tiene cookies a
+  // medio flujo (en Google, GAPS y compañía). Dejarlas junto a la sesión que
+  // llega es lo que termina en accounts.google.com/CookieMismatch.
+  const removed = await removeCookies(to, (c) => cookieInDomain(c, domain));
+
   let copied = 0;
   /** @type {string[]} */
   const failed = [];
   for (const c of cookies) {
     if (!cookieInDomain(c, domain)) continue;
-    const name = String(c.name || '');
-    const rawDomain = String(c.domain || '');
-    const hostForUrl = rawDomain.replace(/^\./, '');
-    if (!hostForUrl) continue;
-    const cookiePath = typeof c.path === 'string' && c.path ? c.path : '/';
-    const sameSite = c.sameSite || 'unspecified';
-    const secure = !!c.secure || sameSite === 'no_restriction';
-    const isHostPrefixed = /^__Host-/.test(name);
-    /** @type {Electron.CookiesSetDetails} */
-    const details = {
-      url: `${secure ? 'https' : 'http'}://${hostForUrl}${cookiePath}`,
-      name,
-      value: String(c.value || ''),
-      path: cookiePath,
-      secure,
-      httpOnly: !!c.httpOnly,
-      sameSite,
-    };
-    // Una cookie host-only (sin Domain) no debe pasar a valer para todo el dominio.
-    if (!isHostPrefixed && rawDomain && c.hostOnly !== true) details.domain = rawDomain;
-    if (!c.session && typeof c.expirationDate === 'number') {
-      details.expirationDate = c.expirationDate;
-    }
+    const details = toSetDetails(c);
+    if (!details) continue;
     try {
       await to.cookies.set(details);
       copied += 1;
     } catch (err) {
-      failed.push(`${name}@${rawDomain}: ${err && err.message ? err.message : err}`);
+      failed.push(`${details.name}@${c.domain}: ${err && err.message ? err.message : err}`);
     }
   }
   try {
     const { log } = require('./logger');
     log(
-      `Sesión copiada ${fromPartition} → ${toPartition} (${domain}): ${copied} ok, ${failed.length} fallaron` +
+      `Sesión copiada ${fromPartition} → ${toPartition} (${domain}): ${copied} ok, ${failed.length} fallaron, ${removed} previas borradas` +
         (failed.length ? ` [${failed.slice(0, 5).join(' | ')}]` : '')
     );
   } catch {
@@ -269,6 +254,35 @@ function isAuthUrl(url) {
   if ((host === 'github.com' || host === 'www.github.com') && p.startsWith('/login')) return true;
   if (host.endsWith('facebook.com') && (p.includes('/oauth') || p.includes('/dialog/'))) return true;
   return false;
+}
+
+/** Parámetros con los que un login dice a dónde volver una vez autenticado. */
+const CONTINUE_PARAMS = ['continue', 'followup', 'next', 'return_to', 'returnUrl', 'returnTo'];
+
+/**
+ * A dónde mandar la pestaña después de prestarle la sesión. La URL de login
+ * lleva tokens atados a las cookies que acabamos de reemplazar (en Google, el
+ * `TL` que va con la cookie GAPS), así que recargarla cae en /CookieMismatch:
+ * mejor ir derecho a la página que el login iba a abrir al terminar.
+ * @param {string} authUrl
+ * @returns {string} '' si no se sabe, y entonces recargar es lo correcto
+ *   (consentimientos de OAuth y logins que no guardan estado en la URL)
+ */
+function destinationAfterSessionCopy(authUrl) {
+  let u;
+  try {
+    u = new URL(String(authUrl || ''));
+  } catch {
+    return '';
+  }
+  for (const key of CONTINUE_PARAMS) {
+    const value = u.searchParams.get(key);
+    if (!value || !/^https?:\/\//i.test(value)) continue;
+    // Un destino que vuelve a ser login nos deja en el mismo lugar.
+    if (isAuthUrl(value)) continue;
+    return value;
+  }
+  return '';
 }
 
 function choicesFilePath() {
@@ -559,8 +573,17 @@ async function maybeOfferSessionCopyForAuthTab(hostWindow, wc, url, openerPartit
 
   const copied = await copyDomainCookies(chosen, openerPartition, cookieDomain);
   if (copied > 0 && wc && !wc.isDestroyed()) {
+    let current = url;
     try {
-      wc.reload();
+      const live = wc.getURL();
+      if (live && isAuthUrl(live)) current = live;
+    } catch {
+      /* queda la URL con la que entramos */
+    }
+    const destination = destinationAfterSessionCopy(current);
+    try {
+      if (destination) wc.loadURL(destination).catch(() => {});
+      else wc.reload();
     } catch {
       /* noop */
     }

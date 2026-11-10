@@ -11,7 +11,7 @@
  * Todo el tour vive en un modal del 80% del ancho y del alto. El fondo
  * queda visible alrededor; no hay spotlight sobre la interfaz.
  *
- * Los cuatro primeros pasos comparten una computadora (el monitor), que se arma
+ * Los tres primeros pasos comparten una computadora (el monitor), que se arma
  * una sola vez y pasa de un paso al otro. Arriba va el monitor y abajo lo
  * propio de cada paso.
  *
@@ -20,15 +20,11 @@
  *      debajo del monitor, la frase de navegación.
  *   1  Personalizar: abajo, las apps. Al marcarlas se suman a la barra del
  *      monitor y, al seguir, se crean los accesos.
- *   2  Atajo, parte 1: el teclado encima de la computadora y, abajo, las
- *      teclas del atajo con una barra que se llena al apretarlas. Las teclas
- *      tienen borde azul y, al apretarlas, un disco gris translúcido. A la
- *      tercera apretada se sostiene un instante y el teclado se pliega.
- *   3  Atajo, parte 2: queda la computadora; apretarlo un par de veces más
- *      muestra cómo inplaize aparece y desaparece en la pantalla.
- *      Las dos partes son pasos distintos con el mismo id ('hotkey') y
- *      cada una cuenta en el indicador (4 pasos en total).
- *   4  Importar sesiones de Chrome.
+ *   2  Atajo: debajo de la computadora, las teclas del atajo con una barra que
+ *      se llena al apretarlas y, a su derecha, el teclado sin marco. Las teclas
+ *      del atajo tienen borde azul y se prenden al apretarlas; cada apretada
+ *      muestra o esconde inplaize en la pantalla.
+ *   3  Importar sesiones de Chrome.
  *
  * Cerrar una ventana (click izquierdo mantenido) y Modo Foco (click
  * derecho, silencia el resto) no van en este tour. Salen después, en un
@@ -46,7 +42,7 @@
  *        deshabilita el auto-avance, se fuerzan botones "Siguiente" en todos
  *        los pasos y NO se persiste `onboardingCompleted` (deja el estado
  *        en disco como estaba, p. ej. para repetir el tour cuantas veces
- *        haga falta desde Internal).
+ *        haga falta desde Configuración).
  *   advance(reason)         → pasa al siguiente paso si el `reason` coincide.
  *   skip()                  → marca completado y cierra todo.
  *   isActive()              → true mientras está mostrándose.
@@ -64,7 +60,7 @@
     layerEl: null,
     spotlightEl: null,
     bubbleEl: null,
-    /** La computadora de los tres primeros pasos. Se arma una vez y pasa de un paso al otro. */
+    /** La computadora de los primeros pasos. Se arma una vez y pasa de un paso al otro. */
     monitorEl: null,
     monitorTimer: 0,
     targetEl: null,
@@ -73,14 +69,12 @@
     modalObserver: null,
     suppressedByModal: false,
     /**
-     * Paso "hotkey": el usuario tiene que pulsar Ctrl+Alt+D una vez antes de
-     * poder avanzar. Se detecta vía cambios de `sidebar-state` (que el main
-     * envía al togglar el dock con el atajo). `hotkeyAttemptedNext` se
-     * activa si el usuario intenta avanzar sin haberlo probado, y muestra
-     * el aviso pidiéndoselo amablemente.
+     * Paso "hotkey": el usuario tiene que pulsar Ctrl+Alt+D antes de poder
+     * avanzar. Se detecta vía cambios de `sidebar-state` (que el main envía
+     * al togglar el dock con el atajo). Hasta que lo haya probado, el pie
+     * pide la acción en texto y no muestra el botón "Siguiente".
      */
     hotkeyPressed: false,
-    hotkeyAttemptedNext: false,
     /** Teclas del atajo guardado. Se prenden solo mientras están apretadas. */
     hotkeyLit: new Set(),
     hotkeyKeys: ['Ctrl', 'Alt', 'D'],
@@ -90,18 +84,10 @@
     hotkeyCapturing: false,
     hotkeyCapture: [],
     hotkeyError: '',
-    /** 'keys': teclado y las teclas del atajo. 'desk': el teclado se pliega y la computadora muestra cómo aparece y desaparece. */
-    hotkeyStage: 'keys',
-    /** Veces que apretó el atajo en la primera parte. A las 3 pasa a la segunda. */
+    /** Veces que apretó el atajo. Cada una muestra o esconde inplaize en la pantalla. */
     hotkeyPressCount: 0,
-    /** Espera a que se vea el tercer dedo antes de plegar el teclado. */
-    hotkeyCountTimer: 0,
-    /** Veces que apretó el atajo en la segunda parte. */
-    hotkeyDeskPresses: 0,
     /** En la pantalla, si inplaize está visible. */
     hotkeyDockShown: true,
-    /** Mientras el teclado se pliega hacia la segunda parte. */
-    hotkeyFlipping: false,
     sidebarStateListenerArmed: false,
     hotkeyKeyListenerArmed: false,
     /** Paso "personalize": apps seleccionadas por el usuario */
@@ -138,23 +124,12 @@
     },
     {
       id: 'hotkey',
-      /** Parte 1: el teclado y las tres apretadas. Es el paso 3 del indicador. */
-      hotkeyStage: 'keys',
+      /** El teclado y la computadora, juntos: cada apretada muestra o esconde inplaize. */
       kind: 'modal',
-      title: 'Aprendiendo tu atajo mágico',
+      title: 'Tu atajo mágico',
       stepperLabel: 'Atajo mágico',
-      body: 'Apretá el atajo tres veces.',
+      body: 'Apretá el atajo: inplaize aparece y desaparece.',
       keyboardKeys: ['Ctrl', 'Alt', 'D'],
-      primaryLabel: 'Siguiente',
-    },
-    {
-      id: 'hotkey',
-      /** Parte 2: la computadora donde inplaize aparece y desaparece. Es el paso 4 del indicador. */
-      hotkeyStage: 'desk',
-      kind: 'modal',
-      title: 'Tu atajo mágico en acción 🌠',
-      stepperLabel: 'Probar el atajo',
-      body: 'Apretando tu atajo mágico, todo siempre estará en orden.',
       primaryLabel: 'Siguiente',
     },
     {
@@ -476,7 +451,6 @@
     state.step = -1;
     state.suppressedByModal = false;
     state.hotkeyPressed = false;
-    state.hotkeyAttemptedNext = false;
     state.hotkeyLit.clear();
     document.documentElement.classList.remove('onboarding-active');
     if (state.repositionListener) {
@@ -937,8 +911,8 @@
   }
 
   /**
-   * Cursor propio y clics sobre la barra del monitor. Solo vale en la segunda
-   * parte del atajo (`.is-interactive`) y mientras inplaize está a la vista.
+   * Cursor propio y clics sobre la barra del monitor. Solo vale en el paso del
+   * atajo (`.is-interactive`) y mientras inplaize está a la vista.
    */
   function bindMonitorPointer(mon) {
     const screen = mon.querySelector('.onboarding-monitor-screen');
@@ -985,7 +959,7 @@
     cursor.addEventListener('animationend', (e) => {
       if (e.target.classList && e.target.classList.contains('onb-cursor-ripple')) cursor.classList.remove('is-click');
     });
-    // Al entrar a la segunda parte, la flecha llega desde un costado al centro y se agranda un poco.
+    // Al entrar al paso del atajo, la flecha llega desde un costado al centro y se agranda un poco.
     const arrive = () => {
       cursor.classList.remove('is-home', 'is-arrive', 'is-over', 'is-down');
       place(78, 76);
@@ -993,7 +967,7 @@
       cursor.classList.add('is-home', 'is-arrive');
       place(50, 50);
     };
-    // Al salir de la segunda parte, el cursor vuelve al centro.
+    // Al salir del paso del atajo, el cursor vuelve al centro.
     mon.__onbCursorHome = goHome;
     mon.__onbCursorArrive = arrive;
   }
@@ -1133,8 +1107,8 @@
     if (step.id !== 'welcome') settleMonitor();
     slot.appendChild(el);
     el.classList.toggle('is-dock-hidden', step.id === 'hotkey' && !state.hotkeyDockShown);
-    // Segunda parte del atajo: el cursor propio y los íconos de la barra se pueden tocar.
-    const interactive = step.id === 'hotkey' && state.hotkeyStage === 'desk' && !state.hotkeyCapturing;
+    // Paso del atajo: el cursor propio y los íconos de la barra se pueden tocar.
+    const interactive = step.id === 'hotkey' && !state.hotkeyCapturing;
     const wasInteractive = el.classList.contains('is-interactive');
     el.classList.toggle('is-interactive', interactive);
     if (!interactive) {
@@ -1153,22 +1127,16 @@
   /** Monitor arriba y, abajo, lo propio de cada paso. */
   function renderStage(step) {
     let below = '';
-    let overlay = '';
     if (step.id === 'welcome' && step.title) {
       below = `<p class="onboarding-welcome-line">${escapeHtml(step.title)}</p>`;
     } else if (step.id === 'personalize' && Array.isArray(step.apps)) below = renderAppGrid(step.apps);
-    else if (step.id === 'hotkey') {
-      below = renderKeyboard(hotkeySlots());
-      overlay = renderKeyboardOverlay();
-    }
-    const modeClass = step.id === 'hotkey'
-      ? ' is-' + (state.hotkeyCapturing ? 'capturing' : state.hotkeyStage)
-      : '';
+    else if (step.id === 'hotkey') below = renderKeyboard(hotkeySlots());
+    const modeClass = step.id === 'hotkey' && state.hotkeyCapturing ? ' is-capturing' : '';
     return (
       // La zona de abajo se reserva siempre (aunque esté vacía) para que la computadora
       // tenga el mismo tamaño y lugar en todos los pasos.
       `<div class="onb-stage has-below${modeClass}" data-stage="${escapeHtml(step.id)}">` +
-        `<div class="onb-monitor-slot">${overlay}</div>` +
+        '<div class="onb-monitor-slot"></div>' +
         `<div class="onb-below">${below}</div>` +
       '</div>'
     );
@@ -1205,9 +1173,14 @@
       ? step.primaryLabel
       : (state.preview ? (isLast ? 'Terminar' : 'Siguiente') : null);
 
-    const primaryDisabled = step.id === 'personalize' && state.selectedApps.size === 0 ? ' disabled' : '';
     const primary = primaryLabel
-      ? `<button type="button" class="onboarding-btn-primary" data-onboarding-action="next"${primaryDisabled}>${escapeHtml(primaryLabel)}</button>`
+      ? `<button type="button" class="onboarding-btn-primary" data-onboarding-action="next">${escapeHtml(primaryLabel)}</button>`
+      : '';
+    // El texto de la acción y el botón se turnan: los dos viven en el pie y la
+    // clase `is-pending` decide cuál se ve, así no hay que rearmar el bocadillo.
+    const hintCopy = pendingActionCopy(step);
+    const hint = primary && (step.id === 'personalize' || step.id === 'hotkey')
+      ? `<p class="onboarding-action-hint">${escapeHtml(hintCopy)}</p>`
       : '';
     const back = stepIndex > 0
       ? `<button type="button" class="onboarding-btn-secondary" data-onboarding-action="back">Atrás</button>`
@@ -1218,10 +1191,16 @@
       const target = escapeHtml(step.bodyUnderline);
       bodyHtml = bodyHtml.replace(target, `<u>${target}</u>`);
     }
-    const body = bodyHtml
-      ? `<p class="onboarding-bubble-body">${bodyHtml}</p>`
-      : '';
+    // Las manitos del atajo van pegadas al copy, a su derecha.
     const counter = step.id === 'hotkey' && showHotkeyCounter() ? renderHotkeyCounter() : '';
+    let body = '';
+    if (bodyHtml && counter) {
+      body = `<p class="onboarding-bubble-body has-count"><span>${bodyHtml}</span>${counter}</p>`;
+    } else if (bodyHtml) {
+      body = `<p class="onboarding-bubble-body">${bodyHtml}</p>`;
+    } else {
+      body = counter;
+    }
     // Bienvenida, personalizar y atajo comparten la computadora de arriba.
     const hasMonitor = MONITOR_STEPS.includes(step.id);
     const stage = hasMonitor
@@ -1229,12 +1208,6 @@
       : (step.id === 'import-sessions'
         ? '<div class="onb-stage onb-import"><div id="onboarding-import-area" class="onboarding-import-area"></div></div>'
         : '');
-    const showHotkeyWarning =
-      step.id === 'hotkey' && state.hotkeyAttemptedNext && !hotkeyReadyToAdvance();
-    const warning = showHotkeyWarning
-      ? `<p class="onboarding-hotkey-gate" role="alert">${escapeHtml(hotkeyGateCopy())}</p>`
-      : '';
-
     const closeButton = step.kind === 'modal'
       ? '<button type="button" class="onboarding-close" data-onboarding-action="skip" aria-label="Cerrar">' +
           '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">' +
@@ -1243,7 +1216,7 @@
         '</button>'
       : '';
 
-    const title = step.id === 'hotkey' ? hotkeyTitle() : step.title;
+    const title = step.title;
     // En la bienvenida el encabezado es la marca (ícono + nombre); el texto va debajo de la computadora.
     const headerTitle = step.id === 'welcome'
       ? (
@@ -1259,15 +1232,14 @@
         ${stepper}
         ${headerTitle}
         ${body}
-        ${counter}
       </header>
       <div class="onboarding-bubble-main">
         ${stage}
       </div>
       <footer class="onboarding-bubble-footer">
-        ${warning}
-        <div class="onboarding-bubble-actions">
+        <div class="onboarding-bubble-actions${hint && hintCopy ? ' is-pending' : ''}">
           ${back}
+          ${hint}
           ${primary}
         </div>
       </footer>
@@ -1287,7 +1259,6 @@
         else if (action === 'skip') skip();
         else if (action === 'change-hotkey') beginHotkeyCapture();
         else if (action === 'cancel-hotkey') cancelHotkeyCapture();
-        else if (action === 'show-desk') showHotkeyDesk();
       });
     });
 
@@ -1314,8 +1285,7 @@
             if (lastApp) setDeskPreview(monitor, lastApp.icon);
             else resetDeskPreview(monitor);
           }
-          const next = bubble.querySelector('.onboarding-btn-primary[data-onboarding-action="next"]');
-          if (next) next.disabled = count === 0;
+          syncActionHint();
         }
       });
     });
@@ -1501,47 +1471,69 @@
     return `<div class="onboarding-app-grid">${items}</div>`;
   }
 
-  /** Apretadas del atajo en la primera parte, antes de ver cómo aparece y desaparece inplaize. */
-  const HOTKEY_KEYS_TRIES = 3;
-  /** Apretadas en la segunda parte, para ver aparecer y desaparecer inplaize en la pantalla. */
-  const HOTKEY_DESK_TRIES = 2;
+  /** Apretadas que pide el paso: una esconde inplaize y la otra lo vuelve a traer. */
+  const HOTKEY_TRIES = 2;
 
   function hotkeyReadyToAdvance() {
-    if (state.hotkeyStage === 'desk') return state.hotkeyDeskPresses >= HOTKEY_DESK_TRIES;
-    return state.hotkeyPressCount >= HOTKEY_KEYS_TRIES;
+    return state.hotkeyPressCount >= HOTKEY_TRIES;
   }
 
-  function hotkeyGateCopy() {
-    if (state.hotkeyStage === 'desk') {
-      return 'Apretalo un par de veces más para ver cómo inplaize aparece y desaparece.';
-    }
-    return 'Apretá el atajo tres veces para seguir.';
+  /** Apps que pide el paso "personalize" para armar una barra que se entienda. */
+  const PERSONALIZE_MIN_APPS = 2;
+
+  function personalizeReadyToAdvance() {
+    return state.selectedApps.size >= PERSONALIZE_MIN_APPS;
   }
 
-  function hotkeyTitle() {
-    if (state.hotkeyStage === 'desk' && !state.hotkeyCapturing) {
-      return 'Tu atajo mágico en acción 🌠';
+  /**
+   * Lo que falta hacer en el paso, en palabras. Mientras haya algo pendiente
+   * el pie lo pide con este texto en lugar del botón "Siguiente"; cuando está
+   * hecho, devuelve '' y aparece el botón.
+   */
+  function pendingActionCopy(step) {
+    if (!step) return '';
+    if (step.id === 'personalize') {
+      const left = PERSONALIZE_MIN_APPS - state.selectedApps.size;
+      if (left <= 0) return '';
+      if (left === 1) return 'Elegí una app más';
+      return 'Elegí al menos dos apps';
     }
-    if (state.hotkeyCapturing) return 'Tu atajo mágico';
-    return 'Aprendiendo tu atajo mágico';
+    if (step.id === 'hotkey') {
+      if (state.hotkeyCapturing) return '';
+      const left = HOTKEY_TRIES - state.hotkeyPressCount;
+      if (left <= 0) return '';
+      if (left === 1) return 'Apretalo una vez más';
+      return `Apretá ${state.hotkeyKeys.join(' + ')} dos veces`;
+    }
+    return '';
+  }
+
+  /** Turna el texto de la acción con el botón del paso, sin rearmar el bocadillo. */
+  function syncActionHint() {
+    const bubble = state.bubbleEl;
+    if (!bubble) return;
+    const actions = bubble.querySelector('.onboarding-bubble-actions');
+    const hint = bubble.querySelector('.onboarding-action-hint');
+    if (!actions || !hint) return;
+    const copy = pendingActionCopy(STEPS[state.step]);
+    if (copy) hint.textContent = copy;
+    actions.classList.toggle('is-pending', Boolean(copy));
   }
 
   function hotkeyBody() {
     if (state.hotkeyCapturing) return 'Apretá las tres teclas del nuevo atajo, de a una.';
-    if (state.hotkeyStage === 'desk') {
-      return 'Apretando tu atajo mágico, todo siempre estará en orden.';
-    }
-    return 'Apretá el atajo tres veces.';
+    return 'Apretá el atajo: inplaize aparece y desaparece.';
   }
 
-  /** Manitos del contador: una por cada apretada del atajo (1, 2 y 3 dedos). */
-  const HOTKEY_COUNT_HANDS = ['☝️', '✌️', '🤟'];
+  /** Manitos del contador: una por cada apretada del atajo. */
+  const HOTKEY_COUNT_HANDS = ['☝️', '✌️'];
 
-  /** El contador solo va en la primera parte del atajo, mientras no se cambian las teclas. */
+  /** El contador va mientras no se estén cambiando las teclas. */
   function showHotkeyCounter() {
-    return state.hotkeyStage !== 'desk' && !state.hotkeyCapturing;
+    return !state.hotkeyCapturing;
   }
 
+  /** Las manitos van en la misma línea que el copy, a su derecha. */
   function renderHotkeyCounter() {
     const count = state.hotkeyPressCount;
     const hands = HOTKEY_COUNT_HANDS.map((hand, i) => {
@@ -1549,8 +1541,8 @@
       return `<span class="onboarding-hotkey-hand${lit}" data-n="${i + 1}" aria-hidden="true">${hand}</span>`;
     }).join('');
     return (
-      '<div class="onboarding-hotkey-count" role="img"' +
-        ` aria-label="Apretaste el atajo ${count} de ${HOTKEY_KEYS_TRIES} veces">${hands}</div>`
+      '<span class="onboarding-hotkey-count" role="img"' +
+        ` aria-label="Apretaste el atajo ${count} de ${HOTKEY_TRIES} veces">${hands}</span>`
     );
   }
 
@@ -1559,7 +1551,7 @@
     const el = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-hotkey-count');
     if (!el) return;
     const count = state.hotkeyPressCount;
-    el.setAttribute('aria-label', `Apretaste el atajo ${count} de ${HOTKEY_KEYS_TRIES} veces`);
+    el.setAttribute('aria-label', `Apretaste el atajo ${count} de ${HOTKEY_TRIES} veces`);
     el.querySelectorAll('.onboarding-hotkey-hand').forEach((hand, i) => {
       const wasLit = hand.classList.contains('is-lit');
       const lit = count > i;
@@ -1572,14 +1564,9 @@
     });
   }
 
-  /** Lo que tarda el teclado en plegarse antes de dejar solo la computadora (ver `.kb-with-check.is-leaving`). */
-  const HOTKEY_KEYS_OUT_MS = 280;
-  /** Tiempo con los tres dedos en alto, para que el conteo se lea antes de seguir. */
-  const HOTKEY_COUNT_HOLD_MS = 880;
-
-  /** Índice del paso del atajo en esa parte ('keys' o 'desk'). */
-  function hotkeyStepIndex(stage) {
-    return STEPS.findIndex((s) => s.id === 'hotkey' && s.hotkeyStage === stage);
+  /** Índice del paso del atajo. */
+  function hotkeyStepIndex() {
+    return STEPS.findIndex((s) => s.id === 'hotkey');
   }
 
   let guideMouseTimer = 0;
@@ -1592,7 +1579,7 @@
     if (guideMouseTimer) clearTimeout(guideMouseTimer);
     guideMouseTimer = setTimeout(() => {
       guideMouseTimer = 0;
-      if (!isHotkeyStep() || state.hotkeyStage !== 'desk' || state.hotkeyCapturing) return;
+      if (!isHotkeyStep() || state.hotkeyCapturing) return;
       if (!window.usualDesk || typeof window.usualDesk.moveOnboardingCursor !== 'function') return;
       const screenEl = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-monitor-screen');
       if (!screenEl || screenEl.matches(':hover')) return;
@@ -1602,31 +1589,6 @@
         .moveOnboardingCursor({ x: r.left + r.width / 2, y: r.top + r.height / 2, ms: 650 })
         .catch(() => {});
     }, delayMs);
-  }
-
-  /**
-   * Pasa de la primera parte a la segunda: el teclado se pliega y la
-   * computadora, que ya estaba, gana ese lugar.
-   */
-  function showHotkeyDesk() {
-    if (state.hotkeyFlipping) return;
-    const deskIndex = hotkeyStepIndex('desk');
-    if (deskIndex < 0) return;
-
-    const board = state.bubbleEl && state.bubbleEl.querySelector('.onb-kb-overlay');
-    if (!board) {
-      showStep(deskIndex);
-      return;
-    }
-
-    // Es un fundido corto: se hace aunque el sistema pida menos movimiento.
-    state.hotkeyFlipping = true;
-    board.classList.add('is-leaving');
-    setTimeout(() => {
-      state.hotkeyFlipping = false;
-      if (!isHotkeyStep() || state.hotkeyStage !== 'keys' || state.hotkeyCapturing) return;
-      showStep(deskIndex);
-    }, HOTKEY_KEYS_OUT_MS);
   }
 
   function hotkeySlots() {
@@ -1794,15 +1756,9 @@
     );
   }
 
-  function clearHotkeyCountTimer() {
-    if (!state.hotkeyCountTimer) return;
-    clearTimeout(state.hotkeyCountTimer);
-    state.hotkeyCountTimer = 0;
-  }
-
   /**
-   * Lo que va debajo del monitor en el paso del atajo.
-   * Primera y segunda parte: las teclas del atajo y la barra de cuántas están apretadas.
+   * Lo que va debajo del teclado y la computadora en el paso del atajo: las
+   * teclas del atajo y la barra de cuántas están apretadas.
    * Al cambiar el atajo, acá también van los selectores y el teclado.
    */
   function renderKeyboard(keys) {
@@ -1818,17 +1774,11 @@
         '</div>'
       );
     }
-    return renderHeldHotkeyChips();
-  }
-
-  /**
-   * Primera parte del atajo: el teclado aparece encima de la computadora, que se ve de fondo.
-   * (Al cambiar el atajo el teclado va abajo, junto a los selectores, no acá.)
-   */
-  function renderKeyboardOverlay() {
-    if (state.hotkeyCapturing || state.hotkeyStage === 'desk') return '';
+    // Las teclas del atajo a la izquierda y, al lado, el teclado sin marco: así la
+    // computadora de arriba queda del mismo tamaño que en los otros pasos.
     return (
-      '<div class="onb-kb-overlay">' +
+      '<div class="onb-hotkey-row">' +
+        renderHeldHotkeyChips() +
         '<div class="kb-with-check">' +
           renderKeyboardBoard() +
         '</div>' +
@@ -2091,16 +2041,10 @@
     state.hotkeyPressed = false;
     state.hotkeyLit.clear();
     state.hotkeyError = '';
-    clearHotkeyCountTimer();
-    const keysIndex = hotkeyStepIndex('keys');
-    if (state.hotkeyStage !== 'keys' && keysIndex >= 0) {
-      showStep(keysIndex);
-    } else {
-      state.hotkeyPressCount = 0;
-      state.hotkeyDeskPresses = 0;
-      state.hotkeyDockShown = true;
-      refreshHotkeyStep();
-    }
+    // Con las teclas nuevas se vuelve a empezar: inplaize a la vista y el contador en cero.
+    state.hotkeyPressCount = 0;
+    state.hotkeyDockShown = true;
+    refreshHotkeyStep();
     let res = null;
     try {
       if (window.usualDesk && typeof window.usualDesk.setAppSettings === 'function') {
@@ -2151,7 +2095,6 @@
       return;
     }
     
-    clearHotkeyCountTimer();
     if (step.id === 'hotkey') {
       state.hotkeyPressed = false;
       state.hotkeyAttemptedNext = false;
@@ -2159,11 +2102,9 @@
       state.hotkeyCapturing = false;
       state.hotkeyCapture = [];
       state.hotkeyError = '';
-      state.hotkeyStage = step.hotkeyStage === 'desk' ? 'desk' : 'keys';
       state.hotkeyPressCount = 0;
-      state.hotkeyDeskPresses = 0;
-      state.hotkeyDockShown = state.hotkeyStage !== 'desk';
-      state.hotkeyFlipping = false;
+      // El paso arranca con inplaize a la vista: la primera apretada lo esconde.
+      state.hotkeyDockShown = true;
     }
     state.step = stepIndex;
     setHotkeyTrial(step.id === 'hotkey');
@@ -2188,7 +2129,7 @@
     }
 
     renderBubble(step);
-    if (step.id === 'hotkey' && state.hotkeyStage === 'desk') guideMouseToMonitor(450);
+    if (step.id === 'hotkey') guideMouseToMonitor(450);
     // Render inicial: dejamos que el navegador layoute y luego posicionamos.
     requestAnimationFrame(() => {
       reflowCurrentStep();
@@ -2297,6 +2238,9 @@
     if (state.active) return;
     const o = opts || {};
     state.active = true;
+    if (window.usualDesk && typeof window.usualDesk.trackEvent === 'function') {
+      window.usualDesk.trackEvent('onboarding_started', { preview: o.preview === true }).catch(() => {});
+    }
     try {
       if (window.usualDesk && typeof window.usualDesk.setOnboardingActive === 'function') {
         window.usualDesk.setOnboardingActive(true);
@@ -2329,9 +2273,6 @@
 
   /** Paso inicial: `step` puede ser el id (`hotkey`) o el número. Si no viene, arranca en 0. */
   function startStepIndex(o, skipWelcome) {
-    if (o.hotkeyStage === 'desk' && (o.step == null || o.step === '' || String(o.step) === 'hotkey')) {
-      return hotkeyStepIndex('desk');
-    }
     if (o.step != null && o.step !== '') {
       const raw = String(o.step);
       const byId = STEPS.findIndex((s) => s.id === raw);
@@ -2384,31 +2325,13 @@
       state.hotkeyAttemptedNext = false;
       const gate = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-hotkey-gate');
       if (gate) gate.remove();
-      if (state.hotkeyStage !== 'desk') {
-        if (state.hotkeyPressCount >= HOTKEY_KEYS_TRIES || state.hotkeyFlipping) return;
-        state.hotkeyPressCount += 1;
-        updateHotkeyCounter();
-        if (state.hotkeyPressCount >= HOTKEY_KEYS_TRIES) {
-          clearHotkeyCountTimer();
-          state.hotkeyCountTimer = setTimeout(() => {
-            state.hotkeyCountTimer = 0;
-            if (!isHotkeyStep() || state.hotkeyCapturing || state.hotkeyStage !== 'keys') return;
-            if (state.hotkeyPressCount < HOTKEY_KEYS_TRIES) return;
-            showHotkeyDesk();
-          }, HOTKEY_COUNT_HOLD_MS);
-        }
-        return;
-      }
-      if (state.hotkeyFlipping) return;
-      state.hotkeyDeskPresses += 1;
+      // Cada apretada esconde o trae de vuelta inplaize en la pantalla.
+      state.hotkeyPressCount += 1;
       state.hotkeyDockShown = !state.hotkeyDockShown;
+      updateHotkeyCounter();
       const monitor = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-monitor');
       if (monitor) monitor.classList.toggle('is-dock-hidden', !state.hotkeyDockShown);
       if (state.hotkeyDockShown) guideMouseToMonitor(120);
-      if (state.hotkeyDeskPresses >= HOTKEY_DESK_TRIES) {
-        const gate = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-hotkey-gate');
-        if (gate) gate.remove();
-      }
     });
     state.sidebarStateListenerArmed = true;
   }
@@ -2455,9 +2378,9 @@
     // franja: nadie quiere quedarse mirando un panel negro a pantalla
     // completa cuando lo único que quería era cerrar el tutorial.
     // En modo preview NO colapsamos: el usuario abrió el panel desde
-    // Internal y querrá seguir interactuando con él.
+    // Configuración y querrá seguir interactuando con él.
     const skippedBeforeFirstShortcut =
-      !state.preview && state.step >= 0 && state.step <= hotkeyStepIndex('desk');
+      !state.preview && state.step >= 0 && state.step <= hotkeyStepIndex();
     await persistCompleted();
     teardown();
     if (skippedBeforeFirstShortcut) {

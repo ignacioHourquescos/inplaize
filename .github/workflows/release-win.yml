@@ -1,0 +1,153 @@
+# Compila el instalador de Windows en un runner de GitHub, lo manda a firmar a
+# SignPath y lo publica como adjunto del release.
+#
+# SignPath solo firma builds que puede verificar: por eso la compilación tiene
+# que pasar por acá y no por la máquina del mantenedor. Ver la política en
+# landing/code-signing-policy/index.html.
+#
+# Para publicar una versión:
+#   npm run build:win        (local, solo para probar; incrementa build-info.json)
+#   git commit -am "..." && git tag v1.5.4 && git push --follow-tags
+#
+# Mientras no estén configuradas las variables de SignPath, el workflow publica
+# el instalador SIN firmar, que es lo mismo que se venía haciendo a mano.
+# Para activar la firma, en Settings → Secrets and variables → Actions:
+#   secret    SIGNPATH_API_TOKEN
+#   variable  SIGNPATH_ORGANIZATION_ID
+#   variable  SIGNPATH_PROJECT_SLUG                 (opcional, default: inplaize)
+#   variable  SIGNPATH_SIGNING_POLICY_SLUG          (opcional, default: release-signing)
+#   variable  SIGNPATH_ARTIFACT_CONFIGURATION_SLUG  (opcional, default: nsis-installer)
+
+name: Release Windows
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  # actions:read lo necesita SignPath para leer los datos del job y bajar el artefacto.
+  actions: read
+  contents: write
+
+concurrency:
+  group: release-win-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SITE_URL: ${{ vars.SITE_URL || 'https://ignaciohourquescos.github.io/inplaize' }}
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar la versión
+        id: meta
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = $env:GITHUB_REF_NAME -replace '^v', ''
+            if ($tag -ne $version) {
+              throw "La etiqueta $env:GITHUB_REF_NAME no coincide con la version $version de package.json."
+            }
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "inplaize $version"
+
+      - name: Compilar el instalador
+        run: npm run build:ci
+
+      - name: Ubicar el instalador
+        id: installer
+        run: |
+          $exe = Get-ChildItem dist -Filter 'inplaize.Setup.*.exe' -File | Select-Object -First 1
+          if (-not $exe) { throw 'electron-builder no dejo ningun instalador en dist/' }
+          "path=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "$($exe.Name) — $([math]::Round($exe.Length / 1MB)) MB"
+
+      # SignPath exige que el artefacto esté guardado en GitHub antes de firmarlo.
+      # archive:false lo sube tal cual, sin envolverlo en un zip.
+      - name: Subir el instalador sin firmar
+        id: unsigned
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.installer.outputs.path }}
+          archive: false
+          if-no-files-found: error
+
+      - name: Pedir la firma a SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'inplaize' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'nsis-installer' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          # Cada release se aprueba a mano en SignPath: la espera es por eso.
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: dist-signed
+          skip-decompress: true
+
+      - name: Elegir qué instalador publicar
+        id: artifact
+        run: |
+          $signed = Get-ChildItem dist-signed -Filter '*.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($signed) {
+            Write-Host "Instalador firmado: $($signed.Name)"
+            "path=$($signed.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            Write-Warning 'Sin firma de SignPath: se publica el instalador tal como salio de electron-builder.'
+            "path=${{ steps.installer.outputs.path }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "signed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+      - name: Publicar en el release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          ASSET: ${{ steps.artifact.outputs.path }}
+          SIGNED: ${{ steps.artifact.outputs.signed }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            $firma = if ($env:SIGNED -eq 'true') {
+              'El instalador esta firmado por SignPath Foundation.'
+            } else {
+              'Este instalador todavia no esta firmado, por lo que Windows muestra el aviso de SmartScreen.'
+            }
+            $notes = @(
+              "## inplaize $env:VERSION",
+              '',
+              '### Code signing policy',
+              '',
+              "$firma Free code signing provided by SignPath.io, certificate by SignPath Foundation.",
+              "Como se compila, quien aprueba cada firma y como verificar el archivo: $env:SITE_URL/code-signing-policy/"
+            ) -join "`n"
+            gh release create $tag --title "inplaize $env:VERSION" --notes $notes
+            if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el release.' }
+          }
+          gh release upload $tag "$env:ASSET" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudo subir el instalador al release.' }

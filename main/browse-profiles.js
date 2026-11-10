@@ -18,16 +18,31 @@ const { circleIcon, loadAccountPhoto, cachePhotoFromFile } = require('./account-
 const { log } = require('./logger');
 
 const NO_SESSION_LABEL = 'Sin sesión';
+const NEW_ACCOUNT_LABEL = 'Cuenta nueva';
+const ADD_ACCOUNT_URL = 'https://accounts.google.com/ServiceLogin?continue=https%3A%2F%2Fmyaccount.google.com%2F';
 /** Misma consulta que usa Chrome para saber qué cuentas hay iniciadas (POST con cuerpo vacío). */
 const LIST_ACCOUNTS_URL = 'https://accounts.google.com/ListAccounts?json=standard&source=ChromiumBrowser';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 /**
  * @typedef {{ email: string, name: string, photo: string }} GoogleAccount
- * @typedef {{ partition: string, email: string, name: string, photo: string, label: string, kind: 'loose' | 'session' | 'chrome', avatar?: string }} BrowseProfile
+ * @typedef {{ partition: string, email: string, name: string, photo: string, label: string, kind: 'loose' | 'session' | 'chrome' | 'custom', avatar?: string }} BrowseProfile
  * @typedef {{ partition: string, label: string, email: string, directory: string }} ChromeImport
- * @typedef {{ chrome: ChromeImport[], chosenDefault: string, accounts: Record<string, GoogleAccount[]> }} Store
+ * @typedef {{
+ *   chrome: ChromeImport[],
+ *   chosenDefault: string,
+ *   accounts: Record<string, GoogleAccount[]>,
+ *   custom: string[],
+ *   hidden: string[],
+ *   hiddenChrome: string[],
+ *   order: string[],
+ * }} Store
  */
+
+/** @param {unknown} raw */
+function stringList(raw) {
+  return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && x) : [];
+}
 
 function loosePartition() {
   return partitionFromSessionId(LOOSE_NAV_SESSION_ID);
@@ -65,7 +80,7 @@ let storeCache = null;
 function loadStore() {
   if (storeCache) return storeCache;
   /** @type {Store} */
-  let store = { chrome: [], chosenDefault: '', accounts: {} };
+  let store = { chrome: [], chosenDefault: '', accounts: {}, custom: [], hidden: [], hiddenChrome: [], order: [] };
   try {
     const raw = JSON.parse(fs.readFileSync(storePath(), 'utf-8'));
     store = {
@@ -75,6 +90,10 @@ function loadStore() {
       // `defaultPartition` (la última cuenta usada) se descarta: ahora el predeterminado se elige a mano.
       chosenDefault: typeof raw.chosenDefault === 'string' ? raw.chosenDefault : '',
       accounts: normalizeAccounts(raw.accounts),
+      custom: stringList(raw.custom),
+      hidden: stringList(raw.hidden),
+      hiddenChrome: stringList(raw.hiddenChrome),
+      order: stringList(raw.order),
     };
   } catch {
     /* primer uso */
@@ -106,6 +125,12 @@ function candidatePartitions() {
     if (index.has(c.partition)) continue;
     const entry = { partition: c.partition, kind: /** @type {const} */ ('chrome'), names: [c.label || c.directory] };
     index.set(c.partition, entry);
+    out.push(entry);
+  }
+  for (const partition of store.custom) {
+    if (index.has(partition)) continue;
+    const entry = { partition, kind: /** @type {const} */ ('custom'), names: [NEW_ACCOUNT_LABEL] };
+    index.set(partition, entry);
     out.push(entry);
   }
   let shortcuts = [];
@@ -146,7 +171,9 @@ function listProfiles() {
 
   /** @type {Map<string, BrowseProfile>} */
   const byEmail = new Map();
+  const hidden = new Set(store.hidden);
   for (const c of ordered) {
+    if (hidden.has(c.partition)) continue;
     const account = (store.accounts[c.partition] || [])[0];
     if (!account) continue;
     const key = account.email.toLowerCase();
@@ -419,17 +446,32 @@ function imageFromFile(filePath) {
 /** @type {Array<{ directory: string, name: string, email: string, avatar: string }>} */
 let chromeRail = [];
 
-/** Perfiles de Chrome cuyo mail todavía no está en ninguna sesión de la app. */
-function refreshChromeRail() {
-  const known = new Set(listProfiles().map((p) => p.email.toLowerCase()).filter(Boolean));
+/** Mails con sesión en alguna partition de la app, también los de perfiles quitados del riel. */
+function knownEmails() {
+  const out = new Set();
+  for (const list of Object.values(loadStore().accounts)) {
+    for (const a of list) out.add(a.email.toLowerCase());
+  }
+  return out;
+}
+
+/** Perfiles de Chrome que se pueden traer: su mail no está en la app y no se quitaron del riel. */
+function importableChromeProfiles() {
+  const known = knownEmails();
+  const hiddenChrome = new Set(loadStore().hiddenChrome);
   let list = [];
   try {
     list = require('./chrome-cookie-import').listChromeProfiles();
   } catch {
     list = [];
   }
-  chromeRail = list
-    .filter((c) => !c.userName || !known.has(c.userName.toLowerCase()))
+  return list.filter(
+    (c) => !hiddenChrome.has(c.directory) && (!c.userName || !known.has(c.userName.toLowerCase()))
+  );
+}
+
+function refreshChromeRail() {
+  chromeRail = importableChromeProfiles()
     .map((c) => {
       const photo = imageFromFile(c.picturePath);
       return {
@@ -489,15 +531,7 @@ async function pickProfile(host) {
   }
   const profiles = listProfiles();
   const currentDefault = defaultPartition();
-  const knownEmails = new Set(profiles.map((p) => p.email.toLowerCase()).filter(Boolean));
-  let chromeProfiles = [];
-  try {
-    chromeProfiles = require('./chrome-cookie-import')
-      .listChromeProfiles()
-      .filter((c) => !c.userName || !knownEmails.has(c.userName.toLowerCase()));
-  } catch {
-    chromeProfiles = [];
-  }
+  const chromeProfiles = importableChromeProfiles();
 
   /** @type {Map<string, Electron.NativeImage>} */
   const icons = new Map();
@@ -556,8 +590,132 @@ async function pickProfile(host) {
   });
 }
 
+/** Orden del riel elegido a mano (partitions); vacío = el de siempre. */
+function profileOrder() {
+  return [...loadStore().order];
+}
+
+/** @param {string[]} partitions */
+function setProfileOrder(partitions) {
+  saveStore({ ...loadStore(), order: stringList(partitions) });
+}
+
+/**
+ * Sesión vacía para iniciar sesión con otra cuenta de Google.
+ * @returns {{ partition: string, url: string }}
+ */
+function createAccountPartition() {
+  const partition = partitionFromSessionId(sessionIdFromName(`profile-${Date.now().toString(36)}`));
+  const store = loadStore();
+  saveStore({ ...store, custom: [...store.custom.filter((p) => p !== partition), partition] });
+  return { partition, url: ADD_ACCOUNT_URL };
+}
+
+/** @param {Electron.BrowserWindow | null} host @param {Electron.MessageBoxOptions} opts */
+async function ask(host, opts) {
+  const res = host && !host.isDestroyed() ? await dialog.showMessageBox(host, opts) : await dialog.showMessageBox(opts);
+  return res.response;
+}
+
+/**
+ * Quita un perfil del riel. Los que creó la app (cuenta nueva o traída de
+ * Chrome) se borran con su sesión; los que vienen de un acceso o de la
+ * navegación suelta solo se ocultan, porque esa sesión la sigue usando el acceso.
+ * @param {Electron.BrowserWindow | null} host
+ * @param {string} partition
+ * @returns {Promise<boolean>}
+ */
+async function removeProfile(host, partition) {
+  if (!partition || partition === guestPartition()) return false;
+  const store = loadStore();
+  const candidate = candidatePartitions().find((c) => c.partition === partition);
+  const owned = !!candidate && (candidate.kind === 'chrome' || candidate.kind === 'custom');
+  const label = labelFor(partition);
+  const choice = await ask(host, {
+    type: 'question',
+    message: `¿Quitar el perfil ${label}?`,
+    detail: owned
+      ? 'Se cierra la sesión de Google de este perfil en inplaize y se cierran sus pestañas.'
+      : 'Se oculta de la navegación libre y se cierran sus pestañas. La sesión sigue disponible para tus accesos directos; podés volver a mostrarlo con el botón +.',
+    buttons: ['Quitar', 'Cancelar'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  });
+  if (choice !== 0) return false;
+
+  const chromeEntry = store.chrome.find((c) => c.partition === partition);
+  const accounts = { ...store.accounts };
+  if (owned) delete accounts[partition];
+  saveStore({
+    ...store,
+    chrome: store.chrome.filter((c) => c.partition !== partition),
+    custom: store.custom.filter((p) => p !== partition),
+    accounts,
+    hidden: owned ? store.hidden : [...store.hidden.filter((p) => p !== partition), partition],
+    hiddenChrome: chromeEntry
+      ? [...store.hiddenChrome.filter((d) => d !== chromeEntry.directory), chromeEntry.directory]
+      : store.hiddenChrome,
+    order: store.order.filter((p) => p !== partition),
+    chosenDefault: store.chosenDefault === partition ? '' : store.chosenDefault,
+  });
+  avatarDataUrls.delete(partition);
+  if (owned) {
+    require('electron')
+      .session.fromPartition(partition)
+      .clearStorageData()
+      .catch(() => {});
+  }
+  refreshChromeRail();
+  return true;
+}
+
+/** @param {string} directory perfil de Chrome que deja de ofrecerse en el riel */
+function hideChromeProfile(directory) {
+  if (!directory) return;
+  const store = loadStore();
+  saveStore({ ...store, hiddenChrome: [...store.hiddenChrome.filter((d) => d !== directory), directory] });
+  refreshChromeRail();
+}
+
+/** Perfiles ocultos que se pueden volver a mostrar. */
+function hiddenProfiles() {
+  const store = loadStore();
+  return store.hidden
+    .filter((p) => (store.accounts[p] || []).length)
+    .map((partition) => ({ partition, label: labelFor(partition) }));
+}
+
+/** @param {string} partition */
+function unhideProfile(partition) {
+  const store = loadStore();
+  saveStore({ ...store, hidden: store.hidden.filter((p) => p !== partition) });
+  refreshChromeRail();
+}
+
+/** @param {string} directory */
+function unhideChromeProfile(directory) {
+  const store = loadStore();
+  saveStore({ ...store, hiddenChrome: store.hiddenChrome.filter((d) => d !== directory) });
+}
+
+/** Perfiles de Chrome quitados del riel: se pueden volver a traer desde el +. */
+function hiddenChromeProfiles() {
+  const hiddenChrome = new Set(loadStore().hiddenChrome);
+  let list = [];
+  try {
+    list = require('./chrome-cookie-import').listChromeProfiles();
+  } catch {
+    list = [];
+  }
+  return list
+    .filter((c) => hiddenChrome.has(c.directory))
+    .map((c) => ({ directory: c.directory, label: c.userName || c.name }));
+}
+
 module.exports = {
   loosePartition,
+  guestPartition,
   listProfiles,
   profileFor,
   labelFor,
@@ -568,4 +726,14 @@ module.exports = {
   pickProfile,
   railEntries,
   importChromeByDirectory,
+  importableChromeProfiles,
+  profileOrder,
+  setProfileOrder,
+  createAccountPartition,
+  removeProfile,
+  hideChromeProfile,
+  hiddenProfiles,
+  unhideProfile,
+  unhideChromeProfile,
+  hiddenChromeProfiles,
 };

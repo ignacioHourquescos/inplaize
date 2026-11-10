@@ -7,7 +7,6 @@ const { shell, BrowserWindow, session, app, webContents } = require('electron');
 const { isProcessRunning, focusWindowByProcess } = require('./process-utils');
 const { partitionFromSessionId, sanitizeSessionId } = require('./session-partition');
 const { webMapKey, normalizeUrlKey } = require('./web-map-key');
-const { loadAppSettings } = require('./app-settings-store');
 const {
   broadcastShortcutTitleBadge,
   broadcastOpenWebWindowKeys,
@@ -250,15 +249,6 @@ function refreshWebNotificationPatches() {
     if (win.isDestroyed()) continue;
     const wc = getHostedWebContents(win) || win.webContents;
     runWebNotificationInject(wc);
-  }
-  if (loadAppSettings().webHostMode === 'shell') {
-    try {
-      require('./web-shell').forEachTabWebContents((wc) => {
-        if (!wc.isDestroyed()) runWebNotificationInject(wc);
-      });
-    } catch {
-      /* noop */
-    }
   }
 }
 
@@ -734,13 +724,6 @@ function deleteWebWindowForMapKey(mapKey) {
 }
 
 function getOpenWebWindowKeys() {
-  if (loadAppSettings().webHostMode === 'shell') {
-    try {
-      return require('./web-shell').getOpenMapKeys();
-    } catch {
-      return [];
-    }
-  }
   return [...webWindowsByUrlKey.keys()];
 }
 
@@ -752,14 +735,6 @@ function getOpenWebWindowKeys() {
 function setWebShortcutAudioMuted(shortcut, muted) {
   if (!shortcut || shortcut.type !== 'web') return;
   const mapKey = webMapKey(shortcut);
-  if (loadAppSettings().webHostMode === 'shell') {
-    try {
-      require('./web-shell').setTabAudioMuted(mapKey, !!muted);
-    } catch {
-      /* noop */
-    }
-    return;
-  }
   const win = webWindowsByUrlKey.get(mapKey);
   if (win && !win.isDestroyed()) {
     const wc = getHostedWebContents(win) || win.webContents;
@@ -775,14 +750,6 @@ function setWebShortcutAudioMuted(shortcut, muted) {
 function setWebShortcutNotificationsMuted(shortcut, muted) {
   if (!shortcut || shortcut.type !== 'web') return;
   const mapKey = webMapKey(shortcut);
-  if (loadAppSettings().webHostMode === 'shell') {
-    try {
-      require('./web-shell').setTabNotificationsMuted(mapKey, !!muted);
-    } catch {
-      /* noop */
-    }
-    return;
-  }
   const win = webWindowsByUrlKey.get(mapKey);
   if (win && !win.isDestroyed()) {
     win.__usualDeskNotificationsMuted = !!muted;
@@ -793,11 +760,6 @@ function setWebShortcutNotificationsMuted(shortcut, muted) {
  * Misma URL (sin hash, sin barra final) → reutiliza la ventana y la enfoca.
  */
 async function openWebShortcut(shortcut) {
-  if (loadAppSettings().webHostMode === 'shell') {
-    await require('./web-shell').openOrFocusTab(shortcut);
-    return;
-  }
-
   const partition = partitionFromSessionId(shortcut.sessionId);
   const mapKey = webMapKey(shortcut);
   const { notificationsMuted: desiredNotificationsMuted, audioMuted: desiredAudioMuted } =
@@ -907,13 +869,6 @@ async function openShortcut(shortcut) {
  */
 function focusWebWindowByMapKey(mapKey) {
   if (!mapKey || typeof mapKey !== 'string') return false;
-  if (loadAppSettings().webHostMode === 'shell') {
-    try {
-      return require('./web-shell').focusTabByMapKey(mapKey);
-    } catch {
-      return false;
-    }
-  }
   const win = webWindowsByUrlKey.get(mapKey);
   if (!win || win.isDestroyed()) return false;
   require('./detached-web-frame').wakeHost(win);
@@ -1109,16 +1064,8 @@ async function focusWebWindowFromNotification(mapKey, notification) {
   const focused = focusWebWindowByMapKey(mapKey);
   if (!focused) return false;
   let wc = null;
-  if (loadAppSettings().webHostMode === 'shell') {
-    try {
-      wc = require('./web-shell').getWebContentsForMapKey(mapKey);
-    } catch {
-      wc = null;
-    }
-  } else {
-    const win = webWindowsByUrlKey.get(mapKey);
-    if (win && !win.isDestroyed()) wc = getHostedWebContents(win) || win.webContents;
-  }
+  const win = webWindowsByUrlKey.get(mapKey);
+  if (win && !win.isDestroyed()) wc = getHostedWebContents(win) || win.webContents;
   if (!wc || wc.isDestroyed()) return false;
   await new Promise((r) => setTimeout(r, 150));
   await tryOpenWebNotificationTarget(wc, notification);
@@ -1218,16 +1165,6 @@ async function openPastedUrl(raw) {
   return { ok: true };
 }
 
-function closeAllDetachedWebWindows() {
-  for (const win of [...webWindowsByUrlKey.values()]) {
-    if (win && !win.isDestroyed()) win.close();
-  }
-  webWindowsByUrlKey.clear();
-  lastFocusedWebMapKey = null;
-  if (lastFocusedSurfaceKind === 'web') lastFocusedSurfaceKind = null;
-  broadcastOpenWebWindowKeys([]);
-}
-
 module.exports = {
   openShortcut,
   openPastedUrl,
@@ -1239,7 +1176,6 @@ module.exports = {
   refreshWebNotificationPatches,
   installWebNotificationPermissionHandlers,
   attachWebShortcutEmbeddedWebContents,
-  closeAllDetachedWebWindows,
   closeWebWindowByMapKey,
   setWebWindowForMapKey,
   deleteWebWindowForMapKey,

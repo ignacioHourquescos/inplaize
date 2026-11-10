@@ -33,6 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
 const { session, app, dialog } = require('electron');
+const { toSetDetails, removeCookies } = require('./cookie-jar');
 
 /**
  * Logger persistente de la importación a `<userData>/chrome-import.log`.
@@ -431,19 +432,6 @@ async function fetchCookiesFromChrome(port, timeoutMs = 12000) {
   }
 }
 
-function mapCdpSameSite(s) {
-  switch (s) {
-    case 'Strict':
-      return 'strict';
-    case 'Lax':
-      return 'lax';
-    case 'None':
-      return 'no_restriction';
-    default:
-      return 'unspecified';
-  }
-}
-
 /**
  * Lanza Chrome headless con el perfil dado y devuelve TODAS las cookies del
  * browser context. Valida plataforma, binario, perfil y que Chrome esté cerrado.
@@ -568,50 +556,28 @@ async function setCookiesIntoPartition(cookies, targetPartition, domainFilter) {
   /** @type {Map<string, number>} */
   const importedByDomain = new Map();
 
+  // Traer el perfil es reemplazar la sesión, no sumarse a la que haya. Si queda
+  // la anterior, el login viejo sobrevive en las cookies que la nueva no pisa.
+  const removed = await removeCookies(ses, (c) => domainFilter(c.domain));
+  logLine('Cookies previas borradas de la partition:', String(removed));
+
   for (const c of cookies) {
     if (!c || typeof c !== 'object') continue;
     if (!domainFilter(c.domain)) continue;
     considered += 1;
 
-    const sameSite = mapCdpSameSite(c.sameSite);
-    const secure = !!c.secure || sameSite === 'no_restriction';
-    const proto = secure ? 'https' : 'http';
-    const rawDomain = String(c.domain || '');
-    const hostForUrl = rawDomain.replace(/^\./, '');
-    if (!hostForUrl) continue;
-    const cookiePath = typeof c.path === 'string' && c.path ? c.path : '/';
-    const url = `${proto}://${hostForUrl}${cookiePath}`;
-
-    const name = String(c.name || '');
-    // Las cookies con prefijo __Host- exigen sin domain attribute, path '/' y Secure.
-    const isHostPrefixed = /^__Host-/.test(name);
-
-    /** @type {Electron.CookiesSetDetails} */
-    const details = {
-      url,
-      name,
-      value: String(c.value || ''),
-      path: cookiePath,
-      secure,
-      httpOnly: !!c.httpOnly,
-      sameSite,
-    };
-    if (!isHostPrefixed && rawDomain) {
-      details.domain = rawDomain;
-    }
-    if (typeof c.expires === 'number' && c.expires > 0 && !c.session) {
-      details.expirationDate = c.expires;
-    }
+    const details = toSetDetails(c);
+    if (!details) continue;
 
     try {
       await ses.cookies.set(details);
       imported += 1;
-      const key = rawDomain || hostForUrl;
+      const key = String(c.domain || '');
       importedByDomain.set(key, (importedByDomain.get(key) || 0) + 1);
     } catch (err) {
       const reason = err && err.message ? err.message : 'desconocido';
       failuresByReason.set(reason, (failuresByReason.get(reason) || 0) + 1);
-      logLine('FALLA set cookie', name, 'domain=', rawDomain, 'path=', cookiePath, '→', reason);
+      logLine('FALLA set cookie', details.name, 'domain=', String(c.domain || ''), 'path=', details.path, '→', reason);
     }
   }
 
@@ -624,82 +590,12 @@ async function setCookiesIntoPartition(cookies, targetPartition, domainFilter) {
   logLine('Resumen partition', targetPartition, ':', JSON.stringify({
     considered,
     imported,
+    removed,
     importedByDomain: Object.fromEntries(importedByDomain),
     failuresByReason: Object.fromEntries(failuresByReason),
   }));
 
   return { imported, considered };
-}
-
-/**
- * Dominios base cuya sesión vive en las cookies de Google (accounts.google.com,
- * .google.com, etc.). Un acceso a Gmail suele guardarse como `gmail.com`, pero
- * el login real está en `google.com`, así que hay que traer la lista amplia.
- */
-const GOOGLE_FAMILY_DOMAINS = new Set([
-  'google.com',
-  'gmail.com',
-  'googlemail.com',
-  'youtube.com',
-  'google.com.ar',
-  'google.es',
-]);
-
-/**
- * Filtro de hostname para un dominio base. Los dominios de la familia Google
- * reciben la lista amplia (accounts.google.com, gstatic, googleusercontent, etc.)
- * porque el login la necesita; el resto matchea por sufijo del dominio base.
- * @param {string} domain dominio base (ej. 'linkedin.com')
- * @returns {(hostname: string) => boolean}
- */
-function domainFilterFor(domain) {
-  const d = String(domain || '').toLowerCase();
-  if (!d) return () => false;
-  if (GOOGLE_FAMILY_DOMAINS.has(d)) return isImportableHostname;
-  return (hostname) => {
-    if (!hostname || typeof hostname !== 'string') return false;
-    const h = hostname.toLowerCase().replace(/^\./, '');
-    return h === d || h.endsWith(`.${d}`);
-  };
-}
-
-/**
- * Importa sesiones de Chrome para varios destinos con UNA sola lectura de cookies.
- * @param {{ profileDirectory?: string, targets: Array<{ partition: string, domains: string[] }>, autoCloseChrome?: boolean }} opts
- * @returns {Promise<{ total: number, results: Array<{ partition: string, imported: number, considered: number }>, logPath: string }>}
- */
-async function importSessionsForTargets(opts) {
-  const targets = Array.isArray(opts && opts.targets) ? opts.targets : [];
-  if (targets.length === 0) throw new Error('MISSING_TARGETS');
-  const profileDirectory =
-    opts && typeof opts.profileDirectory === 'string' && opts.profileDirectory
-      ? opts.profileDirectory
-      : 'Default';
-
-  logReset();
-  logLine(
-    'Inicio importación multi-target. profileDirectory=',
-    profileDirectory,
-    'targets=',
-    targets.map((t) => `${t.partition}←[${(t.domains || []).join(',')}]`).join(' ')
-  );
-
-  const cookies = await fetchAllCookiesFromChromeProfile(profileDirectory, {
-    autoCloseChrome: !!(opts && opts.autoCloseChrome),
-  });
-
-  const results = [];
-  for (const t of targets) {
-    if (!t || typeof t.partition !== 'string' || !t.partition) continue;
-    const domains = Array.isArray(t.domains) ? t.domains.filter(Boolean) : [];
-    const filters = domains.map((d) => domainFilterFor(d));
-    const combined = (hostname) => filters.some((f) => f(hostname));
-    const r = await setCookiesIntoPartition(cookies, t.partition, combined);
-    results.push({ partition: t.partition, imported: r.imported, considered: r.considered });
-  }
-
-  logFlush();
-  return { total: cookies.length, results, logPath: _logPath };
 }
 
 /**
@@ -738,5 +634,4 @@ module.exports = {
   findChromeExecutable,
   defaultChromeUserDataDir,
   importGoogleCookiesFromChrome,
-  importSessionsForTargets,
 };

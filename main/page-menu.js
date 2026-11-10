@@ -20,6 +20,15 @@ const HISTORY_MENU_MAX = 15;
  *   sendToChrome: (command: string, payload?: unknown) => void,
  *   newTab?: () => void,
  *   allowFullScreen?: boolean,
+ *   openIncognitoTab?: () => void,
+ *   profileMenu?: () => Electron.MenuItemConstructorOptions,
+ *   recentlyClosed?: () => Array<{ title: string, url: string }>,
+ *   reopenClosed?: (index: number) => void,
+ *   addToShortcuts?: (wc: Electron.WebContents) => void,
+ *   openPasswordManager?: () => void,
+ *   passwordSettings?: () => { offerToSave: boolean, autofill: boolean },
+ *   setPasswordSettings?: (patch: { offerToSave?: boolean, autofill?: boolean }) => void,
+ *   openHelp?: () => void,
  * }} PageMenuContext
  */
 
@@ -178,6 +187,64 @@ function historyMenuItems(wc) {
   return items.length ? items : [{ label: 'Sin historial', enabled: false }];
 }
 
+/** @param {string} text */
+function menuLabel(text) {
+  return String(text || '').slice(0, 80).replace(/&/g, '&&');
+}
+
+/**
+ * Con pestañas cerradas disponibles, el historial es como el de Chrome:
+ * reabrir, las cerradas recientemente y, aparte, el de la pestaña.
+ * @param {PageMenuContext} ctx
+ * @param {Electron.WebContents | null} wc
+ * @returns {Electron.MenuItemConstructorOptions[]}
+ */
+function historySubmenu(ctx, wc) {
+  const hasPage = isAlive(wc);
+  if (typeof ctx.recentlyClosed !== 'function') return hasPage ? historyMenuItems(wc) : [];
+  const closed = ctx.recentlyClosed();
+  return [
+    {
+      label: 'Volver a abrir pestaña cerrada',
+      accelerator: 'Ctrl+Shift+T',
+      registerAccelerator: false,
+      enabled: closed.length > 0,
+      click: () => ctx.reopenClosed(0),
+    },
+    { type: 'separator' },
+    { label: 'Cerradas recientemente', enabled: false },
+    ...(closed.length
+      ? closed.map((t, i) => ({ label: menuLabel(t.title || t.url), click: () => ctx.reopenClosed(i) }))
+      : [{ label: 'Ninguna', enabled: false }]),
+    { type: 'separator' },
+    { label: 'En esta pestaña', enabled: hasPage, submenu: hasPage ? historyMenuItems(wc) : [] },
+  ];
+}
+
+/**
+ * @param {PageMenuContext} ctx
+ * @returns {Electron.MenuItemConstructorOptions[]}
+ */
+function passwordsSubmenu(ctx) {
+  const s = ctx.passwordSettings();
+  return [
+    { label: 'Gestor de contraseñas', click: () => ctx.openPasswordManager() },
+    { type: 'separator' },
+    {
+      label: 'Ofrecer guardar contraseñas',
+      type: 'checkbox',
+      checked: !!s.offerToSave,
+      click: () => ctx.setPasswordSettings({ offerToSave: !s.offerToSave }),
+    },
+    {
+      label: 'Completar el inicio de sesión automáticamente',
+      type: 'checkbox',
+      checked: !!s.autofill,
+      click: () => ctx.setPasswordSettings({ autofill: !s.autofill }),
+    },
+  ];
+}
+
 /**
  * @param {PageMenuContext} ctx
  * @returns {Electron.MenuItemConstructorOptions[]}
@@ -200,18 +267,56 @@ function buildTemplate(ctx) {
       ]
     : [];
 
+  const history = historySubmenu(ctx, wc);
+  /** @type {Electron.MenuItemConstructorOptions[]} */
+  const newTabItems = [{ label: 'Nueva pestaña', ...label('Ctrl+T'), click: () => openNewTab(ctx) }];
+  if (ctx.openIncognitoTab) {
+    newTabItems.push({
+      label: 'Nueva pestaña de incógnito',
+      ...label('Ctrl+Shift+N'),
+      click: () => ctx.openIncognitoTab(),
+    });
+  }
+  const profileItems = ctx.profileMenu ? [{ type: 'separator' }, ctx.profileMenu()] : [];
+  const passwordItems = ctx.openPasswordManager
+    ? [{ label: 'Contraseñas y Autocompletar', submenu: passwordsSubmenu(ctx) }]
+    : [];
+  const bookmarkItems = ctx.addToShortcuts
+    ? [
+        {
+          label: 'Marcadores y listas',
+          submenu: [
+            {
+              label: 'Añadir esta página a los accesos directos…',
+              enabled: webPage,
+              ...label('Ctrl+D'),
+              click: () => ctx.addToShortcuts(wc),
+            },
+          ],
+        },
+      ]
+    : [];
+  const helpItems = ctx.openHelp
+    ? [{ type: 'separator' }, { label: 'Ayuda', submenu: [{ label: 'Manual de inplaize', click: () => ctx.openHelp() }] }]
+    : [];
+
   return [
-    {
-      label: 'Nueva pestaña',
-      ...label('Ctrl+T'),
-      click: () => openNewTab(ctx),
-    },
+    ...newTabItems,
+    ...profileItems,
     { type: 'separator' },
-    { label: 'Historial', enabled: hasPage, submenu: hasPage ? historyMenuItems(wc) : [] },
+    ...passwordItems,
+    { label: 'Historial', enabled: history.length > 0, submenu: history },
     {
       label: 'Descargas',
       ...label('Ctrl+J'),
       click: () => ctx.sendToChrome('downloads'),
+    },
+    ...bookmarkItems,
+    {
+      label: 'Eliminar datos de navegación…',
+      enabled: hasPage,
+      ...label('Ctrl+Shift+Delete'),
+      click: () => clearBrowsingData(host, wc).catch(() => {}),
     },
     { type: 'separator' },
     {
@@ -237,10 +342,15 @@ function buildTemplate(ctx) {
     },
     { label: 'Traducir…', enabled: webPage, click: () => translatePage(wc) },
     {
-      label: 'Buscar en la página…',
+      label: 'Buscar y editar',
       enabled: hasPage,
-      ...label('Ctrl+F'),
-      click: () => ctx.sendToChrome('find-open'),
+      submenu: [
+        { label: 'Buscar…', ...label('Ctrl+F'), click: () => ctx.sendToChrome('find-open') },
+        { type: 'separator' },
+        { label: 'Cortar', ...label('Ctrl+X'), click: () => wc.cut() },
+        { label: 'Copiar', ...label('Ctrl+C'), click: () => wc.copy() },
+        { label: 'Pegar', ...label('Ctrl+V'), click: () => wc.paste() },
+      ],
     },
     {
       label: 'Enviar, guardar y compartir',
@@ -268,17 +378,13 @@ function buildTemplate(ctx) {
       enabled: hasPage,
       submenu: [
         {
-          label: 'Eliminar datos de navegación…',
-          ...label('Ctrl+Shift+Delete'),
-          click: () => clearBrowsingData(host, wc).catch(() => {}),
-        },
-        {
           label: 'Herramientas para desarrolladores',
           ...label('Ctrl+Shift+I'),
           click: () => wc.openDevTools({ mode: 'detach' }),
         },
       ],
     },
+    ...helpItems,
   ];
 }
 
@@ -340,6 +446,7 @@ function attachPageShortcuts(wc, ctx) {
     if (input.shift) {
       if (lower === 'i') wc.openDevTools({ mode: 'detach' });
       else if (key === 'Delete') clearBrowsingData(host, wc).catch(() => {});
+      else if (lower === 'n' && ctx.openIncognitoTab) ctx.openIncognitoTab();
       else handled = false;
     } else if (key === '+' || key === '=' || key === 'Add') stepZoom(wc, 1);
     else if (key === '-' || key === 'Subtract') stepZoom(wc, -1);
@@ -349,6 +456,7 @@ function attachPageShortcuts(wc, ctx) {
     else if (lower === 's') savePageAs(host, wc).catch(() => {});
     else if (lower === 't') openNewTab(ctx);
     else if (lower === 'j') ctx.sendToChrome('downloads');
+    else if (lower === 'd' && ctx.addToShortcuts && isWebUrl(wc.getURL())) ctx.addToShortcuts(wc);
     else handled = false;
     if (handled) event.preventDefault();
   });

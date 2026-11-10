@@ -311,17 +311,55 @@
 
 .doc-editor [data-resize-container] img {
   margin: 0;
+  height: auto !important;
 }
 
 .doc-editor [data-resize-handle] {
-  width: 12px;
-  height: 12px;
-  margin: -6px;
-  box-sizing: border-box;
-  background: #fff;
-  border: 2px solid #7c3aed;
-  border-radius: 3px;
+  width: 20px;
+  height: 20px;
+  margin: -8px;
+  background: transparent;
   z-index: 3;
+}
+
+.doc-editor .doc-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+  margin: 0.4em 0;
+}
+
+.doc-editor .doc-column {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.doc-editor .doc-column > :first-child,
+.doc-editor .doc-column > [data-resize-container]:first-child img {
+  margin-top: 0;
+}
+
+.doc-editor .doc-column > :last-child {
+  margin-bottom: 0;
+}
+
+.doc-col-drop {
+  display: none;
+  position: fixed;
+  z-index: 40;
+  width: 3px;
+  border-radius: 2px;
+  background: #a78bfa;
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.25);
+  pointer-events: none;
+}
+
+.doc-col-drop.is-on {
+  display: block;
+}
+
+.is-col-dropping .doc-dropcursor {
+  display: none !important;
 }
 
 .doc-editor [data-resize-handle='top-left'],

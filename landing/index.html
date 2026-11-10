@@ -1560,6 +1560,26 @@
       margin-top: 28px;
     }
 
+    .site-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 22px;
+      margin-top: 30px;
+      color: var(--ink-soft);
+      font-size: 13.5px;
+    }
+
+    .site-links a {
+      color: var(--ink-soft);
+      text-decoration: none;
+    }
+
+    .site-links a:hover {
+      color: var(--ink);
+      text-decoration: underline;
+    }
+
     .stage {
       position: relative;
       width: min(88vw, 520px, calc((100vh - 340px) * 640 / 600));
@@ -2192,7 +2212,7 @@
       <span class="sh-spacer"></span>
       <a
         class="sh-cta"
-        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.5.3/inplaize.Setup.1.5.3.exe"
+        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.6.0/inplaize.Setup.1.6.0.exe"
       >Descargar</a>
     </div>
   </header>
@@ -2364,9 +2384,14 @@
       <div class="actions">
         <a
           class="cta"
-          href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.5.3/inplaize.Setup.1.5.3.exe"
+          href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.6.0/inplaize.Setup.1.6.0.exe"
         >Descargar</a>
       </div>
+      <nav class="site-links" aria-label="Enlaces del sitio">
+        <a href="manual/">Manual</a>
+        <a href="code-signing-policy/">Code signing policy</a>
+        <a href="privacidad/">Privacidad</a>
+      </nav>
     </section>
   </div>
   <script>

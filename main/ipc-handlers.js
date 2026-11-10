@@ -35,6 +35,8 @@ const { acceleratorFromHotkey } = require('./hotkey-accelerator');
 const { reregisterDockGlobalShortcut } = require('./global-hotkey');
 
 const { getAppVersionPayload } = require('./app-version');
+const analytics = require('./analytics');
+const { describeShortcut } = require('./usage-snapshot');
 
 const {
   openShortcut,
@@ -45,7 +47,6 @@ const {
   focusWebWindowByMapKey,
   focusWebWindowFromNotification,
   refreshWebNotificationPatches,
-  closeAllDetachedWebWindows,
   focusLastWebWindowFromHotkey,
   minimizeAllWebWindows,
   closeWebWindowByMapKey,
@@ -58,27 +59,17 @@ const { webMapKey } = require('./web-map-key');
 const focusMode = require('./focus-mode');
 const { applyDockWindowBounds } = require('./window-bounds');
 const { raiseAlwaysOnTopWindow } = require('./window-focus');
-const { registerShellIpc, closeAndClearAll: closeWebShell } = require('./web-shell');
+const { registerShellIpc } = require('./web-shell');
 const { registerDetachedFrameIpc } = require('./detached-web-frame');
 const {
   registerLooseNavIpc,
   configureHooks: configureLooseNavHooks,
 } = require('./loose-nav-window');
-const {
-  listChromeProfiles,
-  isChromeRunning,
-  confirmChromeCloseForImport,
-  findChromeExecutable,
-  importGoogleCookiesFromChrome,
-} = require('./chrome-cookie-import');
 const browserImport = require('./browser-import');
 const profileImport = require('./profile-import');
 const historyStore = require('./history-store');
 const bookmarksStore = require('./bookmarks-store');
 const passwordsStore = require('./passwords-store');
-const { partitionFromSessionId } = require('./session-partition');
-const { LOOSE_NAV_SESSION_ID } = require('./constants');
-
 
 
 /**
@@ -177,8 +168,6 @@ const IPC_CHANNELS = [
 
   'chrome-open-add-shortcut',
 
-  'chrome-open-settings',
-
   'chrome-open-appearance',
 
   'chrome-enter-shortcuts-edit-mode',
@@ -226,12 +215,6 @@ const IPC_CHANNELS = [
   'focus-mode-get-state',
 
   'close-web-window-by-map-key',
-
-  'chrome-import-list-profiles',
-
-  'chrome-import-status',
-
-  'chrome-import-google-cookies',
 
   'browser-import-list-profiles',
 
@@ -305,6 +288,62 @@ const IPC_CHANNELS = [
 
 
 
+function trackCountChange(before, after, addedEvent, removedEvent) {
+  if (after > before && addedEvent) analytics.track(addedEvent);
+  else if (after < before && removedEvent) analytics.track(removedEvent);
+}
+
+/** Notas ya contadas como editadas en esta sesión: el renderer guarda en cada tecla. */
+const editedNoteIds = new Set();
+
+/**
+ * Al arrugar, la nota pasa a `crumpled`; al restaurarla vuelve como nota nueva
+ * (otro id), así que se empareja por cantidad y no por id.
+ */
+function trackStickyNoteChanges(before, after) {
+  const beforeNotes = new Map(before.notes.map((n) => [n.id, n]));
+  const afterNoteIds = new Set(after.notes.map((n) => n.id));
+  const beforeCrumpledIds = new Set(before.crumpled.map((c) => c.id));
+  const afterCrumpledIds = new Set(after.crumpled.map((c) => c.id));
+
+  let restorable = before.crumpled.filter((c) => !afterCrumpledIds.has(c.id)).length;
+  let crumpledNew = after.crumpled.filter((c) => !beforeCrumpledIds.has(c.id)).length;
+
+  for (const note of after.notes) {
+    const prev = beforeNotes.get(note.id);
+    if (!prev) {
+      if (restorable > 0) {
+        restorable -= 1;
+        analytics.track('sticky_note_restored');
+      } else {
+        analytics.track('sticky_note_created');
+      }
+    } else if (prev.text !== note.text && note.text.trim() && !editedNoteIds.has(note.id)) {
+      editedNoteIds.add(note.id);
+      analytics.track('sticky_note_edited');
+    }
+  }
+  for (const note of before.notes) {
+    if (afterNoteIds.has(note.id)) continue;
+    if (crumpledNew > 0) {
+      crumpledNew -= 1;
+      analytics.track('sticky_note_crumpled');
+    } else {
+      analytics.track('sticky_note_deleted');
+    }
+  }
+}
+
+function countTodoBlocks(payload) {
+  const columns = payload && Array.isArray(payload.columns) ? payload.columns : [];
+  let n = 0;
+  for (const col of columns) {
+    const blocks = col && Array.isArray(col.blocks) ? col.blocks : [];
+    for (const b of blocks) if (b && b.type === 'todo') n += 1;
+  }
+  return n;
+}
+
 function registerIpcHandlers(state) {
 
   /** IDs activos de avisos in-app; mientras exista alguno, el dock ocupa toda la pantalla. */
@@ -358,6 +397,7 @@ function registerIpcHandlers(state) {
       return;
     }
     state.isExpanded = true;
+    analytics.track('home_viewed');
     applyDockWindowBounds(dock, true);
     try {
       dock.setIgnoreMouseEvents(false);
@@ -538,23 +578,6 @@ function registerIpcHandlers(state) {
 
 
 
-  function dockSurfaceIsFocused() {
-    const dockWin = state.mainWindow;
-    if (!dockWin || dockWin.isDestroyed()) return false;
-    try {
-      if (dockWin.isFocused()) return true;
-    } catch {
-      /* noop */
-    }
-    try {
-      const top = dockWin.webContents;
-      if (top && !top.isDestroyed() && top.isFocused()) return true;
-    } catch {
-      /* noop */
-    }
-    return false;
-  }
-
   /**
    * Ciclos de abrir y volver a cerrar con el atajo antes de explicar cómo
    * apagar una ventana y cómo dejarla en foco. El popup sale al traer la app
@@ -671,85 +694,62 @@ function registerIpcHandlers(state) {
     }
 
     let revealed = false;
+    /** Qué quedó al frente al mostrar: 'home' o 'web'. */
+    let surface = '';
 
-    if (loadAppSettings().webHostMode === 'shell') {
-      let shellInUse = false;
-      let ws = null;
-      try {
-        ws = require('./web-shell');
-        shellInUse = ws.shellWindowOrContentsHasFocus();
-      } catch {
-        /* noop */
-      }
-      const homeIsFront = state.isExpanded && (dockSurfaceIsFocused() || !shellInUse);
-      if (homeIsFront) {
-        markHomeAsLastFocusedSurface({ holdMs: 500 });
-        try {
-          if (ws) ws.minimizeShellFromHotkey();
-        } catch {
-          /* noop */
-        }
-        collapseDockSidebar();
-      } else if (!shellInUse && lastFocusedSurfaceIsHome()) {
-        expandDockSidebar();
-        revealed = true;
-      } else {
-        try {
-          if (ws) ws.showOrToggleShellFromHotkey();
-        } catch {
-          /* noop */
-        }
-        if (state.isExpanded) collapseDockSidebar();
-        revealed = !shellInUse;
-      }
+    const dockWin = state.mainWindow;
+    if (!dockWin || dockWin.isDestroyed()) return;
+
+    const rememberedWebKey = front && front.kind === 'web' && typeof front.mapKey === 'string' ? front.mapKey : '';
+    const webKey = rememberedWebKey || focusedWebMapKey() || '';
+    const homeShowing = state.isExpanded === true;
+    const homeInFront = !webKey && (homeShowing || (front && front.kind === 'home'));
+    if (webKey || homeInFront) {
+      // Se guarda la ventana en la que el usuario está parado, no la que reciba el foco al ocultar.
+      if (webKey) pinWebSurface(webKey, { holdMs: 700 });
+      else markHomeAsLastFocusedSurface({ holdMs: 700 });
+      state.reopenHomeOnFocus = false;
+      state.suppressHomeReopenUntil = Date.now() + 700;
+      minimizeAllWebWindows();
+      if (homeShowing) collapseDockSidebar();
+    } else if (lastFocusedSurfaceIsHome()) {
+      state.reopenHomeOnFocus = false;
+      expandDockSidebar();
+      revealed = true;
+      surface = 'home';
     } else {
-      const dockWin = state.mainWindow;
-      if (!dockWin || dockWin.isDestroyed()) return;
-
-      const rememberedWebKey = front && front.kind === 'web' && typeof front.mapKey === 'string' ? front.mapKey : '';
-      const webKey = rememberedWebKey || focusedWebMapKey() || '';
-      const homeShowing = state.isExpanded === true;
-      const homeInFront = !webKey && (homeShowing || (front && front.kind === 'home'));
-      if (webKey || homeInFront) {
-        // Se guarda la ventana en la que el usuario está parado, no la que reciba el foco al ocultar.
-        if (webKey) pinWebSurface(webKey, { holdMs: 700 });
-        else markHomeAsLastFocusedSurface({ holdMs: 700 });
-        state.reopenHomeOnFocus = false;
-        state.suppressHomeReopenUntil = Date.now() + 700;
-        minimizeAllWebWindows();
-        if (homeShowing) collapseDockSidebar();
-      } else if (lastFocusedSurfaceIsHome()) {
-        state.reopenHomeOnFocus = false;
-        expandDockSidebar();
+      state.reopenHomeOnFocus = false;
+      state.suppressHomeReopenUntil = Date.now() + 700;
+      if (state.isExpanded) collapseDockSidebar();
+      const focusedWeb = focusLastWebWindowFromHotkey();
+      if (focusedWeb) {
         revealed = true;
+        surface = 'web';
       } else {
-        state.reopenHomeOnFocus = false;
-        state.suppressHomeReopenUntil = Date.now() + 700;
-        if (state.isExpanded) collapseDockSidebar();
-        const focusedWeb = focusLastWebWindowFromHotkey();
-        if (focusedWeb) {
-          revealed = true;
-        } else {
-          state.isExpanded = !state.isExpanded;
-          applyDockWindowBounds(dockWin, state.isExpanded);
-          try {
-            if (state.isExpanded) {
-              dockWin.setIgnoreMouseEvents(false);
-            } else {
-              dockWin.setIgnoreMouseEvents(true, { forward: true });
-            }
-          } catch {
-            /* noop */
-          }
-          dockWin.webContents.send('sidebar-state', state.isExpanded);
+        state.isExpanded = !state.isExpanded;
+        applyDockWindowBounds(dockWin, state.isExpanded);
+        try {
           if (state.isExpanded) {
-            state.dockBlurIgnoreUntil = Date.now() + 500;
-            raiseAlwaysOnTopWindow(dockWin);
+            dockWin.setIgnoreMouseEvents(false);
+          } else {
+            dockWin.setIgnoreMouseEvents(true, { forward: true });
           }
-          revealed = state.isExpanded === true;
+        } catch {
+          /* noop */
         }
+        dockWin.webContents.send('sidebar-state', state.isExpanded);
+        if (state.isExpanded) {
+          state.dockBlurIgnoreUntil = Date.now() + 500;
+          raiseAlwaysOnTopWindow(dockWin);
+        }
+        revealed = state.isExpanded === true;
+        if (revealed) surface = 'home';
       }
     }
+
+    analytics.track('hotkey_used', revealed
+      ? { result: 'shown', surface: surface || 'unknown' }
+      : { result: 'hidden' });
 
     recordHotkeyToggle(revealed);
   }
@@ -868,15 +868,6 @@ function registerIpcHandlers(state) {
     return true;
   });
 
-  ipcMain.handle('chrome-open-settings', () => {
-    expandDockSidebar();
-    const dock = state.mainWindow;
-    if (dock && !dock.isDestroyed()) {
-      dock.webContents.send('open-settings-modal');
-    }
-    return true;
-  });
-
   ipcMain.handle('chrome-open-appearance', () => {
     expandDockSidebar();
     const dock = state.mainWindow;
@@ -921,7 +912,11 @@ function registerIpcHandlers(state) {
 
     pushUndoBeforeChange();
 
+    const before = loadShortcuts().length;
+
     saveShortcuts(shortcuts);
+
+    trackCountChange(before, loadShortcuts().length, 'shortcut_created', 'shortcut_deleted');
 
     broadcastShortcutsChanged();
 
@@ -973,11 +968,22 @@ function registerIpcHandlers(state) {
 
   ipcMain.handle('open-shortcut', async (_event, shortcut) => {
 
+    if (shortcut && typeof shortcut === 'object') {
+      analytics.track('shortcut_opened', describeShortcut(shortcut));
+    }
+
     await openShortcut(shortcut);
 
   });
 
+  ipcMain.handle('analytics-track', (_event, payload) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    analytics.trackFromRenderer(String(raw.name || ''), raw.props);
+    return true;
+  });
+
   ipcMain.handle('open-pasted-url', async (_event, raw) => {
+    analytics.track('pasted_url_opened');
     try {
       return await openPastedUrl(raw);
     } catch {
@@ -992,6 +998,7 @@ function registerIpcHandlers(state) {
   });
 
   ipcMain.handle('app-browser-open', async () => {
+    analytics.track('app_browser_opened');
     await require('./loose-nav-window').enterLooseNavMode();
     return true;
   });
@@ -1134,10 +1141,10 @@ function registerIpcHandlers(state) {
 
 
 
-  ipcMain.handle('fetch-web-favicon', async (_event, pageUrl) => {
+  ipcMain.handle('fetch-web-favicon', async (_event, pageUrl, iconUrlHint) => {
     try {
       const { resolveWebFavicon } = require('./web-favicon');
-      const dataUrl = await resolveWebFavicon(pageUrl);
+      const dataUrl = await resolveWebFavicon(pageUrl, iconUrlHint);
       if (!dataUrl || !dataUrl.startsWith('data:image/')) return null;
       return { dataUrl };
     } catch {
@@ -1161,6 +1168,16 @@ function registerIpcHandlers(state) {
 
     const next = saveAppSettings(p);
 
+    if (Object.prototype.hasOwnProperty.call(p, 'analyticsEnabled')) {
+      if (prev.analyticsEnabled && !next.analyticsEnabled) analytics.track('analytics_disabled');
+      analytics.setAnalyticsEnabled(next.analyticsEnabled);
+    }
+    if (!prev.onboardingCompleted && next.onboardingCompleted) {
+      analytics.track('onboarding_completed');
+    }
+    if (Object.prototype.hasOwnProperty.call(p, 'dockHotkey')) {
+      analytics.track('hotkey_changed');
+    }
     if (Object.prototype.hasOwnProperty.call(p, 'dockHotkey')) {
       const registered = reregisterDockGlobalShortcut();
       if (!registered) {
@@ -1168,23 +1185,6 @@ function registerIpcHandlers(state) {
         reregisterDockGlobalShortcut();
         return Object.assign({}, reverted, { dockHotkeyRejected: true });
       }
-    }
-
-    if (
-      Object.prototype.hasOwnProperty.call(p, 'webHostMode') &&
-      prev.webHostMode !== next.webHostMode
-    ) {
-      try {
-        closeWebShell();
-      } catch {
-        /* noop */
-      }
-      try {
-        closeAllDetachedWebWindows();
-      } catch {
-        /* noop */
-      }
-      refreshWebNotificationPatches();
     }
 
     if (Object.prototype.hasOwnProperty.call(p, 'inAppWebNotifications')) {
@@ -1242,16 +1242,6 @@ function registerIpcHandlers(state) {
     const raw = payload && typeof payload === 'object' ? payload : {};
     const mapKey = typeof raw.mapKey === 'string' ? raw.mapKey : String(payload || '');
     if (!mapKey) return false;
-    if (loadAppSettings().webHostMode === 'shell') {
-      try {
-        const shell = require('./web-shell');
-        if (typeof shell.closeTabByMapKey === 'function') {
-          return shell.closeTabByMapKey(mapKey);
-        }
-      } catch {
-        /* noop */
-      }
-    }
     try {
       closeWebWindowByMapKey(mapKey);
     } catch {
@@ -1277,6 +1267,7 @@ function registerIpcHandlers(state) {
     const mk = webMapKey(shortcut);
     if (!mk) return focusMode.getState();
     focusMode.toggleMember(mk);
+    analytics.track('focus_mode_toggled', { member: focusMode.isMember(mk) });
     // Si tras alternar el shortcut quedó DENTRO de la colección y aún no
     // estaba abierto, lo abrimos para que reciba sonido/notifs acorde.
     if (focusMode.isMember(mk)) {
@@ -1290,116 +1281,6 @@ function registerIpcHandlers(state) {
       }
     }
     return focusMode.getState();
-  });
-
-  ipcMain.handle('chrome-import-status', () => {
-    return {
-      platformSupported: process.platform === 'win32',
-      chromeFound: !!findChromeExecutable(),
-      chromeRunning: isChromeRunning(),
-    };
-  });
-
-  ipcMain.handle('chrome-import-list-profiles', () => {
-    try {
-      return listChromeProfiles();
-    } catch {
-      return [];
-    }
-  });
-
-  ipcMain.handle('chrome-import-google-cookies', async (_event, payload) => {
-    const raw = payload && typeof payload === 'object' ? payload : {};
-    const profileDirectory =
-      typeof raw.profileDirectory === 'string' && raw.profileDirectory
-        ? raw.profileDirectory
-        : 'Default';
-    // Por ahora siempre importamos a la partition de Navegación suelta (la que usa
-    // el login de Cursor y demás pestañas dentro del dock).
-    const targetPartition = partitionFromSessionId(LOOSE_NAV_SESSION_ID);
-    if (!(await confirmChromeCloseForImport(state.mainWindow))) {
-      return { ok: false, error: 'CANCELLED' };
-    }
-    try {
-      const result = await importGoogleCookiesFromChrome({
-        profileDirectory,
-        targetPartition,
-        autoCloseChrome: true,
-      });
-      return { ok: true, ...result, targetPartition };
-    } catch (err) {
-      const code =
-        err && typeof err.message === 'string' ? err.message : 'IMPORT_FAILED';
-      return { ok: false, error: code };
-    }
-  });
-
-  ipcMain.handle('chrome-import-sessions-for-shortcuts', async (_event, payload) => {
-    const raw = payload && typeof payload === 'object' ? payload : {};
-    const profileDirectory =
-      typeof raw.profileDirectory === 'string' && raw.profileDirectory
-        ? raw.profileDirectory
-        : 'Default';
-    const wantedIds = Array.isArray(raw.shortcutIds)
-      ? new Set(raw.shortcutIds.map((x) => String(x)))
-      : null;
-
-    const { baseDomainOf } = require('./session-router');
-    const shortcuts = loadShortcuts();
-    /** @type {Array<{ shortcut: object, partition: string, domain: string }>} */
-    const entries = [];
-    for (const s of shortcuts) {
-      if (!s || s.type !== 'web' || !s.url) continue;
-      if (wantedIds && !wantedIds.has(String(s.id))) continue;
-      const domain = baseDomainOf(s.url);
-      if (!domain) continue;
-      // WhatsApp Web no se puede importar: su sesión no vive en cookies.
-      if (domain === 'whatsapp.com') continue;
-      entries.push({
-        shortcut: s,
-        partition: partitionFromSessionId(s.sessionId),
-        domain,
-      });
-    }
-    if (entries.length === 0) {
-      return { ok: false, error: 'NO_IMPORTABLE_SHORTCUTS' };
-    }
-
-    // Varios accesos pueden compartir partition (misma sesión): agrupamos dominios.
-    /** @type {Map<string, Set<string>>} */
-    const domainsByPartition = new Map();
-    for (const e of entries) {
-      if (!domainsByPartition.has(e.partition)) domainsByPartition.set(e.partition, new Set());
-      domainsByPartition.get(e.partition).add(e.domain);
-    }
-    const targets = [...domainsByPartition.entries()].map(([partition, domains]) => ({
-      partition,
-      domains: [...domains],
-    }));
-
-    if (!(await confirmChromeCloseForImport(state.mainWindow))) {
-      return { ok: false, error: 'CANCELLED' };
-    }
-    try {
-      const { importSessionsForTargets } = require('./chrome-cookie-import');
-      const result = await importSessionsForTargets({
-        profileDirectory,
-        targets,
-        autoCloseChrome: true,
-      });
-      const byPartition = new Map(result.results.map((r) => [r.partition, r]));
-      const importedByShortcut = entries.map((e) => ({
-        shortcutId: String(e.shortcut.id),
-        name: (e.shortcut.name && String(e.shortcut.name)) || e.domain,
-        domain: e.domain,
-        imported: byPartition.has(e.partition) ? byPartition.get(e.partition).imported : 0,
-      }));
-      return { ok: true, total: result.total, importedByShortcut };
-    } catch (err) {
-      const code =
-        err && typeof err.message === 'string' ? err.message : 'IMPORT_FAILED';
-      return { ok: false, error: code };
-    }
   });
 
   ipcMain.handle('dismiss-dock-in-app-notification', (_event, id) => {
@@ -1429,9 +1310,10 @@ function registerIpcHandlers(state) {
     ipcMain.handle('downloads-save-image-edit', (_event, id, dataUrl) =>
       downloads.saveImageEdit(String(id), String(dataUrl || ''))
     );
-    ipcMain.handle('downloads-ingest-dropped-files', (_event, paths) =>
-      downloads.ingestDroppedPaths(paths)
-    );
+    ipcMain.handle('downloads-ingest-dropped-files', (_event, paths) => {
+      analytics.track('files_dropped', { count: Array.isArray(paths) ? paths.length : 0 });
+      return downloads.ingestDroppedPaths(paths);
+    });
     // Miniatura de documentos (PDF/Excel/CSV) generada por la app, no por el
     // shell del sistema. Devuelve una URL file:// a la miniatura cacheada.
     const thumbnails = require('./thumbnail-service');
@@ -1488,22 +1370,32 @@ function registerIpcHandlers(state) {
     // Cajón mágico: comprimir/convertir archivos con ffmpeg. El resultado
     // entra al mismo historial de descargas (progreso y toasts incluidos).
     const magicDrawer = require('./magic-drawer');
-    ipcMain.handle('magic-transform', (_event, payload) =>
-      magicDrawer.transformFile(payload || {})
-    );
+    ipcMain.handle('magic-transform', (_event, payload) => {
+      const p = payload || {};
+      analytics.track('magic_transform', {
+        action: String(p.action || ''),
+        target: String(p.target || ''),
+      });
+      return magicDrawer.transformFile(p);
+    });
   }
 
   {
     // Recibir archivos desde el teléfono (QR en el panel de descargas).
     const phoneUpload = require('./phone-upload-server');
     phoneUpload.startPhoneUploadServer().catch(() => {});
-    ipcMain.handle('phone-upload-get-info', () => phoneUpload.getConnectInfo());
+    ipcMain.handle('phone-upload-get-info', () => {
+      analytics.track('phone_upload_opened');
+      return phoneUpload.getConnectInfo();
+    });
   }
 
   ipcMain.handle('get-sticky-notes', () => loadStickyNotes());
 
   ipcMain.handle('save-sticky-notes', (event, payload) => {
+    const before = loadStickyNotes();
     const saved = saveStickyNotes(payload);
+    trackStickyNoteChanges(before, saved);
     broadcastStickyNotesChanged(event.sender);
     return saved;
   });
@@ -1524,7 +1416,9 @@ function registerIpcHandlers(state) {
   ipcMain.handle('get-todos', () => loadTodos());
 
   ipcMain.handle('save-todos', (event, payload) => {
+    const before = countTodoBlocks(loadTodos());
     const saved = saveTodos(payload);
+    trackCountChange(before, countTodoBlocks(saved), 'todo_created', null);
     broadcastTodosChanged(event.sender);
     return saved;
   });
@@ -1533,6 +1427,7 @@ function registerIpcHandlers(state) {
     const body = payload && typeof payload === 'object' ? payload : {};
     const html = typeof body.html === 'string' ? body.html : '';
     if (!html || html.length > 80 * 1024 * 1024) return { ok: false, error: 'EMPTY' };
+    analytics.track('document_pdf_exported');
     const baseName = String(body.title || '')
       .replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ')
       .replace(/\s+/g, ' ')
@@ -1681,6 +1576,7 @@ function registerIpcHandlers(state) {
 
     const def = browserImport.browserDef(browser);
     if (!def) return { ok: false, error: 'BROWSER_NOT_FOUND' };
+    analytics.track('browser_import', { browser });
 
     // Las cookies obligan a cerrar el navegador; pedimos permiso una vez. Si el
     // usuario no quiere cerrarlo, seguimos sin cookies (historial/marcadores/
@@ -1744,7 +1640,7 @@ function registerIpcHandlers(state) {
   ipcMain.handle('history-list', (_event, payload) => {
     const raw = payload && typeof payload === 'object' ? payload : {};
     try {
-      return historyStore.search(String(raw.query || ''), Number(raw.limit) || 300);
+      return historyStore.search(String(raw.query || ''), Number(raw.limit) || 300, Number(raw.offset) || 0);
     } catch {
       return [];
     }
@@ -1752,7 +1648,7 @@ function registerIpcHandlers(state) {
 
   ipcMain.handle('history-remove', (_event, url) => {
     try {
-      return historyStore.remove(String(url || ''));
+      return historyStore.remove(Array.isArray(url) ? url.map((u) => String(u || '')) : String(url || ''));
     } catch {
       return false;
     }

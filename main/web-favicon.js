@@ -271,9 +271,10 @@ async function fetchBytes(url, parentSignal, timeoutMs, maxBytes, accept) {
 
 /**
  * @param {string} pageUrlRaw
+ * @param {string} [iconUrlHint] favicon que ya mostró la página: sirve aunque la página pida login.
  * @returns {Promise<string | null>} data URL o null
  */
-async function resolveWebFavicon(pageUrlRaw) {
+async function resolveWebFavicon(pageUrlRaw, iconUrlHint) {
   if (activeController) {
     try {
       activeController.abort();
@@ -288,6 +289,19 @@ async function resolveWebFavicon(pageUrlRaw) {
     const page = normalizePageUrl(pageUrlRaw);
     if (!page) return null;
     const deadline = Date.now() + BUDGET_MS;
+    const hint = toHttpUrl(String(iconUrlHint || ''), page.href);
+    if (hint) {
+      const img = await fetchBytes(
+        hint,
+        signal,
+        remaining(deadline),
+        ICON_MAX,
+        'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8',
+      );
+      if (signal.aborted) return null;
+      const dataUrl = img ? imageDataUrl(img.buf, img.contentType, hint) : '';
+      if (dataUrl) return dataUrl;
+    }
     let links = [];
     const htmlRes = await fetchBytes(
       page.href,

@@ -24,9 +24,11 @@ contextBridge.exposeInMainWorld('usualDesk', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   openUserDataFolder: () => ipcRenderer.invoke('open-user-data-folder'),
   listBuiltinIcons: () => ipcRenderer.invoke('list-builtin-icons'),
-  fetchWebFavicon: (pageUrl) => ipcRenderer.invoke('fetch-web-favicon', pageUrl),
+  fetchWebFavicon: (pageUrl, iconUrlHint) => ipcRenderer.invoke('fetch-web-favicon', pageUrl, iconUrlHint),
   getAppSettings: () => ipcRenderer.invoke('get-app-settings'),
   setAppSettings: (partial) => ipcRenderer.invoke('set-app-settings', partial),
+  trackEvent: (name, props) =>
+    ipcRenderer.invoke('analytics-track', { name: String(name || ''), props: props || {} }),
   onSidebarState: (callback) => {
     ipcRenderer.on('sidebar-state', (_event, state) => callback(state));
   },
@@ -35,9 +37,6 @@ contextBridge.exposeInMainWorld('usualDesk', {
   },
   onOpenAddShortcutModal: (callback) => {
     ipcRenderer.on('open-add-shortcut-modal', () => callback());
-  },
-  onOpenSettingsModal: (callback) => {
-    ipcRenderer.on('open-settings-modal', () => callback());
   },
   onOpenAppearanceModal: (callback) => {
     ipcRenderer.on('open-appearance-modal', () => callback());
@@ -109,6 +108,15 @@ contextBridge.exposeInMainWorld('usualDesk', {
       partition: target && target.partition ? String(target.partition) : '',
       chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
     }),
+  looseNavRemoveProfile: (target) =>
+    ipcRenderer.invoke('loose-nav-remove-profile', {
+      partition: target && target.partition ? String(target.partition) : '',
+      chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
+    }),
+  looseNavReorderProfiles: (partitions) =>
+    ipcRenderer.invoke('loose-nav-reorder-profiles', Array.isArray(partitions) ? partitions.map(String) : []),
+  looseNavCoverPage: (cover) => ipcRenderer.invoke('loose-nav-cover-page', cover === true),
+  looseNavOpenAddProfileMenu: (x, y) => ipcRenderer.invoke('loose-nav-add-profile-menu', { x, y }),
   onLooseNavShortcut: (callback) => {
     ipcRenderer.on('loose-nav-shortcut', (_event, action) => callback(String(action || '')));
   },
@@ -119,6 +127,10 @@ contextBridge.exposeInMainWorld('usualDesk', {
   looseNavOpenExternal: (url) => ipcRenderer.invoke('loose-nav-open-external', { url }),
   looseNavGetState: () => ipcRenderer.invoke('loose-nav-get-state'),
   looseNavOpenPageMenu: (x, y) => ipcRenderer.invoke('loose-nav-page-menu', { x, y }),
+  looseNavOpenTabMenu: (tabId, x, y) =>
+    ipcRenderer.invoke('loose-nav-tab-menu', { tabId: String(tabId || ''), x, y }),
+  looseNavToggleMute: (tabId) => ipcRenderer.invoke('loose-nav-toggle-mute', String(tabId || '')),
+  looseNavReopenClosedTab: () => ipcRenderer.invoke('loose-nav-reopen-closed'),
   looseNavFindInPage: (text, opts) =>
     ipcRenderer.invoke('loose-nav-find', {
       text: String(text || ''),
@@ -144,14 +156,6 @@ contextBridge.exposeInMainWorld('usualDesk', {
     ipcRenderer.on('loose-nav-state', (_event, payload) => callback(payload));
   },
 
-  /* ---- Importar cookies de Google desde Chrome ---- */
-  getChromeImportStatus: () => ipcRenderer.invoke('chrome-import-status'),
-  listChromeProfiles: () => ipcRenderer.invoke('chrome-import-list-profiles'),
-  importChromeGoogleCookies: (profileDirectory) =>
-    ipcRenderer.invoke('chrome-import-google-cookies', { profileDirectory }),
-  importChromeSessionsForShortcuts: (profileDirectory, shortcutIds) =>
-    ipcRenderer.invoke('chrome-import-sessions-for-shortcuts', { profileDirectory, shortcutIds }),
-
   /* ---- Importar perfil completo de otro navegador (estilo Comet) ---- */
   listBrowserImportProfiles: () => ipcRenderer.invoke('browser-import-list-profiles'),
   runBrowserImport: (browser, directory, parts) =>
@@ -160,7 +164,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   /* ---- Historial, marcadores y contraseñas ---- */
   suggestHistory: (query, limit) => ipcRenderer.invoke('history-suggest', { query, limit }),
   recordHistory: (url, title) => ipcRenderer.invoke('history-record', { url, title }),
-  listHistory: (query, limit) => ipcRenderer.invoke('history-list', { query, limit }),
+  listHistory: (query, limit, offset) => ipcRenderer.invoke('history-list', { query, limit, offset }),
   removeHistory: (url) => ipcRenderer.invoke('history-remove', url),
   clearHistory: () => ipcRenderer.invoke('history-clear'),
   listBookmarks: () => ipcRenderer.invoke('bookmarks-list'),

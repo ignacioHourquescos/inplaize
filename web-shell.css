@@ -61,9 +61,9 @@ html[data-shell-frameless='true'] .shortcut-strip {
   -webkit-app-region: drag;
 }
 
-.shortcut-strip .strip-add-shortcut,
-.shortcut-strip .strip-add-shortcut:hover,
-.shortcut-strip .strip-add-shortcut:active {
+.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary),
+.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):hover,
+.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):active {
   background: var(--ud-chrome-strip-bg);
 }
 

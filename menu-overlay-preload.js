@@ -10,10 +10,10 @@ contextBridge.exposeInMainWorld('menuOverlay', {
   },
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
   openAppearance: () => ipcRenderer.invoke('chrome-open-appearance'),
-  openSettings: () => ipcRenderer.invoke('chrome-open-settings'),
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   exitShortcutsEditMode: () => ipcRenderer.invoke('chrome-request-exit-shortcut-edit-mode'),
   quitApp: () => ipcRenderer.invoke('close-app'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   onShortcutsEditModeSync: (callback) => {
     ipcRenderer.on('shortcuts-edit-mode-sync', (_event, on) => callback(on === true));
   },

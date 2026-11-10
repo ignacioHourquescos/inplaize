@@ -14,6 +14,18 @@ app.setName('inplaize');
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_ID);
 }
+/**
+ * Chromium no comparte la carpeta de datos entre procesos: dos inplaize sobre
+ * la misma se pisan la caché, las cookies y el service worker storage. El
+ * candado va atado al userData, así que `--user-data-dir` sigue permitiendo
+ * levantar una instancia aparte a propósito.
+ */
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0);
+  return;
+}
+const analytics = require('./analytics');
+analytics.initAnalytics();
 const { createDockWindow } = require('./dock-window');
 const { registerIpcHandlers } = require('./ipc-handlers');
 const { registerDockGlobalShortcut, unregisterDockGlobalShortcut } = require('./global-hotkey');
@@ -80,6 +92,18 @@ function enableAutoStart() {
   }
 }
 
+/** Abrir inplaize de nuevo trae al frente el que ya está corriendo. */
+app.on('second-instance', () => {
+  const win = state.mainWindow;
+  if (!win || win.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
+
 app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
   let allow = false;
   try {
@@ -108,11 +132,13 @@ app.whenReady().then(() => {
   }
   const { raiseAppFromGlobalHotkey } = registerIpcHandlers(state);
   log(`App started — userData: ${app.getPath('userData')}`);
+  analytics.track('app_started', { platform: process.platform });
   enableAutoStart();
 
   createWindow();
   require('./web-hibernation').startWebHibernation();
   require('./process-report').startProcessReports();
+  require('./usage-snapshot').startUsageSnapshots();
 
   registerDockGlobalShortcut(state, raiseAppFromGlobalHotkey, createWindow);
 

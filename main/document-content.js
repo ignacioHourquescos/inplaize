@@ -31,6 +31,8 @@ const NODE_TYPES = new Set([
   'horizontalRule',
   'hardBreak',
   'image',
+  'columns',
+  'column',
 ]);
 
 const MARK_TYPES = new Set(['bold', 'italic', 'underline', 'link']);
@@ -171,7 +173,10 @@ function sanitizeNode(raw, depth, budget) {
   const list = Array.isArray(raw.content) ? raw.content : [];
   for (const child of list) {
     const clean = sanitizeNode(child, depth + 1, budget);
-    if (clean) content.push(clean);
+    if (!clean) continue;
+    if ((type === 'columns') !== (clean.type === 'column')) continue;
+    if (type === 'column' && clean.type === 'columns') continue;
+    content.push(clean);
   }
   if (content.length) node.content = content;
   return node;
@@ -184,6 +189,7 @@ function prune(node) {
     if (!node.content.length) delete node.content;
   }
   if (LIST_TYPES.has(node.type) && !node.content) return null;
+  if ((node.type === 'columns' || node.type === 'column') && !node.content) return null;
   if (WRAP_TYPES.has(node.type) && !node.content) node.content = [{ type: 'paragraph' }];
   if (node.type === 'doc' && !node.content) node.content = [{ type: 'paragraph' }];
   return node;
