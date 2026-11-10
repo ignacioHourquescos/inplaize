@@ -1275,7 +1275,6 @@
         }
         const step = STEPS[state.step];
         if (step && step.id === 'personalize' && Array.isArray(step.apps)) {
-          const count = state.selectedApps.size;
           syncMonitorBar(true);
           // La ventana de la computadora muestra la vista de la última app elegida (o vuelve al inicio si no queda ninguna).
           const monitor = state.monitorEl;
@@ -1471,8 +1470,8 @@
     return `<div class="onboarding-app-grid">${items}</div>`;
   }
 
-  /** Apretadas que pide el paso: una esconde inplaize y la otra lo vuelve a traer. */
-  const HOTKEY_TRIES = 2;
+  /** Apretadas que pide el paso: inplaize se esconde, vuelve y se esconde otra vez. */
+  const HOTKEY_TRIES = 3;
 
   function hotkeyReadyToAdvance() {
     return state.hotkeyPressCount >= HOTKEY_TRIES;
@@ -1493,17 +1492,17 @@
   function pendingActionCopy(step) {
     if (!step) return '';
     if (step.id === 'personalize') {
+      if (personalizeReadyToAdvance()) return '';
       const left = PERSONALIZE_MIN_APPS - state.selectedApps.size;
-      if (left <= 0) return '';
       if (left === 1) return 'Elegí una app más';
       return 'Elegí al menos dos apps';
     }
     if (step.id === 'hotkey') {
-      if (state.hotkeyCapturing) return '';
+      if (state.hotkeyCapturing || hotkeyReadyToAdvance()) return '';
       const left = HOTKEY_TRIES - state.hotkeyPressCount;
-      if (left <= 0) return '';
       if (left === 1) return 'Apretalo una vez más';
-      return `Apretá ${state.hotkeyKeys.join(' + ')} dos veces`;
+      if (left === 2) return 'Apretalo dos veces más';
+      return `Apretá ${state.hotkeyKeys.join(' + ')} tres veces`;
     }
     return '';
   }
@@ -1526,7 +1525,7 @@
   }
 
   /** Manitos del contador: una por cada apretada del atajo. */
-  const HOTKEY_COUNT_HANDS = ['☝️', '✌️'];
+  const HOTKEY_COUNT_HANDS = ['☝️', '✌️', '🤟'];
 
   /** El contador va mientras no se estén cambiando las teclas. */
   function showHotkeyCounter() {
@@ -1721,44 +1720,9 @@
     );
   }
 
-  function hotkeyHeldCount() {
-    return state.hotkeyKeys.filter((label) => state.hotkeyLit.has(label)).length;
-  }
-
-  /** Una sola barra: se llena de izquierda a derecha según cuántas teclas están apretadas. */
-  function renderHotkeyMeter() {
-    const total = state.hotkeyKeys.length || 1;
-    const held = hotkeyHeldCount();
-    const pct = Math.round((held / total) * 100);
-    return (
-      '<div class="onboarding-hotkey-meter" role="progressbar"' +
-        ' aria-label="Teclas del atajo apretadas"' +
-        ' aria-valuemin="0" aria-valuemax="' + total + '"' +
-        ' aria-valuenow="' + held + '">' +
-        '<span class="onboarding-hotkey-meter-fill" style="width:' + pct + '%"></span>' +
-      '</div>'
-    );
-  }
-
-  /** Las tres teclas del atajo, juntas, y la barra que marca cuántas están apretadas. */
-  function renderHeldHotkeyChips() {
-    const keys = state.hotkeyKeys.map((label) => {
-      const held = state.hotkeyLit.has(label) ? ' is-lit' : '';
-      return `<span class="onboarding-key${held}" data-hotkey="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
-    }).join('');
-    return (
-      '<div class="onboarding-hotkey-stack">' +
-        '<div class="onboarding-hotkey-chips" role="group" aria-label="Teclas del atajo">' +
-          keys +
-        '</div>' +
-        renderHotkeyMeter() +
-      '</div>'
-    );
-  }
-
   /**
-   * Lo que va debajo del teclado y la computadora en el paso del atajo: las
-   * teclas del atajo y la barra de cuántas están apretadas.
+   * Lo que va debajo de la computadora en el paso del atajo: el teclado, con
+   * las teclas del atajo prendidas.
    * Al cambiar el atajo, acá también van los selectores y el teclado.
    */
   function renderKeyboard(keys) {
@@ -1774,11 +1738,10 @@
         '</div>'
       );
     }
-    // Las teclas del atajo a la izquierda y, al lado, el teclado sin marco: así la
-    // computadora de arriba queda del mismo tamaño que en los otros pasos.
+    // Solo el teclado, sin marco y centrado: las teclas del atajo ya se
+    // prenden ahí y el pie las nombra, así que las fichas sobraban.
     return (
       '<div class="onb-hotkey-row">' +
-        renderHeldHotkeyChips() +
         '<div class="kb-with-check">' +
           renderKeyboardBoard() +
         '</div>' +
@@ -1786,50 +1749,17 @@
     );
   }
 
-  function winDesktopIcon(svg, label) {
-    return (
-      '<div class="win-icon">' +
-        '<span class="win-glyph">' + svg + '</span>' +
-        '<span class="win-label">' + escapeHtml(label) + '</span>' +
-      '</div>'
-    );
-  }
-
+  /** El escritorio de Windows: solo el fondo, vacío y apagado, para que inplaize resalte. */
   function renderWindowsDesktop() {
-    const bin =
-      '<svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#b0b6be" d="M11 5h10l1.2 2.2H9.8z"/><rect x="7" y="7.2" width="18" height="2.2" rx="1" fill="#8b919a"/><path fill="#6d727a" d="M9.2 10.2h13.6l-1.15 15.1a2 2 0 0 1-2 1.8h-7.3a2 2 0 0 1-2-1.8z"/><path stroke="#fff" stroke-width="1.3" stroke-linecap="round" d="M13 14.2v7.2M16 14.2v7.2M19 14.2v7.2"/></svg>';
-    const pc =
-      '<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="4" width="26" height="17" rx="2" fill="#5f6368"/><rect x="5" y="6" width="22" height="13" rx="1" fill="#8ab4f8"/><rect x="13" y="22" width="6" height="3" fill="#5f6368"/><rect x="9" y="25" width="14" height="2.4" rx="1" fill="#80868b"/></svg>';
-    const folder =
-      '<svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#f9ab00" d="M3 9h9.2l2.2 2.4H29V26H3z"/><path fill="#fdd663" d="M3 13.2h26V26H3z"/></svg>';
-    const downloads =
-      '<svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#f9ab00" d="M3 9h9.2l2.2 2.4H29V26H3z"/><path fill="#fdd663" d="M3 13.2h26V26H3z"/><path fill="#fff" d="M15 15.5h2v5.2h2.8L16 24.2l-3.8-3.5H15z"/></svg>';
-    const photos =
-      '<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="6" width="24" height="20" rx="2" fill="#1e8e3e"/><circle cx="12" cy="13" r="2.4" fill="#fff"/><path fill="#e6f4ea" d="M6 22.2l5.6-5.6 3.8 3.8 3.2-3.2 7.4 6.6V24a2 2 0 0 1-2 2H6z"/></svg>';
-    const notes =
-      '<svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#fff" d="M7 3h12l6 6v20H7z"/><path fill="#e8eaed" d="M19 3v6h6"/><path stroke="#1a73e8" stroke-width="1.5" stroke-linecap="round" d="M11 16h10M11 20h10M11 24h6"/></svg>';
-    return (
-      '<div class="onboarding-win-desktop">' +
-        '<div class="win-icons">' +
-          winDesktopIcon(bin, 'Papelera') +
-          winDesktopIcon(pc, 'Este equipo') +
-          winDesktopIcon(folder, 'Documentos') +
-          winDesktopIcon(downloads, 'Descargas') +
-          winDesktopIcon(photos, 'Imágenes') +
-          winDesktopIcon(notes, 'Notas') +
-        '</div>' +
-      '</div>'
-    );
+    return '<div class="onboarding-win-desktop"></div>';
   }
 
+  /** La barra de Windows, sin los íconos de apps: hacían ruido al lado de inplaize. */
   function renderWindowsTaskbar() {
     return (
       '<div class="win-taskbar">' +
         '<span class="win-start"></span>' +
         '<span class="win-search"></span>' +
-        '<span class="win-pin is-blue"></span>' +
-        '<span class="win-pin is-green"></span>' +
-        '<span class="win-pin is-yellow"></span>' +
         '<span class="win-clock">11:48<br>24/10/2026</span>' +
       '</div>'
     );
@@ -1840,15 +1770,6 @@
     state.bubbleEl.querySelectorAll('[data-hotkey]').forEach((el) => {
       el.classList.toggle('is-lit', state.hotkeyLit.has(el.getAttribute('data-hotkey')));
     });
-    const meter = state.bubbleEl.querySelector('.onboarding-hotkey-meter');
-    if (meter) {
-      const total = state.hotkeyKeys.length || 1;
-      const held = hotkeyHeldCount();
-      meter.setAttribute('aria-valuemax', String(total));
-      meter.setAttribute('aria-valuenow', String(held));
-      const fill = meter.querySelector('.onboarding-hotkey-meter-fill');
-      if (fill) fill.style.width = `${Math.round((held / total) * 100)}%`;
-    }
   }
 
   function isHotkeyStep() {
@@ -2097,14 +2018,14 @@
     
     if (step.id === 'hotkey') {
       state.hotkeyPressed = false;
-      state.hotkeyAttemptedNext = false;
       state.hotkeyLit.clear();
       state.hotkeyCapturing = false;
       state.hotkeyCapture = [];
       state.hotkeyError = '';
       state.hotkeyPressCount = 0;
-      // El paso arranca con inplaize a la vista: la primera apretada lo esconde.
-      state.hotkeyDockShown = true;
+      // El paso arranca sin inplaize en la pantalla: con tres apretadas aparece,
+      // se esconde y vuelve a aparecer, así la última deja todo en su lugar.
+      state.hotkeyDockShown = false;
     }
     state.step = stepIndex;
     setHotkeyTrial(step.id === 'hotkey');
@@ -2148,14 +2069,15 @@
     if (!state.active) return;
     const step = STEPS[state.step];
 
-    // Paso "personalize": hace falta al menos una app para armar la barra.
-    if (step && step.id === 'personalize' && state.selectedApps.size === 0) {
-      renderBubble(step);
+    // Los pasos con acción pendiente no muestran el botón: si igual se llega
+    // acá (teclado, doble click), el pie vuelve a pedir lo que falta.
+    if (step && pendingActionCopy(step)) {
+      syncActionHint();
       return;
     }
 
     // Paso "personalize": crear shortcuts para las apps seleccionadas
-    if (step && step.id === 'personalize' && state.selectedApps.size > 0 && !state.preview) {
+    if (step && step.id === 'personalize' && personalizeReadyToAdvance() && !state.preview) {
       // Mostrar mensaje de éxito antes de avanzar
       showSuccessMessage(state.selectedApps.size);
       createShortcutsForSelectedApps(step.apps);
@@ -2163,16 +2085,6 @@
       setTimeout(() => {
         advanceToNextStep();
       }, 800);
-      return;
-    }
-
-    // Paso "hotkey": exigimos que el usuario haya probado Ctrl+Alt+D al
-    // menos una vez antes de seguir, también en modo preview (el preview
-    // tiene que mostrar exactamente lo que ve un usuario nuevo). Si no se
-    // probó, dejamos el wizard donde está y mostramos un aviso amable.
-    if (step && step.id === 'hotkey' && !hotkeyReadyToAdvance()) {
-      state.hotkeyAttemptedNext = true;
-      renderBubble(step);
       return;
     }
 
@@ -2322,13 +2234,11 @@
       if (!step || step.id !== 'hotkey' || state.hotkeyCapturing) return;
       lightSwallowedChordKey();
       state.hotkeyPressed = true;
-      state.hotkeyAttemptedNext = false;
-      const gate = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-hotkey-gate');
-      if (gate) gate.remove();
       // Cada apretada esconde o trae de vuelta inplaize en la pantalla.
       state.hotkeyPressCount += 1;
       state.hotkeyDockShown = !state.hotkeyDockShown;
       updateHotkeyCounter();
+      syncActionHint();
       const monitor = state.bubbleEl && state.bubbleEl.querySelector('.onboarding-monitor');
       if (monitor) monitor.classList.toggle('is-dock-hidden', !state.hotkeyDockShown);
       if (state.hotkeyDockShown) guideMouseToMonitor(120);

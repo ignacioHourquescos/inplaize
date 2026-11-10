@@ -848,8 +848,10 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 }
 
 .onb-stage {
-  /* Alto fijo de lo que va debajo de la computadora, igual en todos los pasos. */
-  --below-h: 104px;
+  /* Alto fijo de lo que va debajo de la computadora, igual en todos los pasos.
+     Lo que se lleva esta zona se lo saca a la computadora, así que el teclado
+     del atajo y la pantalla se reparten el alto del escenario. */
+  --below-h: 140px;
   --hotkey-demo: 4.8s;
   container-type: size;
   container-name: onb;
@@ -921,14 +923,10 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   animation: onb-hotkey-row-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.onb-hotkey-row .onboarding-hotkey-stack {
-  flex: 0 0 auto;
-}
-
 .onb-hotkey-row .kb-with-check {
   flex: 0 0 auto;
   /* El alto de la zona manda: con este ancho el teclado entra justo. */
-  width: min(50%, calc(var(--below-h) * 2.95));
+  width: min(70%, calc(var(--below-h) * 2.95));
   margin-bottom: 0;
 }
 
@@ -1070,11 +1068,12 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
     transform 80ms ease;
 }
 
+/* Apretada de verdad: la tecla del dibujo se pinta de azul y se hunde. */
 .kb-board.is-marked .kb-key.is-chord.is-lit {
-  border-color: #1a73e8;
-  background: #fff;
-  color: #1a73e8;
-  box-shadow: 0 0 0 1px #1a73e8, 0 1px 0 #c4c7cc;
+  border-color: #1557b0;
+  background: #1a73e8;
+  color: #fff;
+  box-shadow: 0 0 0 1px #1557b0, 0 1px 0 #c4c7cc;
   transform: translateY(1px);
 }
 
@@ -1168,9 +1167,10 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 }
 
 .kb-board.is-ready .kb-key.is-chord.is-lit {
-  background: #fff;
-  color: #1a73e8;
-  box-shadow: 0 0 0 1px #1a73e8, 0 1px 0 #c4c7cc;
+  border-color: #1557b0;
+  background: #1a73e8;
+  color: #fff;
+  box-shadow: 0 0 0 1px #1557b0, 0 1px 0 #c4c7cc;
   transform: translateY(1px);
 }
 
@@ -1274,29 +1274,11 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 .kb-key.is-lit {
   animation: none;
   position: relative;
-  isolation: isolate;
-  background: #fff;
+  border-color: #1557b0;
+  background: #1a73e8;
+  color: #fff;
+  box-shadow: 0 0 0 1px #1557b0, 0 1px 0 #c4c7cc;
   transform: translateY(1px);
-}
-
-.kb-key.is-lit::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: calc(var(--ku) * 0.42);
-  height: calc(var(--ku) * 0.42);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(95, 99, 104, 0.4);
-  box-shadow: 0 0 0 2px rgba(95, 99, 104, 0.16);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.kb-key.is-lit > span {
-  position: relative;
-  z-index: 1;
 }
 
 .kb-board.is-capturing .kb-key.is-chord {
@@ -1636,6 +1618,20 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   min-width: 132px;
 }
 
+/* Mientras falta hacer la acción del paso, en vez del botón va el texto que la
+   pide; recién cuando está hecha aparece "Siguiente". */
+.onboarding-action-hint {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #5f6368;
+}
+
+.onboarding-bubble-actions:not(.is-pending) .onboarding-action-hint,
+.onboarding-bubble-actions.is-pending .onboarding-btn-primary {
+  display: none;
+}
+
 .onboarding-btn-secondary:disabled {
   opacity: 0.4;
   cursor: default;
@@ -1646,19 +1642,6 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   background: transparent;
   border-color: #dadce0;
   transform: none;
-}
-
-.onboarding-hotkey-gate {
-  margin: 0;
-  text-align: center;
-  font-size: 14px;
-  line-height: 1.45;
-  color: #174ea6;
-}
-
-.onboarding-hotkey-gate strong {
-  font-weight: 600;
-  color: #1a73e8;
 }
 
 .onboarding-keyboard-row {
@@ -1938,55 +1921,9 @@ button.onboarding-hotkey-check:focus-visible {
   overflow: hidden;
   /* Colina y cielo al estilo del fondo de Windows XP. Dibujo propio, no la foto. */
   background: #1b6ec4 url("assets/win-hill.svg") center / cover no-repeat;
+  /* Telon de fondo: con el color bajado, lo que se mira es inplaize. */
+  filter: saturate(0.32) brightness(1.06);
   transition: opacity 240ms ease;
-}
-
-.win-icons {
-  position: absolute;
-  z-index: 1;
-  top: 2.2059cqi;
-  left: 1.8382cqi;
-  right: 1.8382cqi;
-  bottom: 8.4559cqi;
-  display: flex;
-  flex-direction: column;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 1.8382cqi 0.7353cqi;
-}
-
-/* Con las ventanas desordenadas, los Ã­conos del escritorio solo ensucian. */
-.onboarding-monitor.is-chaos .win-icons {
-  opacity: 0;
-}
-
-.win-icons {
-  transition: opacity 320ms ease;
-}
-
-.win-icon {
-  width: 14.3382cqi;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5515cqi;
-}
-
-.win-glyph svg {
-  width: 5.8824cqi;
-  height: 5.8824cqi;
-  display: block;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.28));
-}
-
-.win-label {
-  max-width: 13.9706cqi;
-  color: #fff;
-  font-size: 1.8382cqi;
-  font-weight: 600;
-  line-height: 1.15;
-  text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
 }
 
 .win-taskbar {
@@ -2001,6 +1938,8 @@ button.onboarding-hotkey-check:focus-visible {
   justify-content: center;
   gap: max(6px, 1.1029cqi);
   background: rgba(243, 243, 243, 0.92);
+  /* Del mismo palo que el escritorio: atras de inplaize. */
+  filter: saturate(0.32);
 }
 
 .win-start {
@@ -2033,17 +1972,6 @@ button.onboarding-hotkey-check:focus-visible {
   background: #5f6368;
   transform: rotate(45deg);
 }
-
-.win-pin {
-  width: max(18px, 3.3088cqi);
-  height: max(18px, 3.3088cqi);
-  border-radius: max(4px, 0.7353cqi);
-  background: #5f6368;
-}
-
-.win-pin.is-blue { background: #1a73e8; }
-.win-pin.is-green { background: #1e8e3e; }
-.win-pin.is-yellow { background: #f9ab00; }
 
 .win-clock {
   position: absolute;
@@ -2587,9 +2515,9 @@ button.onboarding-hotkey-check:focus-visible {
     border-color: #1a73e8;
   }
   .kb-key.is-chord.is-lit {
-    background: #fff;
-    color: #1a73e8;
-    border-color: #1a73e8;
+    background: #1a73e8;
+    color: #fff;
+    border-color: #1557b0;
   }
   .onboarding-monitor.is-dock-hidden .onboarding-dockbar {
     transform: translateY(-140%);
@@ -2663,16 +2591,6 @@ button.onboarding-hotkey-check:focus-visible {
   padding-top: 40px;
 }
 
-/* El aviso del atajo se apoya en el espacio de arriba de los botones: no agranda el pie. */
-.onboarding-bubble[data-kind][data-step-id='hotkey'] .onboarding-hotkey-gate {
-  position: absolute;
-  top: 6px;
-  left: 0;
-  right: 0;
-  margin: 0;
-  text-align: center;
-}
-
 /* Pantallas muy bajas: encabezado y pie mas chicos, siempre iguales en los tres pasos. */
 @media (max-height: 760px) {
   .onboarding-bubble[data-kind][data-step-id='welcome'],
@@ -2718,7 +2636,7 @@ button.onboarding-hotkey-check:focus-visible {
 }
 
 .onboarding-bubble[data-step-id='welcome'] .onb-stage {
-  --below-h: 126px;
+  --below-h: 162px;
 }
 
 .onboarding-bubble[data-step-id='welcome'] .onb-below {
@@ -2815,8 +2733,10 @@ button.onboarding-hotkey-check:focus-visible {
     height: 118px;
   }
 
-  .onboarding-bubble[data-step-id='welcome'] .onb-stage {
-    --below-h: 104px;
+  /* Pantalla baja: la zona de abajo vuelve a lo mínimo en todos los pasos para
+     que a la computadora le quede algo de alto. */
+  .onboarding-bubble[data-kind] .onb-stage {
+    --below-h: 110px;
   }
 
   .onboarding-welcome-line {
@@ -3991,6 +3911,5 @@ button.onboarding-hotkey-check:focus-visible {
 
 /* Personalizar: las fichas de apps quedan a la misma distancia de la computadora y del boton. */
 .onboarding-bubble[data-step-id='personalize'] .onb-below {
-  justify-content: flex-end;
-  padding-bottom: 7px;
+  justify-content: center;
 }
