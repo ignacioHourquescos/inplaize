@@ -33,7 +33,10 @@ const certSubject = process.env.WIN_CERT_SUBJECT || '';
 const certSha1 = process.env.WIN_CERT_SHA1 || '';
 const signing = !!(certFile || certSubject || certSha1);
 
-const args = ['--win'];
+// Sobre un tag de git, electron-builder intenta publicar el release él mismo y
+// muere pidiendo GH_TOKEN. La publicación la hace el workflow con `gh release`,
+// después de que SignPath firme el instalador.
+const args = ['--win', '--publish', 'never'];
 const env = { ...process.env };
 
 if (signing) {
