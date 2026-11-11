@@ -71,11 +71,12 @@ jobs:
           echo "path=$dmg" >> "$GITHUB_OUTPUT"
           ls -lh "$dmg"
 
+      # Va zipeado: download-artifact no sabe bajar un artefacto subido con archive:false.
       - name: Subir el .dmg
         uses: actions/upload-artifact@v7
         with:
+          name: dmg
           path: ${{ steps.dmg.outputs.path }}
-          archive: false
           if-no-files-found: error
 
   publish:
@@ -86,6 +87,7 @@ jobs:
       - name: Bajar el .dmg
         uses: actions/download-artifact@v7
         with:
+          name: dmg
           path: dist-release
 
       - name: Publicar en el release
