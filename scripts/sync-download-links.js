@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Apunta los botones de descarga de la landing a la versión de package.json.
- * Corre en el build de Vercel y antes de empaquetar, así el link nunca queda
- * atrasado respecto de la release publicada.
+ * Apunta los botones de descarga de la landing a la versión de package.json
+ * y deja ese número en el texto ("Descargar 1.2.3"). Corre en el build de
+ * Vercel y antes de empaquetar, así el link nunca queda atrasado respecto
+ * de la release publicada.
  */
 
 const fs = require('fs');
@@ -16,8 +17,14 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf-8')
 const version = pkg.version || '0.0.0';
 const repo = 'https://github.com/ignacioHourquescos/inplaize';
 const target = `${repo}/releases/download/v${version}/inplaize.Setup.${version}.exe`;
+const label = `Descargar ${version}`;
 const escaped = repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const linkRe = new RegExp(`${escaped}/releases/download/v[\\d.]+/inplaize\\.Setup\\.[\\d.]+\\.exe`, 'g');
+const escapedTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const labelRe = new RegExp(
+  `(<a\\b[^>]*href="${escapedTarget}"[^>]*>)\\s*Descargar(?:\\s+[\\d.]+)?\\s*(</a>)`,
+  'g',
+);
 
 function htmlFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -30,7 +37,9 @@ function htmlFiles(dir) {
 let updated = 0;
 htmlFiles(landing).forEach((file) => {
   const html = fs.readFileSync(file, 'utf-8');
-  const next = html.replace(linkRe, target);
+  linkRe.lastIndex = 0;
+  labelRe.lastIndex = 0;
+  const next = html.replace(linkRe, target).replace(labelRe, `$1${label}$2`);
   if (next === html) return;
   fs.writeFileSync(file, next, 'utf-8');
   updated += 1;

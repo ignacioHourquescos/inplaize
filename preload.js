@@ -158,6 +158,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
 
   /* ---- Importar perfil completo de otro navegador (estilo Comet) ---- */
   listBrowserImportProfiles: () => ipcRenderer.invoke('browser-import-list-profiles'),
+  // `directory` puede ser uno o varios perfiles del mismo navegador.
   runBrowserImport: (browser, directory, parts) =>
     ipcRenderer.invoke('browser-import-run', { browser, directory, parts: parts || null }),
 
@@ -234,6 +235,10 @@ contextBridge.exposeInMainWorld('usualDesk', {
     ipcRenderer.on('gesture-coach-show', () => callback());
   },
   closeGestureCoach: (opts) => ipcRenderer.invoke('gesture-coach-close', opts || {}),
+  consumeOnboardingLaunch: () => ipcRenderer.invoke('consume-onboarding-launch'),
+  onOnboardingLaunch: (callback) => {
+    ipcRenderer.on('start-onboarding', () => callback());
+  },
   setOnboardingActive: (on) => ipcRenderer.invoke('set-onboarding-active', on === true),
   setOnboardingHotkeyTrial: (on) => ipcRenderer.invoke('set-onboarding-hotkey-trial', on === true),
   moveOnboardingCursor: (point) => ipcRenderer.invoke('onboarding-move-cursor', point),

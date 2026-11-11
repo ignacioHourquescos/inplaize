@@ -73,7 +73,7 @@
       justify-content: center;
       gap: 40px;
       width: 100%;
-      padding: 92px 24px 48px;
+      padding: 48px 24px 48px;
       box-sizing: border-box;
     }
 
@@ -181,136 +181,6 @@
       text-decoration: underline;
     }
 
-    .site-header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 30;
-      height: 60px;
-      background: rgba(255, 255, 255, 0.92);
-      border-bottom: 1px solid #e8eaed;
-      backdrop-filter: blur(8px);
-    }
-
-    .sh-inner {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 1120px;
-      height: 100%;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-
-    .sh-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-right: 18px;
-      color: var(--ink);
-      font-size: 18px;
-      font-weight: 500;
-      letter-spacing: -0.03em;
-      text-decoration: none;
-    }
-
-    .sh-mark {
-      position: relative;
-      width: 28px;
-      height: 28px;
-      flex: 0 0 auto;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
-    }
-
-    .sh-mark::before {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 12px;
-      height: 12px;
-      border-radius: 4px;
-      background: rgba(255, 255, 255, 0.95);
-      transform: translate(-50%, -50%);
-    }
-
-    .sh-mark::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: #8b5cf6;
-      transform: translate(-50%, -50%);
-    }
-
-    /* Por ahora no se muestran las subpáginas (Inicio, Manual, Acerca). */
-    .sh-nav {
-      display: none;
-    }
-
-    .sh-nav a {
-      padding: 6px 14px;
-      border-radius: 8px;
-      color: var(--ink-soft);
-      font-size: 14px;
-      font-weight: 500;
-      text-decoration: none;
-    }
-
-    .sh-nav a:hover {
-      background: #f1f3f4;
-      color: var(--ink);
-    }
-
-    .sh-nav a[aria-current="page"] {
-      background: #f1f3f4;
-      color: var(--ink);
-    }
-
-    .sh-spacer {
-      flex: 1;
-    }
-
-    .sh-cta {
-      display: inline-flex;
-      align-items: center;
-      min-height: 36px;
-      padding: 0 20px;
-      border-radius: 999px;
-      background: var(--blue);
-      color: #fff;
-      font-size: 14px;
-      font-weight: 500;
-      text-decoration: none;
-    }
-
-    .sh-cta:hover {
-      background: var(--blue-hover);
-    }
-
-    @media (max-width: 640px) {
-      .sh-inner {
-        padding: 0 14px;
-      }
-
-      .sh-brand {
-        margin-right: 6px;
-      }
-
-      .sh-brand span:last-child {
-        display: none;
-      }
-
-      .sh-nav a {
-        padding: 6px 10px;
-      }
-    }
-
     .fine {
       margin: 16px 0 0;
       max-width: 36em;
@@ -338,7 +208,7 @@
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 96px 24px 48px;
+      padding: 48px 24px 48px;
     }
 
     body.is-after .hero {
@@ -2138,7 +2008,7 @@
 
       .hero {
         gap: 28px;
-        padding: 84px 16px 32px;
+        padding: 32px 16px 32px;
       }
 
       .questions {
@@ -2197,25 +2067,6 @@
       if (seen) document.body.classList.add('is-after');
     })();
   </script>
-  <header class="site-header">
-    <div class="sh-inner">
-      <a class="sh-brand" href="./" aria-label="inplaize, inicio">
-        <span class="sh-mark" aria-hidden="true"></span>
-        <span>inplaize</span>
-      </a>
-      <!-- Subpáginas ocultas por ahora: Inicio, Manual, Acerca. -->
-      <nav class="sh-nav" aria-label="Principal" hidden>
-        <a href="./" aria-current="page">Inicio</a>
-        <a href="manual/">Manual</a>
-        <a href="historia/">Acerca</a>
-      </nav>
-      <span class="sh-spacer"></span>
-      <a
-        class="sh-cta"
-        href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.6.1/inplaize.Setup.1.6.1.exe"
-      >Descargar</a>
-    </div>
-  </header>
   <div class="page">
     <main class="hero">
       <div class="questions">
@@ -2384,8 +2235,8 @@
       <div class="actions">
         <a
           class="cta"
-          href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.6.1/inplaize.Setup.1.6.1.exe"
-        >Descargar</a>
+          href="https://github.com/ignacioHourquescos/inplaize/releases/download/v1.6.2/inplaize.Setup.1.6.2.exe"
+        >Descargar 1.6.2</a>
       </div>
       <nav class="site-links" aria-label="Enlaces del sitio">
         <a href="manual/">Manual</a>

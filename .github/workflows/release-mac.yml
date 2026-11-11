@@ -1,0 +1,108 @@
+# Compila el .dmg de macOS en un runner de GitHub y lo publica como adjunto del
+# mismo release que arma release-win.yml.
+#
+# Sale para Apple Silicon (arm64) solamente: ffmpeg-static baja el binario de la
+# arquitectura donde corre `npm ci`, así que un .dmg de Intel armado en este
+# runner llevaría un ffmpeg que no arranca.
+#
+# El .dmg no está firmado ni notarizado: la primera vez macOS dice que la app
+# "está dañada" o que "no se puede verificar el desarrollador". Para abrirla:
+#   clic derecho → Abrir, o en la Terminal:  xattr -cr /Applications/inplaize.app
+#
+# El release lo crea release-win.yml con sus notas. El job que publica espera a
+# que exista (Windows puede tardar por la aprobación de SignPath) y solo lo crea
+# él si se cansa de esperar.
+
+name: Release macOS
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-mac-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar la versión
+        id: meta
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "La etiqueta $GITHUB_REF_NAME no coincide con la version $version de package.json."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "inplaize $version"
+
+      - name: Compilar el .dmg
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          node scripts/bundle-document-editor.js
+          npx electron-builder --mac dmg --arm64 --publish never
+
+      - name: Ubicar el .dmg
+        id: dmg
+        run: |
+          dmg=$(ls dist/*.dmg | head -n 1)
+          if [ -z "$dmg" ]; then echo 'electron-builder no dejo ningun .dmg en dist/'; exit 1; fi
+          echo "path=$dmg" >> "$GITHUB_OUTPUT"
+          ls -lh "$dmg"
+
+      - name: Subir el .dmg
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.dmg.outputs.path }}
+          archive: false
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar el .dmg
+        uses: actions/download-artifact@v7
+        with:
+          path: dist-release
+
+      - name: Publicar en el release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          dmg=$(find dist-release -name '*.dmg' | head -n 1)
+          if [ -z "$dmg" ]; then echo 'No llego el .dmg del job de build.'; exit 1; fi
+          for i in $(seq 1 80); do
+            gh release view "$tag" > /dev/null 2>&1 && break
+            echo "Esperando a que release-win.yml cree el release $tag ($i/80)..."
+            sleep 60
+          done
+          if ! gh release view "$tag" > /dev/null 2>&1; then
+            gh release create "$tag" --title "inplaize $VERSION" --notes "## inplaize $VERSION"
+          fi
+          gh release upload "$tag" "$dmg" --clobber

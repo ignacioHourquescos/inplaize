@@ -92,9 +92,15 @@ function enableAutoStart() {
   }
 }
 
+function launchedForOnboarding(argv) {
+  return Array.isArray(argv) && argv.some((arg) => arg === '--onboarding');
+}
+
 /** Abrir inplaize de nuevo trae al frente el que ya está corriendo. */
-app.on('second-instance', () => {
+app.on('second-instance', (_event, argv) => {
   const win = state.mainWindow;
+  const onboarding = launchedForOnboarding(argv);
+  if (onboarding) state.pendingOnboarding = true;
   if (!win || win.isDestroyed()) {
     createWindow();
     return;
@@ -102,6 +108,12 @@ app.on('second-instance', () => {
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  if (!onboarding) return;
+  const send = () => {
+    if (!win.isDestroyed()) win.webContents.send('start-onboarding');
+  };
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send);
+  else send();
 });
 
 app.on('certificate-error', (event, _webContents, url, _error, _certificate, callback) => {
@@ -124,6 +136,8 @@ app.on('certificate-error', (event, _webContents, url, _error, _certificate, cal
   }
   callback(false);
 });
+
+state.pendingOnboarding = launchedForOnboarding(process.argv);
 
 app.whenReady().then(() => {
   if (process.platform === 'win32' && !app.isPackaged) {

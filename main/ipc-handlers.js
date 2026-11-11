@@ -266,6 +266,8 @@ const IPC_CHANNELS = [
 
   'onboarding-move-cursor',
 
+  'consume-onboarding-launch',
+
   'downloads-get-history',
 
   'downloads-open-file',
@@ -1487,6 +1489,12 @@ function registerIpcHandlers(state) {
     return true;
   });
 
+  ipcMain.handle('consume-onboarding-launch', () => {
+    const pending = state.pendingOnboarding === true;
+    state.pendingOnboarding = false;
+    return pending;
+  });
+
   ipcMain.handle('set-onboarding-active', (_event, on) => {
     state.onboardingActive = on === true;
     if (!state.onboardingActive) {
@@ -1570,7 +1578,11 @@ function registerIpcHandlers(state) {
   ipcMain.handle('browser-import-run', async (_event, payload) => {
     const raw = payload && typeof payload === 'object' ? payload : {};
     const browser = String(raw.browser || 'chrome');
-    const directory = String(raw.directory || 'Default');
+    // Puede venir un perfil o varios del mismo navegador.
+    const directories = (Array.isArray(raw.directory) ? raw.directory : [raw.directory])
+      .map((d) => String(d || '').trim())
+      .filter(Boolean);
+    if (directories.length === 0) directories.push('Default');
     const parts = raw.parts && typeof raw.parts === 'object' ? raw.parts : undefined;
     const wantsCookies = !parts || parts.cookies !== false;
 
@@ -1600,22 +1612,65 @@ function registerIpcHandlers(state) {
       if (response === 1) importCookies = false;
     }
 
-    try {
-      const summary = await profileImport.importFullProfile({
-        browser,
-        directory,
-        autoClose: true,
-        parts: parts ? { ...parts, cookies: importCookies } : { cookies: importCookies },
-      });
-      try {
-        require('./browse-profiles').refreshAccounts();
-      } catch {
-        /* noop */
+    // Con varios perfiles lo cerramos una sola vez acá: cada perfil levanta su
+    // propia instancia headless, así que reabrirlo entre perfiles obligaría a
+    // cerrarlo de nuevo en el siguiente.
+    let closedHere = false;
+    if (importCookies && browserImport.isBrowserRunning(def.processName)) {
+      if (!(await browserImport.closeBrowserForImport(def.processName))) {
+        return { ok: false, error: 'BROWSER_CLOSE_FAILED' };
       }
-      return { ok: true, ...summary };
-    } catch (err) {
-      return { ok: false, error: (err && err.message) || 'IMPORT_FAILED' };
+      closedHere = true;
     }
+
+    const totals = {
+      cookies: 0,
+      history: 0,
+      bookmarks: 0,
+      passwords: 0,
+      passwordsSkipped: 0,
+      passwordsVaultAvailable: true,
+    };
+    let lastError = '';
+    let anyDone = false;
+    try {
+      for (let i = 0; i < directories.length; i += 1) {
+        // Un respiro entre perfiles: la instancia headless anterior tiene que
+        // soltar el directorio del navegador antes de levantar la siguiente.
+        if (i > 0 && importCookies) await new Promise((r) => setTimeout(r, 1200));
+        let summary = null;
+        try {
+          summary = await profileImport.importFullProfile({
+            browser,
+            directory: directories[i],
+            autoClose: true,
+            parts: parts ? { ...parts, cookies: importCookies } : { cookies: importCookies },
+          });
+        } catch (err) {
+          lastError = (err && err.message) || 'IMPORT_FAILED';
+          continue;
+        }
+        anyDone = true;
+        totals.partition = summary.partition;
+        totals.cookies += summary.cookies || 0;
+        totals.history += summary.history || 0;
+        totals.bookmarks += summary.bookmarks || 0;
+        totals.passwords += summary.passwords || 0;
+        totals.passwordsSkipped += summary.passwordsSkipped || 0;
+        if (summary.cookiesError) totals.cookiesError = summary.cookiesError;
+        if (summary.passwordsVaultAvailable === false) totals.passwordsVaultAvailable = false;
+      }
+    } finally {
+      if (closedHere) browserImport.relaunchBrowser(browser);
+    }
+
+    if (!anyDone) return { ok: false, error: lastError || 'IMPORT_FAILED' };
+    try {
+      require('./browse-profiles').refreshAccounts();
+    } catch {
+      /* noop */
+    }
+    return { ok: true, ...totals };
   });
 
   ipcMain.handle('history-suggest', (_event, payload) => {

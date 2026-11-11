@@ -17,7 +17,9 @@
  *
  * Pasos:
  *   0  Bienvenida: el monitor muestra el logo. Arriba va la pregunta y,
- *      debajo del monitor, la frase de navegación.
+ *      debajo del monitor, la frase de navegación. Ya no es parte del tour:
+ *      la bienvenida la da el instalador (installer/ui) y la app arranca en
+ *      el paso 1. Solo se ve pidiéndola con `step: 'welcome'`.
  *   1  Personalizar: abajo, las apps. Al marcarlas se suman a la barra del
  *      monitor y, al seguir, se crean los accesos.
  *   2  Atajo: debajo de la computadora, las teclas del atajo con una barra que
@@ -36,8 +38,8 @@
  * tenían la app configurada y vienen de una versión previa).
  *
  * API pública (`window.UsualDeskOnboarding`):
- *   start({ skipWelcome, preview })
- *     → arranca el flujo desde el paso 0 (o 1 si skipWelcome).
+ *   start({ preview, step })
+ *     → arranca el flujo en "Armá tu espacio" (o en `step`, por id o número).
  *     → con `preview: true` se asume que el usuario ya tiene shortcuts: se
  *        deshabilita el auto-avance, se fuerzan botones "Siguiente" en todos
  *        los pasos y NO se persiste `onboardingCompleted` (deja el estado
@@ -92,13 +94,18 @@
     hotkeyKeyListenerArmed: false,
     /** Paso "personalize": apps seleccionadas por el usuario */
     selectedApps: new Set(),
+    /** Tiempos de la entrada de la bienvenida (escritorio vacío → entra inplaize). */
+    welcomeIntroTimers: [],
+    /** Bienvenida: si ya se apretó "Empezar" y inplaize entró en la pantalla. */
+    welcomeRevealed: false,
   };
 
   const STEPS = [
     {
       id: 'welcome',
       kind: 'modal',
-      // Arriba va la marca de inplaize; este texto va debajo de la computadora.
+      // La marca y esta frase van sobre la pantalla del monitor, con el
+      // escritorio de Windows difuminado atrás.
       title: 'Navegá tus ventanas de manera ordenada.',
       body: '',
       primaryLabel: 'Empezar',
@@ -143,6 +150,12 @@
     },
   ];
 
+  /**
+   * Donde arranca el tour. La bienvenida ya la dio el instalador, así que la
+   * app empieza en "Armá tu espacio" y desde ahí no se puede volver atrás.
+   */
+  const FIRST_STEP = STEPS.findIndex((s) => s.id === 'personalize');
+
   function isActive() {
     return state.active;
   }
@@ -160,8 +173,8 @@
     vaultAvailable: false,
     /** @type {Array<{ browser: string, browserName: string, key: string, directory: string, name: string, userName: string, picturePath: string, historyCount: number }>} */
     profiles: [],
-    /** key (`browser::directory`) del perfil elegido */
-    selectedKey: '',
+    /** @type {Set<string>} keys (`browser::directory`) de los perfiles tildados */
+    selectedKeys: new Set(),
     /** Qué traer. */
     parts: { cookies: true, history: true, bookmarks: true, passwords: true },
     /** Si el usuario abrió el detalle de opciones. */
@@ -178,7 +191,7 @@
     importState.platformSupported = true;
     importState.vaultAvailable = false;
     importState.profiles = [];
-    importState.selectedKey = '';
+    importState.selectedKeys = new Set();
     importState.parts = { cookies: true, history: true, bookmarks: true, passwords: true };
     importState.optionsOpen = false;
     importState.busy = false;
@@ -186,8 +199,8 @@
     importState.error = '';
   }
 
-  function selectedProfileObj() {
-    return importState.profiles.find((p) => p.key === importState.selectedKey) || null;
+  function selectedProfileObjs() {
+    return importState.profiles.filter((p) => importState.selectedKeys.has(p.key));
   }
 
   async function initImportStepData() {
@@ -218,8 +231,8 @@
       renderImportArea();
       return;
     }
-    // El perfil con más historial queda preseleccionado (ya viene primero).
-    importState.selectedKey = importState.profiles[0].key;
+    // Todos los perfiles vienen tildados: lo normal es querer traerlos enteros.
+    importState.selectedKeys = new Set(importState.profiles.map((p) => p.key));
     importState.parts.passwords = importState.vaultAvailable;
     renderImportArea();
   }
@@ -239,29 +252,72 @@
     }
   }
 
+  /** Junta lo que trajo cada navegador en un solo resumen. */
+  function mergeImportResults(results) {
+    const total = {
+      cookies: 0,
+      history: 0,
+      bookmarks: 0,
+      passwords: 0,
+      passwordsSkipped: 0,
+      passwordsVaultAvailable: true,
+      cookiesError: '',
+    };
+    results.forEach((r) => {
+      total.cookies += r.cookies || 0;
+      total.history += r.history || 0;
+      total.bookmarks += r.bookmarks || 0;
+      total.passwords += r.passwords || 0;
+      total.passwordsSkipped += r.passwordsSkipped || 0;
+      if (r.cookiesError) total.cookiesError = r.cookiesError;
+      if (r.passwordsVaultAvailable === false) total.passwordsVaultAvailable = false;
+    });
+    return total;
+  }
+
+  /** Si hay algo tildado para traer (perfiles y datos) y no estamos importando. */
+  function importReady() {
+    return !importState.busy
+      && importState.selectedKeys.size > 0
+      && Object.values(importState.parts).some(Boolean);
+  }
+
   async function runImport() {
-    if (importState.busy) return;
-    const profile = selectedProfileObj();
-    if (!profile) return;
+    if (!importReady()) return;
+    const profiles = selectedProfileObjs();
     importState.busy = true;
     importState.error = '';
     importState.result = null;
     renderImportArea();
-    let res = null;
-    try {
-      res = await window.usualDesk.runBrowserImport(
-        profile.browser,
-        profile.directory,
-        { ...importState.parts },
-      );
-    } catch {
-      res = null;
+
+    // Un pedido por navegador con todos sus perfiles juntos: así el aviso de
+    // cerrarlo aparece una vez y no se abre y cierra una vez por perfil.
+    const byBrowser = new Map();
+    profiles.forEach((p) => {
+      const dirs = byBrowser.get(p.browser) || [];
+      dirs.push(p.directory);
+      byBrowser.set(p.browser, dirs);
+    });
+
+    const done = [];
+    let failure = '';
+    for (const [browser, directories] of byBrowser) {
+      let res = null;
+      try {
+        res = await window.usualDesk.runBrowserImport(browser, directories, { ...importState.parts });
+      } catch {
+        res = null;
+      }
+      if (res && res.ok) done.push(res);
+      else if (!failure) failure = importErrorText(res && res.error);
     }
+
     importState.busy = false;
-    if (res && res.ok) {
-      importState.result = res;
+    if (done.length) {
+      importState.result = mergeImportResults(done);
+      importState.result.partialError = failure;
     } else {
-      importState.error = importErrorText(res && res.error);
+      importState.error = failure || importErrorText('');
     }
     renderImportArea();
   }
@@ -311,6 +367,7 @@
       if (importState.parts.passwords && !r.passwordsVaultAvailable) {
         notes.push('Las contraseñas no se pudieron guardar: el cifrado del sistema no está disponible.');
       }
+      if (r.partialError) notes.push(r.partialError);
       area.innerHTML =
         `<p class="onboarding-import-hint">Listo, importamos: ${escapeHtml(summary)}.</p>`
         + notes.map((n) => `<div class="onboarding-import-note">${escapeHtml(n)}</div>`).join('');
@@ -318,17 +375,24 @@
       return;
     }
 
-    const profileOptions = importState.profiles
+    // Todos los perfiles a la vista y tildados: se destildan los que no se quieran.
+    const profileRows = importState.profiles
       .map((p) => {
         const who = p.userName || p.name;
-        const label = `${p.browserName} · ${who}`;
-        const sel = p.key === importState.selectedKey ? ' selected' : '';
-        return `<option value="${escapeHtml(p.key)}"${sel}>${escapeHtml(label)}</option>`;
+        const on = importState.selectedKeys.has(p.key) ? ' checked' : '';
+        const pages = p.historyCount ? ` · ${p.historyCount} páginas` : '';
+        return (
+          '<label class="onboarding-import-profile">'
+          + `<input type="checkbox" data-import-profile="${escapeHtml(p.key)}"${on}>`
+          + `<span class="onboarding-import-profile-name">${escapeHtml(who)}</span>`
+          + `<span class="onboarding-import-profile-meta">${escapeHtml(p.browserName + pages)}</span>`
+          + '</label>'
+        );
       })
       .join('');
     const profileRow =
-      '<label class="onboarding-import-row">Perfil a importar'
-      + `<select id="onboarding-import-profile">${profileOptions}</select></label>`;
+      '<p class="onboarding-import-label">Perfiles a importar</p>'
+      + `<div class="onboarding-import-profiles">${profileRows}</div>`;
 
     const optionRows = Object.keys(PART_LABELS)
       .map((key) => {
@@ -352,9 +416,8 @@
     const error = importState.error
       ? `<div class="onboarding-bubble-warning" role="alert">${escapeHtml(importState.error)}</div>`
       : '';
-    const anyPart = Object.values(importState.parts).some(Boolean);
     const btnLabel = importState.busy ? 'Importando… (puede tardar unos segundos)' : 'Importar';
-    const btnDisabled = importState.busy || !anyPart ? ' disabled' : '';
+    const btnDisabled = importReady() ? '' : ' disabled';
 
     area.innerHTML =
       profileRow
@@ -363,12 +426,19 @@
       + error
       + `<button type="button" id="onboarding-import-btn" class="onboarding-btn-primary onboarding-import-btn"${btnDisabled}>${escapeHtml(btnLabel)}</button>`;
 
-    const profileSel = area.querySelector('#onboarding-import-profile');
-    if (profileSel) {
-      profileSel.addEventListener('change', () => {
-        importState.selectedKey = profileSel.value;
+    // Tildar o destildar no rearma el bloque: solo cambia si se puede importar.
+    const syncImportBtn = () => {
+      const btn = area.querySelector('#onboarding-import-btn');
+      if (btn) btn.disabled = !importReady();
+    };
+    area.querySelectorAll('[data-import-profile]').forEach((box) => {
+      box.addEventListener('change', () => {
+        const key = box.getAttribute('data-import-profile');
+        if (box.checked) importState.selectedKeys.add(key);
+        else importState.selectedKeys.delete(key);
+        syncImportBtn();
       });
-    }
+    });
     const optToggle = area.querySelector('#onboarding-import-options-toggle');
     if (optToggle) {
       optToggle.addEventListener('click', () => {
@@ -380,8 +450,7 @@
       box.addEventListener('change', () => {
         const key = box.getAttribute('data-import-part');
         importState.parts[key] = box.checked;
-        const btn = area.querySelector('#onboarding-import-btn');
-        if (btn) btn.disabled = importState.busy || !Object.values(importState.parts).some(Boolean);
+        syncImportBtn();
       });
     });
     const importBtn = area.querySelector('#onboarding-import-btn');
@@ -446,6 +515,7 @@
       /* noop */
     }
     setHotkeyTrial(false);
+    clearWelcomeIntro(state.monitorEl);
     state.active = false;
     state.preview = false;
     state.step = -1;
@@ -986,7 +1056,17 @@
             '<span class="onboarding-dockbar-slot"></span>' +
             '<span class="onboarding-dockbar-plus">+</span>' +
           '</div>' +
+          '<span class="onb-pin-hint" aria-hidden="true"><span>Tus accesos quedan fijos acá</span></span>' +
           renderWindowsTaskbar() +
+          // Bienvenida: la marca y la frase van sobre la pantalla, con el
+          // escritorio de Windows difuminado atrás.
+          '<div class="onb-welcome-cover" aria-hidden="true">' +
+            '<div class="onboarding-welcome-brand">' +
+              '<span class="onboarding-welcome-mark"></span>' +
+              '<span class="onboarding-welcome-name">inplaize</span>' +
+            '</div>' +
+            '<p class="onboarding-welcome-line"></p>' +
+          '</div>' +
           monitorCursorMarkup() +
         '</div>' +
       '</div>' +
@@ -1008,6 +1088,31 @@
     bindMonitorPointer(el);
     state.monitorEl = el;
     return el;
+  }
+
+  /**
+   * La misma computadora, suelta y fuera del tour: la usa el instalador para
+   * mostrar inplaize mientras baja. No toca el estado del onboarding.
+   */
+  function createMonitor(icons) {
+    const el = document.createElement('div');
+    el.className = 'onboarding-monitor is-ordered';
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = monitorMarkup(false);
+    bindMonitorPointer(el);
+    const holder = el.querySelector('.onboarding-dockbar-icons');
+    (Array.isArray(icons) && icons.length ? icons : allAppIcons()).forEach((icon) => {
+      const img = document.createElement('img');
+      img.src = icon;
+      img.alt = '';
+      img.setAttribute('data-icon', icon);
+      holder.appendChild(img);
+    });
+    return {
+      el,
+      openApp: (icon) => setDeskPreview(el, icon),
+      closeApp: () => resetDeskPreview(el),
+    };
   }
 
   /** Las ventanas ya se fueron (o el usuario siguió antes): inplaize deja todo en su lugar. */
@@ -1106,7 +1211,11 @@
     const el = ensureMonitor();
     if (step.id !== 'welcome') settleMonitor();
     slot.appendChild(el);
-    el.classList.toggle('is-dock-hidden', step.id === 'hotkey' && !state.hotkeyDockShown);
+    // La bienvenida arranca con el escritorio solo: inplaize entra al apretar "Empezar".
+    const hideDock = step.id === 'welcome'
+      ? !state.welcomeRevealed
+      : (step.id === 'hotkey' && !state.hotkeyDockShown);
+    el.classList.toggle('is-dock-hidden', hideDock);
     // Paso del atajo: el cursor propio y los íconos de la barra se pueden tocar.
     const interactive = step.id === 'hotkey' && !state.hotkeyCapturing;
     const wasInteractive = el.classList.contains('is-interactive');
@@ -1121,15 +1230,62 @@
     // Sin esto, los íconos que se van no tienen estilo previo y desaparecen de golpe.
     void el.offsetWidth;
     syncMonitorBar(true);
-    if (step.id === 'welcome') setDeskPreview(el, WELCOME_APP_ICON);
+    if (step.id === 'welcome') {
+      setDeskPreview(el, WELCOME_APP_ICON);
+      // El velo con la marca tapa el escritorio hasta que se apreta "Empezar".
+      const line = el.querySelector('.onb-welcome-cover .onboarding-welcome-line');
+      if (line) line.textContent = step.title || '';
+      el.classList.toggle('is-welcome-cover', !state.welcomeRevealed);
+    } else {
+      el.classList.remove('is-welcome-cover');
+      clearWelcomeIntro(el);
+    }
+  }
+
+  /** Lo que tarda en irse el velo con la marca. */
+  const WELCOME_COVER_MS = 340;
+  /** Lo que tardan los accesos en acomodarse en la barra. */
+  const WELCOME_PIN_MS = 1400;
+  /** Desde que entra inplaize hasta que el tour sigue solo. */
+  const WELCOME_REVEAL_MS = 2200;
+
+  /**
+   * Bienvenida: la computadora arranca con el escritorio de Windows difuminado
+   * detrás de la marca, y es el botón "Empezar" el que hace entrar inplaize: se
+   * va el velo, los accesos suben a la barra de arriba y un cartel lo señala.
+   * Cuando termina de entrar el tour sigue solo (o antes, si se vuelve a
+   * apretar el botón).
+   */
+  function revealWelcomeApp() {
+    const el = state.monitorEl;
+    if (!el) {
+      advanceToNextStep();
+      return;
+    }
+    clearWelcomeIntro(el);
+    state.welcomeRevealed = true;
+    el.classList.remove('is-welcome-cover');
+    const later = (ms, fn) => state.welcomeIntroTimers.push(setTimeout(fn, ms));
+    later(WELCOME_COVER_MS, () => {
+      el.classList.remove('is-dock-hidden');
+      el.classList.add('is-pinning', 'is-pin-hint');
+    });
+    later(WELCOME_COVER_MS + WELCOME_PIN_MS, () => el.classList.remove('is-pinning'));
+    later(WELCOME_COVER_MS + WELCOME_REVEAL_MS, () => {
+      if (state.active && STEPS[state.step] && STEPS[state.step].id === 'welcome') advanceToNextStep();
+    });
+  }
+
+  /** Corta la entrada de la bienvenida: al salir del paso no queda nada a medias. */
+  function clearWelcomeIntro(el) {
+    state.welcomeIntroTimers.splice(0).forEach(clearTimeout);
+    if (el) el.classList.remove('is-pinning', 'is-pin-hint');
   }
 
   /** Monitor arriba y, abajo, lo propio de cada paso. */
   function renderStage(step) {
     let below = '';
-    if (step.id === 'welcome' && step.title) {
-      below = `<p class="onboarding-welcome-line">${escapeHtml(step.title)}</p>`;
-    } else if (step.id === 'personalize' && Array.isArray(step.apps)) below = renderAppGrid(step.apps);
+    if (step.id === 'personalize' && Array.isArray(step.apps)) below = renderAppGrid(step.apps);
     else if (step.id === 'hotkey') below = renderKeyboard(hotkeySlots());
     const modeClass = step.id === 'hotkey' && state.hotkeyCapturing ? ' is-capturing' : '';
     return (
@@ -1182,7 +1338,7 @@
     const hint = primary && (step.id === 'personalize' || step.id === 'hotkey')
       ? `<p class="onboarding-action-hint">${escapeHtml(hintCopy)}</p>`
       : '';
-    const back = stepIndex > 0
+    const back = stepIndex > FIRST_STEP
       ? `<button type="button" class="onboarding-btn-secondary" data-onboarding-action="back">Atrás</button>`
       : '';
     const bodyCopy = step.id === 'hotkey' ? hotkeyBody() : step.body;
@@ -1217,15 +1373,11 @@
       : '';
 
     const title = step.title;
-    // En la bienvenida el encabezado es la marca (ícono + nombre); el texto va debajo de la computadora.
-    const headerTitle = step.id === 'welcome'
-      ? (
-        '<div class="onboarding-welcome-brand" role="img" aria-label="inplaize">' +
-          '<span class="onboarding-welcome-mark" aria-hidden="true"></span>' +
-          '<span class="onboarding-welcome-name" aria-hidden="true">inplaize</span>' +
-        '</div>'
-      )
-      : (title ? `<h3 class="onboarding-bubble-title">${escapeHtml(title)}</h3>` : '');
+    // En la bienvenida la marca y la frase van sobre la pantalla del monitor,
+    // así que el encabezado del bocadillo queda vacío.
+    const headerTitle = step.id === 'welcome' || !title
+      ? ''
+      : `<h3 class="onboarding-bubble-title">${escapeHtml(title)}</h3>`;
     const pane = `
       ${closeButton}
       <header class="onboarding-bubble-header">
@@ -2016,6 +2168,12 @@
       return;
     }
     
+    // Volver a la bienvenida vuelve a mostrar la computadora vacía.
+    if (step.id === 'welcome') {
+      clearWelcomeIntro(state.monitorEl);
+      state.welcomeRevealed = false;
+    }
+
     if (step.id === 'hotkey') {
       state.hotkeyPressed = false;
       state.hotkeyLit.clear();
@@ -2061,13 +2219,19 @@
   }
 
   function goBack() {
-    if (!state.active || state.step <= 0) return;
+    if (!state.active || state.step <= FIRST_STEP) return;
     showStep(state.step - 1);
   }
 
   function goNext() {
     if (!state.active) return;
     const step = STEPS[state.step];
+
+    // Bienvenida: el primer "Empezar" muestra inplaize sobre la computadora.
+    if (step && step.id === 'welcome' && !state.welcomeRevealed) {
+      revealWelcomeApp();
+      return;
+    }
 
     // Los pasos con acción pendiente no muestran el botón: si igual se llega
     // acá (teclado, doble click), el pie vuelve a pedir lo que falta.
@@ -2166,7 +2330,6 @@
     state.hotkeyCapturing = false;
     state.hotkeyCapture = [];
     state.hotkeyError = '';
-    const skipWelcome = !!o.skipWelcome;
 
     if (!state.repositionListener) {
       const listener = () => scheduleReflow();
@@ -2179,12 +2342,12 @@
     armHotkeyKeyListener();
     startModalObserver();
     loadSavedHotkey();
-    showStep(startStepIndex(o, skipWelcome));
+    showStep(startStepIndex(o));
     applyModalSuppression();
   }
 
-  /** Paso inicial: `step` puede ser el id (`hotkey`) o el número. Si no viene, arranca en 0. */
-  function startStepIndex(o, skipWelcome) {
+  /** Paso inicial: `step` puede ser el id (`hotkey`) o el número. Si no viene, arranca en "Armá tu espacio". */
+  function startStepIndex(o) {
     if (o.step != null && o.step !== '') {
       const raw = String(o.step);
       const byId = STEPS.findIndex((s) => s.id === raw);
@@ -2192,7 +2355,7 @@
       const n = Number(raw);
       if (Number.isInteger(n) && n >= 0 && n < STEPS.length) return n;
     }
-    return skipWelcome ? 1 : 0;
+    return FIRST_STEP;
   }
 
   async function loadSavedHotkey() {
@@ -2315,5 +2478,6 @@
     skip,
     isActive,
     showGestureCoach,
+    createMonitor,
   };
 })();

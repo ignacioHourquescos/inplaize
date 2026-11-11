@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instalar inplaize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- La computadora, la barra y las ventanas son las del onboarding de la app. -->
+  <link rel="stylesheet" href="onboarding.css">
+  <link rel="stylesheet" href="installer.css">
+</head>
+<body>
+  <main class="setup" id="setup" data-state="welcome">
+    <!-- La marca, la misma del onboarding, fija arriba a la izquierda. -->
+    <div class="onboarding-welcome-brand setup-brand">
+      <span class="onboarding-welcome-mark" aria-hidden="true"></span>
+      <span class="onboarding-welcome-name">inplaize</span>
+    </div>
+
+    <!-- A la izquierda, lo que se cuenta y el botón; a la derecha, la computadora. -->
+    <div class="setup-side">
+      <!-- Mientras baja: los tres pasos del recorrido, uno debajo del otro. -->
+      <ol class="setup-steps" id="steps"></ol>
+
+      <!-- Antes y después: un título y una frase. -->
+      <section class="setup-copy" aria-live="polite">
+        <h1 id="copy-title"></h1>
+        <p id="copy-body"></p>
+      </section>
+
+      <div class="setup-action">
+        <button type="button" id="install-btn" class="onboarding-btn-primary setup-cta">Comenzar</button>
+        <p class="setup-note" id="install-note"></p>
+      </div>
+
+      <div class="setup-error" role="alert">
+        <p id="error-text"></p>
+        <div class="setup-error-actions">
+          <button type="button" id="retry-btn" class="onboarding-btn-primary">Reintentar</button>
+          <button type="button" id="full-btn" class="setup-link">Bajar el instalador completo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="setup-stage">
+      <div class="onb-monitor-slot" id="monitor-slot"></div>
+    </div>
+
+    <!-- El avance de la descarga, abajo de todo y de lado a lado. -->
+    <footer class="setup-progress" role="status">
+      <div class="setup-bar" id="bar"><i id="bar-fill"></i></div>
+      <div class="setup-status">
+        <span id="status-text"></span>
+        <span id="status-detail"></span>
+      </div>
+    </footer>
+  </main>
+
+  <script src="onboarding.js"></script>
+  <script src="installer.js"></script>
+</body>
+</html>

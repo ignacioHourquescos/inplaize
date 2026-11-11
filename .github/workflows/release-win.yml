@@ -1,5 +1,12 @@
-# Compila el instalador de Windows en un runner de GitHub, lo manda a firmar a
-# SignPath y lo publica como adjunto del release.
+# Compila los instaladores de Windows en un runner de GitHub, los manda a firmar
+# a SignPath y los publica como adjuntos del release.
+#
+# Son dos archivos por versión:
+#   inplaize.Setup.X.exe        el chico (~2 MB): es el que enlaza la landing. Al
+#                               abrirlo baja el completo de este mismo release.
+#   inplaize.Full.Setup.X.exe   el completo, el de electron-builder.
+# Los nombres no se pueden cambiar acá sin cambiarlos en scripts/build-installer.js:
+# el chico busca al completo por ese nombre.
 #
 # SignPath solo firma builds que puede verificar: por eso la compilación tiene
 # que pasar por acá y no por la máquina del mantenedor. Ver la política en
@@ -10,13 +17,18 @@
 #   git commit -am "..." && git tag v1.5.4 && git push --follow-tags
 #
 # Mientras no estén configuradas las variables de SignPath, el workflow publica
-# el instalador SIN firmar, que es lo mismo que se venía haciendo a mano.
+# los instaladores SIN firmar, que es lo mismo que se venía haciendo a mano.
 # Para activar la firma, en Settings → Secrets and variables → Actions:
 #   secret    SIGNPATH_API_TOKEN
 #   variable  SIGNPATH_ORGANIZATION_ID
-#   variable  SIGNPATH_PROJECT_SLUG                 (opcional, default: inplaize)
-#   variable  SIGNPATH_SIGNING_POLICY_SLUG          (opcional, default: release-signing)
-#   variable  SIGNPATH_ARTIFACT_CONFIGURATION_SLUG  (opcional, default: nsis-installer)
+#   variable  SIGNPATH_PROJECT_SLUG                     (opcional, default: inplaize)
+#   variable  SIGNPATH_SIGNING_POLICY_SLUG              (opcional, default: release-signing)
+#   variable  SIGNPATH_ARTIFACT_CONFIGURATION_SLUG      (opcional, default: nsis-installer)
+#   variable  SIGNPATH_WEB_ARTIFACT_CONFIGURATION_SLUG  (opcional; la del chico si no sirve la misma)
+#
+# Se piden dos firmas, una por archivo, así que en SignPath hay dos aprobaciones
+# por release. Tienen que salir las dos: el chico, si está firmado, solo ejecuta
+# un completo firmado por el mismo editor.
 
 name: Release Windows
 
@@ -71,28 +83,41 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "inplaize $version"
 
-      - name: Compilar el instalador
+      - name: Compilar los instaladores
         run: npm run build:ci
 
-      - name: Ubicar el instalador
+      - name: Ubicar los instaladores
         id: installer
         run: |
-          $exe = Get-ChildItem dist -Filter 'inplaize.Setup.*.exe' -File | Select-Object -First 1
-          if (-not $exe) { throw 'electron-builder no dejo ningun instalador en dist/' }
-          "path=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "$($exe.Name) — $([math]::Round($exe.Length / 1MB)) MB"
+          # El filtro del chico no agarra al completo: ese empieza con "inplaize.Full.".
+          $full = Get-ChildItem dist -Filter 'inplaize.Full.Setup.*.exe' -File | Select-Object -First 1
+          $web = Get-ChildItem dist -Filter 'inplaize.Setup.*.exe' -File | Select-Object -First 1
+          if (-not $full) { throw 'electron-builder no dejo el instalador completo en dist/' }
+          if (-not $web) { throw 'scripts/build-installer.js no dejo el instalador chico en dist/' }
+          "full=$($full.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "web=$($web.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "$($full.Name) — $([math]::Round($full.Length / 1MB)) MB"
+          Write-Host "$($web.Name) — $([math]::Round($web.Length / 1KB)) KB"
 
       # SignPath exige que el artefacto esté guardado en GitHub antes de firmarlo.
       # archive:false lo sube tal cual, sin envolverlo en un zip.
-      - name: Subir el instalador sin firmar
-        id: unsigned
+      - name: Subir el instalador completo sin firmar
+        id: unsigned_full
         uses: actions/upload-artifact@v7
         with:
-          path: ${{ steps.installer.outputs.path }}
+          path: ${{ steps.installer.outputs.full }}
           archive: false
           if-no-files-found: error
 
-      - name: Pedir la firma a SignPath
+      - name: Subir el instalador chico sin firmar
+        id: unsigned_web
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.installer.outputs.web }}
+          archive: false
+          if-no-files-found: error
+
+      - name: Pedir a SignPath la firma del instalador completo
         if: vars.SIGNPATH_ORGANIZATION_ID != ''
         uses: signpath/github-action-submit-signing-request@v3
         with:
@@ -101,45 +126,81 @@ jobs:
           project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'inplaize' }}
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
           artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'nsis-installer' }}
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          github-artifact-id: ${{ steps.unsigned_full.outputs.artifact-id }}
           # Cada release se aprueba a mano en SignPath: la espera es por eso.
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: 3600
-          output-artifact-directory: dist-signed
+          output-artifact-directory: dist-signed/full
           skip-decompress: true
 
-      - name: Elegir qué instalador publicar
+      - name: Pedir a SignPath la firma del instalador chico
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'inplaize' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_WEB_ARTIFACT_CONFIGURATION_SLUG || vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG || 'nsis-installer' }}
+          github-artifact-id: ${{ steps.unsigned_web.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: dist-signed/web
+          skip-decompress: true
+
+      # Lo que se publica queda en dist-release/ con el nombre de siempre, venga
+      # firmado o no: la landing y el instalador chico buscan esos nombres.
+      - name: Elegir qué instaladores publicar
         id: artifact
+        env:
+          FULL: ${{ steps.installer.outputs.full }}
+          WEB: ${{ steps.installer.outputs.web }}
         run: |
-          $signed = Get-ChildItem dist-signed -Filter '*.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($signed) {
-            Write-Host "Instalador firmado: $($signed.Name)"
-            "path=$($signed.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $signedFull = Get-ChildItem dist-signed/full -Filter '*.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          $signedWeb = Get-ChildItem dist-signed/web -Filter '*.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ([bool]$signedFull -ne [bool]$signedWeb) {
+            # Un chico firmado no ejecuta un completo sin firmar: publicar así deja la descarga rota.
+            throw 'SignPath devolvio firmado solo uno de los dos instaladores. No se publica nada.'
+          }
+          New-Item -ItemType Directory -Force dist-release | Out-Null
+          $fullOut = Join-Path (Resolve-Path dist-release) (Split-Path $env:FULL -Leaf)
+          $webOut = Join-Path (Resolve-Path dist-release) (Split-Path $env:WEB -Leaf)
+          if ($signedFull) {
+            Copy-Item $signedFull.FullName $fullOut -Force
+            Copy-Item $signedWeb.FullName $webOut -Force
+            Write-Host 'Instaladores firmados por SignPath.'
             "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           } else {
-            Write-Warning 'Sin firma de SignPath: se publica el instalador tal como salio de electron-builder.'
-            "path=${{ steps.installer.outputs.path }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Warning 'Sin firma de SignPath: se publican los instaladores tal como salieron de la compilacion.'
+            Copy-Item $env:FULL $fullOut -Force
+            Copy-Item $env:WEB $webOut -Force
             "signed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
+          "full=$fullOut" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "web=$webOut" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Publicar en el release
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.meta.outputs.version }}
-          ASSET: ${{ steps.artifact.outputs.path }}
+          FULL: ${{ steps.artifact.outputs.full }}
+          WEB: ${{ steps.artifact.outputs.web }}
           SIGNED: ${{ steps.artifact.outputs.signed }}
         run: |
           $tag = $env:GITHUB_REF_NAME
           gh release view $tag 2>&1 | Out-Null
           if ($LASTEXITCODE -ne 0) {
             $firma = if ($env:SIGNED -eq 'true') {
-              'El instalador esta firmado por SignPath Foundation.'
+              'Los instaladores estan firmados por SignPath Foundation.'
             } else {
-              'Este instalador todavia no esta firmado, por lo que Windows muestra el aviso de SmartScreen.'
+              'Estos instaladores todavia no estan firmados, por lo que Windows muestra el aviso de SmartScreen.'
             }
             $notes = @(
               "## inplaize $env:VERSION",
+              '',
+              "- ``$(Split-Path $env:WEB -Leaf)``: el instalador. Pesa poco y baja la app al abrirlo.",
+              "- ``$(Split-Path $env:FULL -Leaf)``: el instalador completo, para instalar sin conexion.",
               '',
               '### Code signing policy',
               '',
@@ -149,5 +210,8 @@ jobs:
             gh release create $tag --title "inplaize $env:VERSION" --notes $notes
             if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el release.' }
           }
-          gh release upload $tag "$env:ASSET" --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'No se pudo subir el instalador al release.' }
+          # Primero el completo: el chico es el que enlaza la landing y lo sale a buscar.
+          gh release upload $tag "$env:FULL" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudo subir el instalador completo al release.' }
+          gh release upload $tag "$env:WEB" --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudo subir el instalador chico al release.' }

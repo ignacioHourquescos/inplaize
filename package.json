@@ -1,6 +1,6 @@
 {
   "name": "inplaize",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {
@@ -13,9 +13,10 @@
     "build:editor": "node scripts/bundle-document-editor.js",
     "test:docs": "node scripts/test-document-content.js",
     "sync:download-links": "node scripts/sync-download-links.js",
-    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && node scripts/sync-download-links.js && node scripts/build-win.js",
-    "build:ci": "node scripts/bundle-document-editor.js && node scripts/sync-download-links.js && node scripts/build-win.js",
-    "build:mac": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac"
+    "build:installer": "node scripts/build-installer.js",
+    "build:win": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && node scripts/sync-download-links.js && node scripts/build-win.js && node scripts/build-installer.js",
+    "build:ci": "node scripts/bundle-document-editor.js && node scripts/sync-download-links.js && node scripts/build-win.js && node scripts/build-installer.js",
+    "build:mac": "node scripts/bundle-document-editor.js && node scripts/bump-build.js && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never"
   },
   "build": {
     "appId": "com.inplaize.app",
@@ -44,7 +45,7 @@
       "target": "nsis",
       "icon": "assets/icon.ico",
       "signAndEditExecutable": false,
-      "artifactName": "inplaize.Setup.${version}.${ext}",
+      "artifactName": "inplaize.Full.Setup.${version}.${ext}",
       "signtoolOptions": {
         "publisherName": "SignPath Foundation",
         "rfc3161TimeStampServer": "http://timestamp.digicert.com"

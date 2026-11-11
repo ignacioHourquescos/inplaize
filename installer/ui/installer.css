@@ -1,0 +1,810 @@
+/* ==========================================================================
+   Ventana del instalador. A la izquierda, lo que se está contando y el botón;
+   a la derecha, la computadora del onboarding; abajo de todo, de lado a lado,
+   el avance de la descarga.
+   La ventana mide siempre lo mismo (960 x 560, igual que en Installer.cs), así
+   que las medidas son fijas y las proporciones no dependen de dónde se abra.
+   ========================================================================== */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  color: #202124;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+.setup {
+  position: relative;
+  box-sizing: border-box;
+  width: 960px;
+  max-width: 100%;
+  height: 560px;
+  max-height: 100%;
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: 32px;
+  row-gap: 14px;
+  align-items: center;
+  padding: 32px 44px 28px 52px;
+  background: #fff;
+}
+/* En el navegador (la vista previa) sobra lugar: se ve como la ventana que es,
+   del tamaño real, en vez de estirarse a toda la página. */
+@media (min-width: 1000px), (min-height: 600px) {
+  html,
+  body {
+    background: #dfe1e5;
+  }
+
+  .setup {
+    border-radius: 10px;
+    box-shadow: 0 24px 60px rgba(32, 33, 36, 0.28), 0 0 0 1px rgba(32, 33, 36, 0.08);
+  }
+}
+
+/* La marca, arriba a la izquierda, alineada con el texto. No ocupa lugar en la grilla. */
+.setup-brand {
+  position: absolute;
+  top: 36px;
+  left: 52px;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.setup-brand .onboarding-welcome-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.setup-brand .onboarding-welcome-mark::before {
+  width: 14px;
+  height: 14px;
+  border-radius: 4.5px;
+}
+
+.setup-brand .onboarding-welcome-mark::after {
+  width: 6px;
+  height: 6px;
+}
+
+.setup-brand .onboarding-welcome-name {
+  font-size: 25px;
+}
+
+/* La computadora se ve entera: el atajo se entiende porque inplaize aparece y
+   desaparece de toda la pantalla, y de cerca eso no se llega a ver. */
+.setup-stage {
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+/* La columna del texto, centrada a la altura de la computadora. Muestra una
+   sola cosa por vez: el título con su botón, los pasos del recorrido o el error. */
+.setup-side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+}
+
+/* ---- Antes y después del recorrido: un título y una frase ---- */
+
+.setup-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.setup[data-state='working'] .setup-copy {
+  display: none;
+}
+
+.setup-copy h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.setup-copy p {
+  margin: 14px 0 0;
+  color: #5f6368;
+  font-size: 16px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+
+/* ---- El recorrido: tres pasos, uno debajo del otro ---- */
+
+/* Cada paso lleva una barra vertical a su izquierda. Se prende la del paso que
+   se está viendo, que además muestra su frase; las otras dos quedan apagadas.
+   El alto es fijo para que la lista no se mueva al cambiar de paso. */
+.setup-steps {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 190px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.setup[data-state='working'] .setup-steps {
+  display: flex;
+  animation: setup-steps-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes setup-steps-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.setup-steps li {
+  position: relative;
+  padding: 3px 0 3px 20px;
+}
+
+.setup-steps li::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: #e8eaed;
+  transition: background 320ms ease;
+}
+
+.setup-steps li.is-on::before {
+  background: #7c6cff;
+}
+
+.setup-steps h2 {
+  margin: 0;
+  color: #a4a9af;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-wrap: balance;
+  transition: color 320ms ease;
+}
+
+.setup-steps li.is-on h2 {
+  color: #202124;
+}
+
+/* La frase del paso se abre al prenderse y se cierra al apagarse. */
+.setup-step-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 360ms cubic-bezier(0.16, 1, 0.3, 1), opacity 240ms ease;
+}
+
+.setup-steps li.is-on .setup-step-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.setup-step-body p {
+  min-height: 0;
+  overflow: hidden;
+  margin: 0;
+  color: #5f6368;
+  font-size: 16.5px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* El atajo va dentro de la frase y no se parte entre dos renglones. */
+.setup-keys {
+  white-space: nowrap;
+}
+
+/* El aire entre el título y la frase va adentro, así se cierra con ella. */
+.setup-step-body p::before {
+  content: '';
+  display: block;
+  height: 8px;
+}
+
+/* Las teclas del atajo. Al apretarse apenas se hunden y toman un poco de color. */
+.setup kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 1px 6px;
+  border: 1px solid #d0d3d8;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 0 #c4c7cc;
+  color: #1a73e8;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  transition:
+    background 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    transform 220ms ease;
+}
+
+.setup kbd.is-lit {
+  border-color: #aecbfa;
+  background: #e8f0fe;
+  box-shadow: 0 0 0 #c4c7cc;
+  transform: translateY(1px);
+}
+
+/* ---- Debajo del texto: el botón para empezar o, si falló, cómo seguir ---- */
+
+.setup-action,
+.setup-error {
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.setup[data-state='welcome'] .setup-action,
+.setup[data-state='error'] .setup-error {
+  display: flex;
+}
+
+.setup-action {
+  gap: 12px;
+}
+
+.onboarding-btn-primary.setup-cta {
+  padding: 12px 44px;
+  font-size: 16px;
+}
+
+/* El botón arranca con el foco (Enter instala): el aro va en el azul del botón, no el negro del navegador. */
+.onboarding-btn-primary.setup-cta:focus-visible,
+.setup-error .onboarding-btn-primary:focus-visible {
+  outline: 3px solid rgba(26, 115, 232, 0.3);
+  outline-offset: 3px;
+}
+
+.setup-link:focus-visible {
+  outline: 2px solid rgba(26, 115, 232, 0.4);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.setup-note {
+  margin: 0;
+  color: #80868b;
+  font-size: 12px;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* ---- Pie: el avance de la descarga, abajo de todo y de lado a lado ---- */
+
+/* Ocupa su lugar aunque no se vea, así nada se corre al empezar a bajar. */
+.setup-progress {
+  grid-column: 1 / -1;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.setup[data-state='working'] .setup-progress,
+.setup[data-state='done'] .setup-progress {
+  visibility: visible;
+  opacity: 1;
+}
+.setup-bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e8eaed;
+}
+
+.setup-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 3px;
+  background: #1a73e8;
+  transition: width 240ms ease;
+}
+
+/* Instalando: no hay un porcentaje que mostrar, la barra va y viene. */
+.setup-bar.is-busy i {
+  width: 34% !important;
+  transition: none;
+  animation: setup-busy 1.3s ease-in-out infinite;
+}
+
+@keyframes setup-busy {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(300%); }
+}
+
+.setup-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  /* Mide lo mismo con texto o sin él, para que la computadora no se corra al empezar. */
+  min-height: 17px;
+  margin-top: 10px;
+  color: #5f6368;
+  font-size: 13px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.setup-status span:first-child {
+  color: #202124;
+  font-weight: 500;
+}
+
+.setup-error {
+  gap: 14px;
+}
+
+.setup-error p {
+  margin: 0;
+  color: #c5221f;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.setup-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+
+.setup-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1a73e8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.setup-link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Lo que el instalador le suma a la computadora del onboarding: el segmentado
+   «inplaize | www», las notificaciones, el foco y la navegación libre.
+   La pantalla mide siempre lo mismo (la ventana es fija), así que va en px.
+   ========================================================================== */
+
+/* La flecha se mueve sola: el mouse de la persona no toca nada de la pantalla. */
+.setup .onboarding-monitor-screen {
+  pointer-events: none;
+  transition: opacity 260ms ease;
+}
+
+/* Entre un paso y el siguiente la pantalla se apaga y vuelve. Mientras está
+   apagada, lo de adentro se acomoda de golpe, sin sus transiciones. */
+.setup .onboarding-monitor.is-cut .onboarding-monitor-screen {
+  opacity: 0;
+}
+
+.setup .onboarding-monitor.is-resetting .onboarding-monitor-screen *,
+.setup .onboarding-monitor.is-resetting .onboarding-monitor-screen *::before,
+.setup .onboarding-monitor.is-resetting .onboarding-monitor-screen *::after {
+  transition: none !important;
+}
+
+/* ---- Segmentado: de un lado inplaize con sus accesos, del otro www ---- */
+
+.setup-seg {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid #a78bfa;
+  border-radius: 9px;
+}
+
+/* El lado elegido: el fondo violeta se desliza de uno al otro. */
+.setup-seg::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.onboarding-monitor.is-www .setup-seg::before {
+  transform: translateX(26px);
+}
+
+.setup-seg i {
+  position: relative;
+  width: 24px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+}
+
+/* La marca: el cuadrado con el punto. Apagada cuando se está en www. */
+.setup-seg-home::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 11px;
+  height: 11px;
+  border-radius: 3.5px;
+  background: #fff;
+  transition: background 200ms ease;
+}
+
+.setup-seg-home::after {
+  content: '';
+  grid-area: 1 / 1;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #6d28d9;
+  transition: background 200ms ease;
+}
+
+.onboarding-monitor.is-www .setup-seg-home::before {
+  background: #6f6f7d;
+}
+
+.onboarding-monitor.is-www .setup-seg-home::after {
+  background: #121216;
+}
+
+.setup-seg-www {
+  color: #a9a9b6;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  transition: color 200ms ease;
+}
+
+.onboarding-monitor.is-www .setup-seg-www {
+  color: #fff;
+}
+
+/* ---- Foco y notificaciones ---- */
+
+.onboarding-monitor .onboarding-dockbar-icons img {
+  transition:
+    opacity 240ms ease,
+    filter 240ms ease,
+    transform 200ms ease;
+}
+
+/* En foco, las demás apps pierden el color: siguen ahí, pero calladas. */
+.onboarding-monitor.is-focus .onboarding-dockbar-icons img:not(.is-focus) {
+  opacity: 0.34;
+  filter: grayscale(1);
+}
+
+.onboarding-monitor.is-focus .onboarding-dockbar-icons img.is-focus {
+  border-radius: 5px;
+  box-shadow: none;
+  outline: 2px solid #7c6cff;
+  outline-offset: 3px;
+}
+
+/* La marca del modo foco en inplaize: un semicírculo violeta arriba, al centro. */
+.onboarding-dockbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 14px;
+  height: 7px;
+  margin-left: -7px;
+  border-radius: 0 0 7px 7px;
+  background: #7c6cff;
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: opacity 200ms ease, transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.onboarding-monitor.is-focus .onboarding-dockbar::before {
+  opacity: 1;
+  transform: none;
+}
+
+/* Notificaciones: el número sobre el ícono de la app. La posición la pone installer.js. */
+.setup-badge {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  border-radius: 99px;
+  background: #ea4335;
+  box-shadow: 0 0 0 1.5px #121216;
+  color: #fff;
+  font-size: 7.5px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+  animation: setup-badge-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: background-color 260ms ease, color 260ms ease;
+}
+
+/* En foco, las notificaciones de las demás apps quedan calladas. */
+.setup-badge.is-quiet {
+  background: #4a4d55;
+  color: #9aa0a6;
+}
+
+@keyframes setup-badge-in {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Los carteles, debajo del ícono. `left` lo pone installer.js. */
+.setup-fx {
+  position: absolute;
+  z-index: 5;
+  top: 48px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.setup-pill {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  box-shadow: 0 2px 6px rgba(32, 33, 36, 0.24);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.setup-fx[data-show='right'] > [data-for='right'],
+.setup-fx[data-show='focus'] > [data-for='focus'] {
+  display: inline-flex;
+  animation: setup-pill-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes setup-pill-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.setup-pill.is-tag {
+  background: #2b2b33;
+}
+
+.setup-pill.is-focus {
+  background: #7c6cff;
+}
+
+.setup-pill svg {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+
+.setup-pill svg[viewBox='0 0 12 16'] {
+  width: 8px;
+  height: 11px;
+}
+
+/* ---- www: los perfiles, la pestaña y la barra de navegación ---- */
+
+.setup-www {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-monitor.is-www .setup-www {
+  display: flex;
+  animation: setup-www-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.onboarding-monitor.is-www .onboarding-dockbar-icons,
+.onboarding-monitor.is-www .onboarding-dockbar-slot,
+.onboarding-monitor.is-www .onboarding-dockbar-plus {
+  display: none;
+}
+
+@keyframes setup-www-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.setup-profiles {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 3px;
+}
+
+.setup-profile {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 9.5px;
+  font-style: normal;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 200ms ease, box-shadow 200ms ease;
+}
+
+.setup-profile b {
+  font-weight: 700;
+}
+
+.setup-profile.is-pink { background: #ec4899; }
+.setup-profile.is-blue { background: #3b82f6; }
+.setup-profile.is-amber { background: #f59e0b; }
+
+/* El perfil en uso: con todo el color y el aro blanco. */
+.setup-profile.is-on {
+  opacity: 1;
+  box-shadow: 0 0 0 1.5px #121216, 0 0 0 3px #fff;
+}
+
+.setup-tab {
+  flex: 0 1 132px;
+  min-width: 0;
+  height: 26px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: #2a2a33;
+  color: #ececf1;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.setup-tab-ico {
+  flex: 0 0 auto;
+  display: flex;
+}
+
+.onboarding-dockbar .setup-tab-ico img,
+.setup-tab-ico svg {
+  width: 12px;
+  height: 12px;
+}
+
+.setup-tab b {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.setup-tab em {
+  flex: 0 0 auto;
+  color: #8b8b99;
+  font-size: 12px;
+  font-style: normal;
+}
+
+/* Al cambiar de perfil, entra la pestaña de ese perfil. */
+.setup-tab.is-swap {
+  animation: setup-tab-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes setup-tab-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.setup-tab-new {
+  flex: 0 0 auto;
+  color: #8b8b99;
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* La segunda fila del navegador: Fijar, atrás y adelante, y la dirección. */
+.setup-nav {
+  flex: 0 0 auto;
+  height: 26px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-top: 1px solid #25252d;
+  background: #121216;
+}
+
+.setup-nav-pin {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(167, 139, 250, 0.14);
+  color: #d4c8ff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.setup-nav-btns {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #8b8b99;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.setup-nav-btns i {
+  font-style: normal;
+}
+
+.setup-nav-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 17px;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0 9px;
+  border-radius: 9px;
+  background: #25252d;
+  color: #c9c9d3;
+  font-size: 9px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -65,6 +65,21 @@
           ]);
         },
         addShortcut: function () { return Promise.resolve(); },
+        listBrowserImportProfiles: function () {
+          return Promise.resolve({
+            platformSupported: true,
+            vaultAvailable: true,
+            profiles: [
+              { browser: 'chrome', browserName: 'Chrome', key: 'chrome::Default', directory: 'Default', name: 'Persona 1', userName: 'ivan@gmail.com', historyCount: 8421 },
+              { browser: 'chrome', browserName: 'Chrome', key: 'chrome::Profile 1', directory: 'Profile 1', name: 'Persona 2', userName: 'ivan@trabajo.com', historyCount: 3120 },
+              { browser: 'chrome', browserName: 'Chrome', key: 'chrome::Profile 2', directory: 'Profile 2', name: 'Persona 3', userName: 'tests@inplaize.com', historyCount: 204 },
+              { browser: 'edge', browserName: 'Edge', key: 'edge::Default', directory: 'Default', name: 'Persona 1', userName: '', historyCount: 42 },
+            ],
+          });
+        },
+        runBrowserImport: function () {
+          return Promise.resolve({ ok: true, cookies: 120, history: 900, bookmarks: 30, passwords: 12, passwordsVaultAvailable: true });
+        },
       };
 
       window.addEventListener('keydown', function (e) {

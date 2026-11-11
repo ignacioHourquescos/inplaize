@@ -2052,6 +2052,11 @@ async function init() {
   } finally {
     maybeStartOnboarding();
   }
+  if (window.usualDesk.onOnboardingLaunch) {
+    window.usualDesk.onOnboardingLaunch(() => {
+      maybeStartOnboarding(true);
+    });
+  }
   if (typeof window.usualDesk.onDockOpenWelcomeHome === 'function') {
     window.usualDesk.onDockOpenWelcomeHome((view) => {
       goToDockWelcomeHome(view === 'downloads' ? 'downloads' : 'todos').catch(() => {});
@@ -2111,18 +2116,28 @@ function applyFocusModeStateToDock(state) {
  * Y la lista de shortcuts está vacía: así no molestamos a usuarios que ya
  * tenían el dock configurado y vienen de una versión previa.
  */
-async function maybeStartOnboarding() {
+async function maybeStartOnboarding(force) {
   if (!window.UsualDeskOnboarding || typeof window.UsualDeskOnboarding.start !== 'function') {
     return;
   }
-  if (shortcuts.length > 0) return;
+  let fromInstaller = force === true;
+  if (!fromInstaller && window.usualDesk.consumeOnboardingLaunch) {
+    try {
+      fromInstaller = (await window.usualDesk.consumeOnboardingLaunch()) === true;
+    } catch {
+      fromInstaller = false;
+    }
+  }
+  // El instalador abre la app con --onboarding: el tour es el paso siguiente,
+  // aunque ya hubiera un acceso de una versión anterior.
+  if (!fromInstaller && shortcuts.length > 0) return;
   let settings = null;
   try {
     settings = await window.usualDesk.getAppSettings();
   } catch {
     /* sin settings asumimos onboarding pendiente: estado por defecto */
   }
-  if (settings && settings.onboardingCompleted === true) return;
+  if (!fromInstaller && settings && settings.onboardingCompleted === true) return;
   // Marcamos el tour como activo ANTES de expandir. Recién instalada, la app
   // suele arrancar detrás del instalador o del escritorio: sin esta bandera
   // el main colapsa el panel al primer blur y el tour queda dibujado dentro
