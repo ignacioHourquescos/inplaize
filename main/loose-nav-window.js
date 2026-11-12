@@ -15,6 +15,7 @@ const { setEmbeddedPageBackground } = require('./embedded-page-background');
 const { applyChromeIdentityToPartition } = require('./chrome-identity');
 const { isLoopbackHost, withScheme } = require('./load-web-url');
 const browseProfiles = require('./browse-profiles');
+const browseTabsStore = require('./browse-tabs-store');
 const historyStore = require('./history-store');
 const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
 const passwordManager = require('./password-manager');
@@ -43,7 +44,7 @@ function recordHistoryVisit(url, wc) {
 /**
  * @typedef {{
  *   id: string,
- *   view: Electron.BrowserView,
+ *   view: Electron.BrowserView | null,
  *   partition: string,
  *   title: string,
  *   url: string,
@@ -75,6 +76,19 @@ const lastTabBySession = new Map();
 let modeActive = false;
 /** @type {{x: number, y: number, width: number, height: number} | null} */
 let viewportBounds = null;
+/**
+ * Pestañas ya abiertas o restauradas en este proceso. Recién entonces se pisa
+ * el archivo: un arranque vacío no borra lo del día anterior.
+ */
+let tabsTouched = false;
+/** Una restauración por proceso, para no revivir pestañas que el usuario acaba de cerrar. */
+let tabsRestored = false;
+let restoringTabs = false;
+/** @type {ReturnType<typeof setTimeout> | null} */
+let saveTabsTimer = null;
+/** Último perfil real (no incógnito) que se estaba mirando. */
+let lastRestorablePartition = '';
+let tabPersistenceInstalled = false;
 
 /** Callback que permite al módulo solicitar al resto del main expandir el dock. */
 /** @type {(() => void) | null} */
@@ -165,7 +179,7 @@ function buildStatePayload() {
   const tabCounts = {};
   for (const tab of tabs.values()) {
     tabCounts[tab.partition] = (tabCounts[tab.partition] || 0) + 1;
-    const wc = tab.view.webContents;
+    const wc = tab.view && tab.view.webContents;
     const alive = !tab.sleeping && !!wc && !wc.isDestroyed();
     items.push({
       id: tab.id,
@@ -237,6 +251,7 @@ function buildStatePayload() {
 }
 
 function broadcastState() {
+  scheduleSaveTabs();
   const dock = getDockWindow();
   if (!dock) return;
   try {
@@ -250,6 +265,7 @@ function detachAllFromDock() {
   const dock = getDockWindow();
   if (!dock) return;
   for (const tab of tabs.values()) {
+    if (!tab.view) continue;
     try {
       dock.removeBrowserView(tab.view);
     } catch {
@@ -262,7 +278,7 @@ function layoutActiveView() {
   const dock = getDockWindow();
   if (!dock || !modeActive || !activeTabId || !viewportBounds) return;
   const tab = tabs.get(activeTabId);
-  if (!tab) return;
+  if (!tab || !tab.view) return;
   const { x, y, width, height } = viewportBounds;
   if (width <= 0 || height <= 0) return;
   try {
@@ -317,7 +333,7 @@ function attachActiveViewOnly() {
   if (urlPromptOpen || !modeActive || !activeTabId) return;
   const tab = tabs.get(activeTabId);
   if (!tab) return;
-  if (tab.sleeping) wakeTab(tab);
+  if (tab.sleeping || !tab.view) wakeTab(tab);
   try {
     dock.addBrowserView(tab.view);
   } catch {
@@ -336,14 +352,14 @@ function tabInUse(tab) {
  */
 function sleepTab(tab) {
   const dock = getDockWindow();
-  if (dock) {
+  if (dock && tab.view) {
     try {
       dock.removeBrowserView(tab.view);
     } catch {
       /* noop */
     }
   }
-  const wc = tab.view.webContents;
+  const wc = tab.view && tab.view.webContents;
   try {
     if (wc && !wc.isDestroyed()) {
       tab.url = wc.getURL() || tab.url;
@@ -359,10 +375,13 @@ function sleepTab(tab) {
 /** @param {LooseTab} tab */
 function wakeTab(tab) {
   tab.sleeping = false;
+  tab.loading = true;
   tab.lastActiveAt = Date.now();
   tab.view = createLooseView(tab.partition);
   wireTab(tab, tab.url);
-  tab.view.webContents.loadURL(tab.url || LOOSE_NAV_NEW_TAB_URL).catch(() => {});
+  tab.view.webContents.loadURL(tab.url || LOOSE_NAV_NEW_TAB_URL).catch(() => {
+    tab.loading = false;
+  });
 }
 
 /**
@@ -374,7 +393,7 @@ function sleepIdleTabs(idleMs) {
   let count = 0;
   for (const tab of tabs.values()) {
     if (tab.sleeping || tabInUse(tab) || now - tab.lastActiveAt < idleMs) continue;
-    const wc = tab.view.webContents;
+    const wc = tab.view && tab.view.webContents;
     try {
       if (!wc || wc.isDestroyed() || wc.isCurrentlyAudible()) continue;
     } catch {
@@ -390,14 +409,14 @@ function destroyTabView(tabId) {
   const tab = tabs.get(tabId);
   if (!tab) return;
   const dock = getDockWindow();
-  if (dock) {
+  if (dock && tab.view) {
     try {
       dock.removeBrowserView(tab.view);
     } catch {
       /* noop */
     }
   }
-  const wc = tab.view.webContents;
+  const wc = tab.view && tab.view.webContents;
   try {
     if (wc && !wc.isDestroyed() && typeof wc.destroy === 'function') {
       wc.destroy();
@@ -421,8 +440,9 @@ function siteKeyOf(tab) {
 
 /** @param {LooseTab} tab */
 function applySiteMute(tab) {
+  if (tab.sleeping || !tab.view) return;
   const wc = tab.view.webContents;
-  if (tab.sleeping || !wc || wc.isDestroyed()) return;
+  if (!wc || wc.isDestroyed()) return;
   wc.setAudioMuted(mutedSites.has(siteKeyOf(tab)));
 }
 
@@ -639,10 +659,12 @@ function wireTab(tab, url) {
  * Crea una pestaña y opcionalmente la activa. Si el modo está activo,
  * se ajusta el BrowserView inmediatamente.
  * @param {string} url
- * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions, afterId?: string, freshLogin?: boolean }} [opts]
+ * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions, afterId?: string, freshLogin?: boolean, skipRestore?: boolean }} [opts]
  * @returns {Promise<string>} id de la pestaña creada
  */
 async function openTabFromUrl(url, opts = {}) {
+  const browserWasOpen = modeActive || tabs.size > 0;
+  if (!opts.skipRestore) ensureTabsRestored();
   const partition = (typeof opts.partition === 'string' && opts.partition) || defaultPartition();
   const view = createLooseView(partition);
 
@@ -664,6 +686,7 @@ async function openTabFromUrl(url, opts = {}) {
     freshLogin: opts.freshLogin === true,
   };
   insertTab(id, tab, opts.afterId);
+  tabsTouched = true;
   wireTab(tab, url);
 
   const shouldActivateMode = opts.activateMode !== false;
@@ -678,7 +701,9 @@ async function openTabFromUrl(url, opts = {}) {
     }
   }
 
-  if (!opts.background || !activeTabId) {
+  // Si el navegador estaba cerrado, se muestra la pestaña pedida: la sesión
+  // guardada vuelve con ella, sin taparla.
+  if (!opts.background || !activeTabId || !browserWasOpen) {
     setActiveTab(id);
     if (modeActive) attachActiveViewOnly();
   }
@@ -703,6 +728,7 @@ function setActiveTab(id) {
   if (tab) {
     tab.lastActiveAt = Date.now();
     lastTabBySession.set(tab.partition, tab.id);
+    if (tab.partition !== browseProfiles.guestPartition()) lastRestorablePartition = tab.partition;
   }
 }
 
@@ -734,8 +760,183 @@ async function switchToSession(partition) {
 }
 
 /**
+ * Perfil cuyas pestañas se recuerdan al apagar. Sin sesión es incógnito y no se guarda.
+ * @param {string} partition
+ */
+function persistablePartition(partition) {
+  if (!partition || partition === browseProfiles.guestPartition()) return false;
+  return !browseProfiles.isHiddenPartition(partition);
+}
+
+/** @returns {{ activePartition: string, profiles: Record<string, { activeIndex: number, tabs: { url: string, title: string, pinned: boolean, favicon: string }[] }> }} */
+function snapshotOpenTabs() {
+  /** @type {Map<string, { activeIndex: number, tabs: { url: string, title: string, pinned: boolean, favicon: string }[] }>} */
+  const profiles = new Map();
+  const activeLocked = new Set();
+  for (const tab of tabs.values()) {
+    if (!persistablePartition(tab.partition)) continue;
+    let url = String(tab.url || '');
+    const wc = !tab.sleeping && tab.view && tab.view.webContents;
+    try {
+      if (wc && !wc.isDestroyed()) {
+        const live = wc.getURL();
+        if (/^https?:\/\//i.test(live)) url = live;
+      }
+    } catch {
+      /* la URL que ya tenía la pestaña alcanza */
+    }
+    if (!/^https?:\/\//i.test(url)) continue;
+    let entry = profiles.get(tab.partition);
+    if (!entry) {
+      entry = { activeIndex: 0, tabs: [] };
+      profiles.set(tab.partition, entry);
+    }
+    const title = tab.title && tab.title !== 'Cargando…' ? tab.title : url;
+    const favicon = /^https?:\/\//i.test(tab.favicon || '') ? String(tab.favicon).slice(0, 500) : '';
+    const index = entry.tabs.length;
+    entry.tabs.push({
+      url: url.slice(0, 8000),
+      title: String(title).slice(0, 180),
+      pinned: !!tab.pinned,
+      favicon,
+    });
+    if (tab.id === activeTabId) {
+      entry.activeIndex = index;
+      activeLocked.add(tab.partition);
+    } else if (!activeLocked.has(tab.partition) && lastTabBySession.get(tab.partition) === tab.id) {
+      entry.activeIndex = index;
+    }
+  }
+  const active = activeTabId ? tabs.get(activeTabId) : null;
+  const activePartition = active && persistablePartition(active.partition)
+    ? active.partition
+    : lastRestorablePartition;
+  return { activePartition, profiles: Object.fromEntries(profiles) };
+}
+
+let lastSavedTabsJson = '';
+
+function persistOpenTabs() {
+  try {
+    const json = JSON.stringify(browseTabsStore.normalize(snapshotOpenTabs()));
+    if (json === lastSavedTabsJson) return;
+    if (!browseTabsStore.save(JSON.parse(json))) return;
+    lastSavedTabsJson = json;
+  } catch {
+    /* noop */
+  }
+}
+
+function scheduleSaveTabs() {
+  if (restoringTabs || !tabsTouched) return;
+  if (saveTabsTimer) clearTimeout(saveTabsTimer);
+  saveTabsTimer = setTimeout(() => {
+    saveTabsTimer = null;
+    persistOpenTabs();
+  }, 300);
+  if (saveTabsTimer && typeof saveTabsTimer.unref === 'function') saveTabsTimer.unref();
+}
+
+function flushSaveTabs() {
+  if (saveTabsTimer) clearTimeout(saveTabsTimer);
+  saveTabsTimer = null;
+  if (restoringTabs || !tabsTouched) return;
+  persistOpenTabs();
+}
+
+function installTabPersistence() {
+  if (tabPersistenceInstalled) return;
+  tabPersistenceInstalled = true;
+  app.on('before-quit', flushSaveTabs);
+  try {
+    require('electron').powerMonitor.on('shutdown', flushSaveTabs);
+  } catch {
+    /* sin aviso de apagado: before-quit igual escribe */
+  }
+}
+
+/**
+ * Pestaña recordada, sin proceso hasta que alguien la mire.
+ * @param {string} partition
+ * @param {{ url: string, title: string, pinned: boolean, favicon: string }} saved
+ */
+function addSleepingTab(partition, saved) {
+  const id = nextTabId();
+  /** @type {LooseTab} */
+  const tab = {
+    id,
+    view: null,
+    partition,
+    title: saved.title || saved.url || 'Pestaña',
+    url: saved.url,
+    favicon: saved.favicon || '',
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    lastActiveAt: Date.now(),
+    sleeping: true,
+    pinned: saved.pinned === true,
+  };
+  tabs.set(id, tab);
+  return id;
+}
+
+/** @returns {boolean} hubo pestañas para traer */
+function restoreSavedTabs() {
+  const saved = browseTabsStore.load();
+  const partitions = Object.keys(saved.profiles).filter((partition) => persistablePartition(partition));
+  if (!partitions.length) return false;
+  restoringTabs = true;
+  try {
+    /** @type {Map<string, string>} */
+    const activeByPartition = new Map();
+    for (const partition of partitions) {
+      const entry = saved.profiles[partition];
+      const ids = entry.tabs.map((item) => addSleepingTab(partition, item));
+      const activeId = ids[entry.activeIndex] || ids[ids.length - 1];
+      if (activeId) {
+        activeByPartition.set(partition, activeId);
+        lastTabBySession.set(partition, activeId);
+      }
+    }
+    setTabOrder([...tabs.entries()]);
+    const preferred = partitions.includes(saved.activePartition) ? saved.activePartition : partitions[0];
+    const activeId = activeByPartition.get(preferred) || null;
+    if (activeId) setActiveTab(activeId);
+    lastRestorablePartition = preferred;
+    tabsTouched = true;
+    try {
+      require('./logger').log(`Pestañas restauradas por perfil: ${tabs.size}`);
+    } catch {
+      /* noop */
+    }
+    return tabs.size > 0;
+  } finally {
+    restoringTabs = false;
+  }
+}
+
+/** La primera vez que se usa el navegador en este proceso, vuelve lo que quedó abierto. */
+function ensureTabsRestored() {
+  if (tabsRestored || restoringTabs) return;
+  tabsRestored = true;
+  if (tabs.size > 0) return;
+  try {
+    restoreSavedTabs();
+  } catch (err) {
+    try {
+      require('./logger').log(
+        `No se pudieron restaurar las pestañas: ${err && err.message ? err.message : err}`
+      );
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+/**
  * Entrada pública cuando el usuario pulsa el acceso de “Navegación suelta” en el dock.
- * Si no hay pestañas abiertas, crea una con la URL inicial.
+ * Si no hay pestañas abiertas, trae las que quedaron por perfil o abre una nueva.
  */
 async function enterLooseNavMode() {
   modeActive = true;
@@ -747,8 +948,9 @@ async function enterLooseNavMode() {
       /* noop */
     }
   }
+  ensureTabsRestored();
   if (tabs.size === 0) {
-    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { activateMode: false });
+    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { activateMode: false, skipRestore: true });
   } else if (modeActive) {
     attachActiveViewOnly();
   }
@@ -838,7 +1040,7 @@ function setTabOrder(entries) {
 
 /** @param {LooseTab} tab */
 function rememberClosedTab(tab) {
-  const wc = tab.view.webContents;
+  const wc = tab.view && tab.view.webContents;
   let url = tab.url;
   try {
     if (!tab.sleeping && wc && !wc.isDestroyed()) url = wc.getURL() || url;
@@ -1049,7 +1251,7 @@ function popupTabMenu(tabId, at = {}) {
 function activeTabWebContents() {
   if (!activeTabId) return null;
   const tab = tabs.get(activeTabId);
-  if (!tab) return null;
+  if (!tab || !tab.view) return null;
   const wc = tab.view.webContents;
   return wc && !wc.isDestroyed() ? wc : null;
 }
@@ -1112,6 +1314,11 @@ function reloadTab(tabId) {
   if (!id) return false;
   const tab = tabs.get(id);
   if (!tab) return false;
+  if (tab.sleeping || !tab.view) {
+    wakeTab(tab);
+    if (modeActive && tab.id === activeTabId) attachActiveViewOnly();
+    return true;
+  }
   const wc = tab.view.webContents;
   if (!wc || wc.isDestroyed()) return false;
   try {
@@ -1129,6 +1336,10 @@ function closeAndClearAll() {
   activeTabId = null;
   lastTabBySession.clear();
   viewportBounds = null;
+  if (tabsTouched) {
+    tabsRestored = true;
+    flushSaveTabs();
+  }
 }
 
 function isModeActive() {
@@ -1185,7 +1396,9 @@ async function removeProfile(payload) {
     if (closedTabs[i].partition === partition) closedTabs.splice(i, 1);
   }
   lastTabBySession.delete(partition);
+  if (lastRestorablePartition === partition) lastRestorablePartition = '';
   broadcastState();
+  flushSaveTabs();
   return true;
 }
 
@@ -1262,6 +1475,7 @@ async function useAccount(payload) {
 }
 
 function registerLooseNavIpc() {
+  installTabPersistence();
   const channels = [
     'loose-nav-open',
     'loose-nav-close',

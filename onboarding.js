@@ -22,10 +22,10 @@
  *      el paso 1. Solo se ve pidiéndola con `step: 'welcome'`.
  *   1  Personalizar: abajo, las apps. Al marcarlas se suman a la barra del
  *      monitor y, al seguir, se crean los accesos.
- *   2  Atajo: debajo de la computadora, las teclas del atajo con una barra que
- *      se llena al apretarlas y, a su derecha, el teclado sin marco. Las teclas
- *      del atajo tienen borde azul y se prenden al apretarlas; cada apretada
- *      muestra o esconde inplaize en la pantalla.
+ *   2  Atajo: debajo del título, las teclas del atajo (se prenden al
+ *      apretarlas). Debajo de la computadora, el teclado sin marco. Cada
+ *      apretada muestra o esconde inplaize. El pie pide las tres veces y
+ *      las manitos cuentan ahí.
  *   3  Importar sesiones de Chrome.
  *
  * Cerrar una ventana (click izquierdo mantenido) y Modo Foco (click
@@ -135,7 +135,7 @@
       kind: 'modal',
       title: 'Tu atajo mágico',
       stepperLabel: 'Atajo mágico',
-      body: 'Apretá el atajo: inplaize aparece y desaparece.',
+      body: 'Apretalo para que aparezca y desaparezca inplaize.',
       keyboardKeys: ['Ctrl', 'Alt', 'D'],
       primaryLabel: 'Siguiente',
     },
@@ -1335,8 +1335,12 @@
     // El texto de la acción y el botón se turnan: los dos viven en el pie y la
     // clase `is-pending` decide cuál se ve, así no hay que rearmar el bocadillo.
     const hintCopy = pendingActionCopy(step);
+    // Las manitos cuentan las apretadas al lado del texto del pie.
+    const counter = step.id === 'hotkey' && showHotkeyCounter() ? renderHotkeyCounter() : '';
     const hint = primary && (step.id === 'personalize' || step.id === 'hotkey')
-      ? `<p class="onboarding-action-hint">${escapeHtml(hintCopy)}</p>`
+      ? (counter
+        ? `<div class="onboarding-action-pending"><p class="onboarding-action-hint">${escapeHtml(hintCopy)}</p>${counter}</div>`
+        : `<p class="onboarding-action-hint">${escapeHtml(hintCopy)}</p>`)
       : '';
     const back = stepIndex > FIRST_STEP
       ? `<button type="button" class="onboarding-btn-secondary" data-onboarding-action="back">Atrás</button>`
@@ -1347,16 +1351,7 @@
       const target = escapeHtml(step.bodyUnderline);
       bodyHtml = bodyHtml.replace(target, `<u>${target}</u>`);
     }
-    // Las manitos del atajo van pegadas al copy, a su derecha.
-    const counter = step.id === 'hotkey' && showHotkeyCounter() ? renderHotkeyCounter() : '';
-    let body = '';
-    if (bodyHtml && counter) {
-      body = `<p class="onboarding-bubble-body has-count"><span>${bodyHtml}</span>${counter}</p>`;
-    } else if (bodyHtml) {
-      body = `<p class="onboarding-bubble-body">${bodyHtml}</p>`;
-    } else {
-      body = counter;
-    }
+    const body = bodyHtml ? `<p class="onboarding-bubble-body">${bodyHtml}</p>` : '';
     // Bienvenida, personalizar y atajo comparten la computadora de arriba.
     const hasMonitor = MONITOR_STEPS.includes(step.id);
     const stage = hasMonitor
@@ -1378,11 +1373,13 @@
     const headerTitle = step.id === 'welcome' || !title
       ? ''
       : `<h3 class="onboarding-bubble-title">${escapeHtml(title)}</h3>`;
+    const titleKeys = step.id === 'hotkey' ? renderHotkeyTitleKeys() : '';
     const pane = `
       ${closeButton}
       <header class="onboarding-bubble-header">
         ${stepper}
         ${headerTitle}
+        ${titleKeys}
         ${body}
       </header>
       <div class="onboarding-bubble-main">
@@ -1673,7 +1670,28 @@
 
   function hotkeyBody() {
     if (state.hotkeyCapturing) return 'Apretá las tres teclas del nuevo atajo, de a una.';
-    return 'Apretá el atajo: inplaize aparece y desaparece.';
+    return 'Apretalo para que aparezca y desaparezca inplaize.';
+  }
+
+  /**
+   * Las teclas del atajo, debajo del título. Se prenden mientras están
+   * apretadas. Al cambiar el atajo no van: ahí las elige en la zona de abajo.
+   */
+  function renderHotkeyTitleKeys() {
+    if (state.hotkeyCapturing) return '';
+    const keys = state.hotkeyKeys.map((label, i) => {
+      const plus = i > 0 ? '<span class="onboarding-key-plus" aria-hidden="true">+</span>' : '';
+      const held = state.hotkeyLit.has(label) ? ' is-lit' : '';
+      return (
+        plus +
+        `<span class="onboarding-key${held}" data-hotkey="${escapeHtml(label)}">${escapeHtml(label)}</span>`
+      );
+    }).join('');
+    return (
+      '<div class="onboarding-hotkey-chips" role="group" aria-label="Teclas del atajo">' +
+        keys +
+      '</div>'
+    );
   }
 
   /** Manitos del contador: una por cada apretada del atajo. */
@@ -1684,7 +1702,7 @@
     return !state.hotkeyCapturing;
   }
 
-  /** Las manitos van en la misma línea que el copy, a su derecha. */
+  /** Las manitos van en el pie, al lado del texto que pide las tres veces. */
   function renderHotkeyCounter() {
     const count = state.hotkeyPressCount;
     const hands = HOTKEY_COUNT_HANDS.map((hand, i) => {
@@ -1890,8 +1908,7 @@
         '</div>'
       );
     }
-    // Solo el teclado, sin marco y centrado: las teclas del atajo ya se
-    // prenden ahí y el pie las nombra, así que las fichas sobraban.
+    // El teclado, sin marco y centrado. Las teclas sueltas van bajo el título.
     return (
       '<div class="onb-hotkey-row">' +
         '<div class="kb-with-check">' +

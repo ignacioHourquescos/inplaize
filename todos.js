@@ -1194,26 +1194,74 @@
     return x >= rect.left - pad && x <= rect.right + pad && y >= rect.top - pad && y <= rect.bottom + pad;
   }
 
+  function draggingImage() {
+    if (!press || !press.blockIds) return false;
+    return press.blockIds.some((id) => {
+      const found = findBlock(id);
+      return !!(found && found.block.type === 'image');
+    });
+  }
+
+  // El hueco a la derecha de la foto (no llega al borde de la columna) también
+  // abre columna. Si no, soltar "al lado" de la imagen sólo la reordena.
+  function imageGapDrop(x, y) {
+    let best = null;
+    let bestDist = Infinity;
+    rootEl.querySelectorAll('.notion-block-image').forEach((row) => {
+      const frame = row.querySelector('.notion-image-frame');
+      const columnEl = row.closest('.notion-column');
+      if (!frame || !columnEl) return;
+      const box = frame.getBoundingClientRect();
+      const columnBox = columnEl.getBoundingClientRect();
+      if (y < box.top - 12 || y > box.bottom + 12) return;
+      const gap = box.right + 12;
+      if (columnBox.right - gap < 20) return;
+      if (x < gap || x > columnBox.right) return;
+      const dist = x - box.right;
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = {
+          kind: 'new-column',
+          columnId: columnEl.dataset.columnId,
+          side: 'after',
+          top: columnBox.top,
+          left: columnBox.right,
+          height: columnBox.height,
+        };
+      }
+    });
+    return best;
+  }
+
   function sideDrop(x, y) {
     let best = null;
-    let bestDist = 36;
+    let bestDist = Infinity;
+    const imageDrag = draggingImage();
     const columnEls = [...rootEl.querySelectorAll('.notion-column')];
     columnEls.forEach((el) => {
       const rect = el.getBoundingClientRect();
       if (y < rect.top || y > rect.bottom) return;
-      const zone = Math.min(42, Math.max(22, rect.width * 0.18));
+      const leftReach = 36;
+      // Con una imagen, el costado derecho de la fila cuenta: la foto no se
+      // agarra del borde de 36px como un renglón de texto. El lado izquierdo
+      // queda libre para reordenar.
+      const rightReach = imageDrag
+        ? Math.min(260, rect.width * 0.45, Math.max(64, rect.width * 0.4))
+        : 36;
       const leftDist = Math.abs(x - rect.left);
       const rightDist = Math.abs(x - rect.right);
-      if (x <= rect.left + zone && leftDist < bestDist) {
+      if (x <= rect.left + leftReach && leftDist <= leftReach && leftDist < bestDist) {
         bestDist = leftDist;
         best = { kind: 'new-column', columnId: el.dataset.columnId, side: 'before', top: rect.top, left: rect.left, height: rect.height };
       }
-      if (x >= rect.right - zone && rightDist < bestDist) {
+      if (x >= rect.right - rightReach && rightDist <= rightReach && rightDist < bestDist) {
         bestDist = rightDist;
         best = { kind: 'new-column', columnId: el.dataset.columnId, side: 'after', top: rect.top, left: rect.right, height: rect.height };
       }
     });
-    if (best || !columnEls.length) return best;
+    if (best) return best;
+    const besideImage = imageGapDrop(x, y);
+    if (besideImage || !columnEls.length) return besideImage;
     // Soltar en el espacio libre a los costados del lienzo también abre columna.
     const first = columnEls[0].getBoundingClientRect();
     const last = columnEls[columnEls.length - 1].getBoundingClientRect();
@@ -1709,6 +1757,12 @@
           clearBlockSelection();
           focusBlock(id, null);
         }
+        return;
+      }
+      if (gesture.onImage && gesture.blockId) {
+        selectedIds = new Set([gesture.blockId]);
+        selectionAnchorId = gesture.blockId;
+        applySelectionClasses();
         return;
       }
       clearBlockSelection();
@@ -2448,6 +2502,10 @@
       img.alt = '';
       img.draggable = false;
       img.src = block.src;
+      const stopNativeDrag = (event) => event.preventDefault();
+      img.addEventListener('dragstart', stopNativeDrag);
+      frame.draggable = false;
+      frame.addEventListener('dragstart', stopNativeDrag);
       if (block.width >= 48) img.style.width = `${block.width}px`;
       const handle = document.createElement('div');
       handle.className = 'notion-image-resize';
@@ -2603,6 +2661,7 @@
     const onContent = !!origin.closest('.notion-content');
     const onDoc = !!origin.closest('.notion-block-document');
     const onCheck = !!origin.closest('.notion-check');
+    const onImage = !!row && !!origin.closest('.notion-block-image') && !origin.closest('.notion-image-resize');
 
     if (origin.closest('.notion-trash, .notion-archive, .notion-image-resize')) return;
 
@@ -2636,7 +2695,10 @@
 
     if (row) {
       const wasSelected = selectedIds.has(row.dataset.blockId);
-      if ((wasSelected || onDoc) && !onCheck) e.preventDefault();
+      if ((wasSelected || onDoc || onImage) && !onCheck) e.preventDefault();
+      if (onImage) {
+        try { homeEl.setPointerCapture(e.pointerId); } catch { /* el puntero sintético no siempre deja capturar */ }
+      }
       blockGesture = {
         mode: 'pending-move',
         pointerId: e.pointerId,
@@ -2646,6 +2708,7 @@
         onContent: false,
         onDoc,
         onCheck,
+        onImage,
         wasSelected,
       };
       return;

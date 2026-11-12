@@ -10,7 +10,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const { app, Menu, dialog, nativeImage } = require('electron');
+const { app, Menu, nativeImage } = require('electron');
+const { showAppMessageBox } = require('./window-focus');
 const { LOOSE_NAV_SESSION_ID } = require('./constants');
 const { partitionFromSessionId, sessionIdFromName } = require('./session-partition');
 const { loadShortcuts } = require('./shortcuts-store');
@@ -397,8 +398,7 @@ async function importChromeProfile(host, chromeProfile) {
       detail: IMPORT_ERRORS[code] || `Error: ${code || 'desconocido'}`,
       buttons: ['Entendido'],
     };
-    if (host && !host.isDestroyed()) await dialog.showMessageBox(host, opts);
-    else await dialog.showMessageBox(opts);
+    await showAppMessageBox(host, opts);
     return null;
   }
   if (chromeProfile.userName && chromeProfile.picturePath) {
@@ -613,7 +613,7 @@ function createAccountPartition() {
 
 /** @param {Electron.BrowserWindow | null} host @param {Electron.MessageBoxOptions} opts */
 async function ask(host, opts) {
-  const res = host && !host.isDestroyed() ? await dialog.showMessageBox(host, opts) : await dialog.showMessageBox(opts);
+  const res = await showAppMessageBox(host, opts);
   return res.response;
 }
 
@@ -678,6 +678,11 @@ function hideChromeProfile(directory) {
   refreshChromeRail();
 }
 
+/** @param {string} partition */
+function isHiddenPartition(partition) {
+  return !!partition && loadStore().hidden.includes(partition);
+}
+
 /** Perfiles ocultos que se pueden volver a mostrar. */
 function hiddenProfiles() {
   const store = loadStore();
@@ -733,6 +738,7 @@ module.exports = {
   removeProfile,
   hideChromeProfile,
   hiddenProfiles,
+  isHiddenPartition,
   unhideProfile,
   unhideChromeProfile,
   hiddenChromeProfiles,

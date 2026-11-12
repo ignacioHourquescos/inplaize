@@ -212,6 +212,14 @@ function applyHomeView(view) {
     wireHistoryHome();
     renderHistoryHome();
   }
+  syncHomeNav();
+}
+
+function syncHomeNav() {
+  document.querySelectorAll('.home-nav-item').forEach((btn) => {
+    const on = btn.dataset.homeNav === homeView;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
 }
 
 function syncDockHomeStripBtn() {
@@ -1027,7 +1035,7 @@ function buildDownloadTile(d) {
     if (d.state === 'completed') {
       // Ver el archivo no cambia el orden: la grilla queda por fecha de descarga.
       if (isPreviewableDownload(d) && d.savePath) {
-        // Desde la franja el visor ocupa el lugar de la página, arriba.
+        // Desde la columna el visor ocupa el lugar de la página.
         if (homeView === 'history') {
           applyHomeView('downloads');
           syncDockHomeStripBtn();
@@ -3691,25 +3699,14 @@ document.getElementById('downloads-expand-btn')?.addEventListener('click', () =>
   goToDockWelcomeHome('downloads').catch(() => {});
 });
 
-/** Franja de archivos en la vista de tareas: la rueda vertical la desplaza
- *  de lado. */
-(function initDownloadsStripWheel() {
-  const panel = document.getElementById('dock-home-panel');
-  const grid = document.getElementById('downloads-home-grid');
-  if (!panel || !grid) return;
-  grid.addEventListener(
-    'wheel',
-    (e) => {
-      if (panel.dataset.homeView !== 'todos') return;
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      e.preventDefault();
-      grid.scrollLeft += e.deltaY;
-    },
-    { passive: false },
-  );
-})();
+document.querySelectorAll('.home-nav-item').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const view = btn.dataset.homeNav === 'downloads' ? 'downloads' : 'todos';
+    goToDockWelcomeHome(view).catch(() => {});
+  });
+});
 
-/** Alto de la franja de archivos: el borde superior se arrastra y los tiles
+/** Ancho de la columna de archivos: el borde derecho se arrastra y los tiles
  *  acompañan el tamaño. Doble clic vuelve al tamaño por defecto. */
 const DOWNLOADS_STRIP_KEY = 'inplaize.downloadsStripTile';
 const DOWNLOADS_STRIP_DEFAULT = 96;
@@ -3742,7 +3739,7 @@ const DOWNLOADS_STRIP_MAX = 260;
   handle.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const startY = e.clientY;
+    const startX = e.clientX;
     const startSize = size;
     handle.classList.add('is-dragging');
     panel.classList.add('is-strip-resizing');
@@ -3752,7 +3749,7 @@ const DOWNLOADS_STRIP_MAX = 260;
       /* noop */
     }
     const move = (ev) => {
-      size = clamp(startSize + startY - ev.clientY);
+      size = clamp(startSize + ev.clientX - startX);
       apply(size);
     };
     const end = () => {
@@ -5350,8 +5347,8 @@ function initLooseNavUiEvents() {
   }
 
   // Si el sidebar se cierra, pedimos al main cerrar el modo (detach del view).
-  // Las pestañas quedan en memoria: al volver a abrir el dock retomamos "www"
-  // si era la pestaña del segmento que estaba activa.
+  // Las pestañas quedan en memoria y, por perfil, en disco: al volver a abrir
+  // el dock se retoma la que estaba activa.
   window.usualDesk.onSidebarState((expanded) => {
     if (!expanded && looseNavState.active) {
       looseNavResumePending = true;

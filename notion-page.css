@@ -8,7 +8,8 @@
   justify-content: flex-start;
   align-items: flex-start;
   overflow: auto;
-  padding: 12px 28px 160px calc(var(--ud-chrome-strip-pad-x, 8px) + var(--ud-chrome-icon, 40px) + 16px);
+  /* El menú de la izquierda ya separa la página del borde. */
+  padding: 12px 28px 24px 16px;
   box-sizing: border-box;
   color: #ececf1;
   -webkit-app-region: no-drag;
@@ -546,7 +547,6 @@ body.notion-selecting * {
   display: none;
 }
 
-/* Descargas: abre/cierra la grilla de archivos dentro del home. */
 .canvas-downloads-btn {
   margin-bottom: 4px;
 }
@@ -556,10 +556,6 @@ body.notion-selecting * {
   background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
   border-color: rgba(167, 139, 250, 0.7);
   color: #fff;
-}
-
-#dock-home-panel[data-home-view='downloads'] .downloads-home-grid {
-  padding-left: calc(var(--ud-chrome-strip-pad-x, 8px) + var(--ud-chrome-icon, 40px) + 16px);
 }
 
 .notion-menu-item.is-checked::after {
@@ -757,6 +753,7 @@ html[data-canvas-theme='light'] .notion-block.notion-block-document.is-drop-into
 
 .notion-block-image {
   display: block;
+  cursor: grab;
 }
 
 .notion-image-frame {
@@ -764,6 +761,9 @@ html[data-canvas-theme='light'] .notion-block.notion-block-document.is-drop-into
   display: inline-block;
   max-width: 100%;
   line-height: 0;
+  touch-action: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .notion-image-frame:focus-visible {
@@ -777,6 +777,9 @@ html[data-canvas-theme='light'] .notion-block.notion-block-document.is-drop-into
   max-width: 100%;
   height: auto;
   border-radius: 10px;
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: auto;
 }
 
 .notion-image-resize {

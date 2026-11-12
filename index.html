@@ -225,6 +225,10 @@
 
       <div id="dock-viewport" class="dock-viewport">
         <div id="dock-home-panel" class="dock-home-panel" data-home-view="todos">
+          <nav id="home-nav" class="home-nav" data-mouse-hit aria-label="Secciones">
+            <button type="button" class="home-nav-item" data-home-nav="todos" aria-pressed="true">Notas</button>
+            <button type="button" class="home-nav-item" data-home-nav="downloads" aria-pressed="false">Descargas</button>
+          </nav>
           <section id="todo-home" class="todo-home" data-mouse-hit aria-label="Página">
             <div id="notion-root" class="notion-root"></div>
           </section>
@@ -279,9 +283,9 @@
             </button>
           </div>
 
-          <!-- Archivos descargados: se abre con la flecha de la franja. -->
+          <!-- Archivos descargados: la vista ampliada, al elegir Descargas en el menú. -->
           <div id="downloads-home" class="downloads-home" data-mouse-hit aria-label="Archivos de Descargas y Escritorio">
-            <!-- Solo en la franja de la vista de tareas: abre la vista completa. -->
+            <!-- Solo en la columna de la vista de tareas: abre la vista completa. -->
             <button
               type="button"
               id="downloads-expand-btn"
@@ -301,10 +305,10 @@
               id="downloads-strip-resizer"
               class="downloads-strip-resizer"
               role="separator"
-              aria-orientation="horizontal"
-              aria-label="Alto de la franja de archivos"
+              aria-orientation="vertical"
+              aria-label="Ancho de la columna de archivos"
               data-tooltip="Arrastrá para agrandar o achicar"
-              data-tooltip-placement="top"
+              data-tooltip-placement="right"
             ></div>
             <div id="downloads-home-grid" class="downloads-home-grid">
               <!-- Tile fijo: QR para recibir archivos desde el teléfono. Siempre primero.

@@ -27,7 +27,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execFileSync } = require('child_process');
+const { spawn } = require('child_process');
+const { isImageRunning, closeImage, waitImageExit, killPidTree } = require('./win-image');
 
 let _sqlite = null;
 function sqlite() {
@@ -252,54 +253,14 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** @param {string} processName */
+/** @param {string} processName @returns {Promise<boolean>} */
 function isBrowserRunning(processName) {
-  if (process.platform !== 'win32') return false;
-  try {
-    const out = execFileSync(
-      'tasklist',
-      ['/FI', `IMAGENAME eq ${processName}`, '/FO', 'CSV', '/NH'],
-      { encoding: 'utf8', windowsHide: true },
-    );
-    return new RegExp(processName.replace('.', '\\.'), 'i').test(out);
-  } catch {
-    return false;
-  }
-}
-
-/** @param {string} processName @param {string[]} args */
-function taskkill(processName, args) {
-  try {
-    execFileSync('taskkill', ['/IM', processName, '/T', ...args], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-  } catch {
-    /* procesos hijo sin ventana devuelven error; el browser sí recibe el cierre */
-  }
-}
-
-/** @param {string} processName @param {number} timeoutMs */
-async function waitForExit(processName, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!isBrowserRunning(processName)) {
-      await sleep(800); // margen para que libere el lock del perfil
-      return true;
-    }
-    await sleep(250);
-  }
-  return false;
+  return isImageRunning(processName);
 }
 
 /** @param {string} processName @returns {Promise<boolean>} */
-async function closeBrowserForImport(processName) {
-  if (process.platform !== 'win32') return false;
-  if (!isBrowserRunning(processName)) return true;
-  taskkill(processName, []);
-  if (await waitForExit(processName, 12000)) return true;
-  taskkill(processName, ['/F']);
-  return waitForExit(processName, 6000);
+function closeBrowserForImport(processName) {
+  return closeImage(processName);
 }
 
 /** @param {string} browserId */
@@ -585,26 +546,58 @@ function readPasswords(browserId, directory) {
  * Cookies (CDP contra el propio navegador en headless).
  * -------------------------------------------------------------------------- */
 
-async function waitForDevToolsPort(portFile, timeoutMs) {
+/**
+ * Si el archivo viejo no se pudo borrar, solo vale uno reescrito después
+ * de este instante. Si no, conectamos al puerto de una sesión anterior y
+ * el pedido de cookies no vuelve nunca.
+ * @param {string} portFile
+ * @returns {number}
+ */
+function devToolsPortCutoff(portFile) {
+  let cutoff = 0;
+  try {
+    if (!fs.existsSync(portFile)) return 0;
+    cutoff = fs.statSync(portFile).mtimeMs;
+    fs.unlinkSync(portFile);
+    return 0;
+  } catch {
+    return cutoff;
+  }
+}
+
+/** @param {string} portFile @param {number} timeoutMs @param {number} [staleCutoffMs] */
+async function waitForDevToolsPort(portFile, timeoutMs, staleCutoffMs) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      if (fs.existsSync(portFile)) {
-        const port = parseInt(String(fs.readFileSync(portFile, 'utf8')).split('\n')[0].trim(), 10);
-        if (Number.isFinite(port) && port > 0) return port;
+      const st = fs.statSync(portFile);
+      if (staleCutoffMs && st.mtimeMs <= staleCutoffMs) {
+        await sleep(100);
+        continue;
       }
+      const port = parseInt(String(fs.readFileSync(portFile, 'utf8')).split('\n')[0].trim(), 10);
+      if (Number.isFinite(port) && port > 0) return port;
     } catch {
-      /* retry */
+      /* todavía arrancando */
     }
     await sleep(100);
   }
   throw new Error('Timeout esperando el puerto de depuración del navegador.');
 }
 
-async function fetchJson(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} en ${url}`);
-  return resp.json();
+async function fetchJson(url, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} en ${url}`);
+    return await resp.json();
+  } catch (err) {
+    if (err && err.name === 'AbortError') throw new Error(`Timeout leyendo ${url}`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function openCdp(wsUrl, timeoutMs = 12000) {
@@ -632,12 +625,24 @@ function openCdp(wsUrl, timeoutMs = 12000) {
         send(method, params) {
           return new Promise((res, rej) => {
             const id = nextId++;
-            pending.set(id, { res, rej });
+            const timer = setTimeout(() => {
+              if (!pending.has(id)) return;
+              pending.delete(id);
+              rej(new Error(`Timeout CDP: ${method}`));
+            }, timeoutMs);
+            const finish = (fn, value) => {
+              clearTimeout(timer);
+              fn(value);
+            };
+            pending.set(id, {
+              res: (value) => finish(res, value),
+              rej: (err) => finish(rej, err),
+            });
             try {
               ws.send(JSON.stringify({ id, method, params: params || {} }));
             } catch (err) {
               pending.delete(id);
-              rej(err);
+              finish(rej, err);
             }
           });
         },
@@ -663,15 +668,30 @@ function openCdp(wsUrl, timeoutMs = 12000) {
         /* noop */
       }
     });
+    const failPending = (err) => {
+      for (const { rej } of pending.values()) {
+        try {
+          rej(err);
+        } catch {
+          /* noop */
+        }
+      }
+      pending.clear();
+    };
     ws.addEventListener('error', () => {
       clearTimeout(openTimer);
-      reject(new Error('Error de WebSocket conectando al navegador.'));
+      const err = new Error('Error de WebSocket conectando al navegador.');
+      failPending(err);
+      reject(err);
+    });
+    ws.addEventListener('close', () => {
+      failPending(new Error('WebSocket CDP cerrado.'));
     });
   });
 }
 
 async function fetchCookiesViaCdp(port, timeoutMs = 12000) {
-  const version = await fetchJson(`http://127.0.0.1:${port}/json/version`);
+  const version = await fetchJson(`http://127.0.0.1:${port}/json/version`, timeoutMs);
   const browserWs = version && version.webSocketDebuggerUrl;
   if (!browserWs) throw new Error('Sin endpoint WebSocket del navegador.');
   try {
@@ -686,7 +706,7 @@ async function fetchCookiesViaCdp(port, timeoutMs = 12000) {
   } catch {
     /* fallback abajo */
   }
-  const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`);
+  const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`, timeoutMs);
   const pageTarget = (Array.isArray(targets) ? targets : []).find(
     (t) => t && t.type === 'page' && t.webSocketDebuggerUrl,
   );
@@ -705,7 +725,10 @@ async function fetchCookiesViaCdp(port, timeoutMs = 12000) {
  * cookies del browser context.
  * @param {string} browserId
  * @param {string} directory
- * @param {{ autoClose?: boolean }} [opts]
+ * @param {{ autoClose?: boolean, relaunch?: boolean, closedBrowser?: boolean }} [opts]
+ *   `relaunch: false` lo usa quien cierra el navegador una sola vez y lo
+ *   reabre al terminar todos los perfiles. Si no, cada perfil lo reabría y
+ *   el siguiente volvía a cerrarlo.
  * @returns {Promise<Array<object>>}
  */
 async function fetchAllCookies(browserId, directory, opts) {
@@ -716,19 +739,17 @@ async function fetchAllCookies(browserId, directory, opts) {
   if (!def || !exe) throw new Error('BROWSER_NOT_FOUND');
   if (!userDataDir || !fs.existsSync(userDataDir)) throw new Error('BROWSER_PROFILE_DIR_NOT_FOUND');
 
-  let reopen = false;
-  if (isBrowserRunning(def.processName)) {
+  const mayRelaunch = !opts || opts.relaunch !== false;
+  let closedBrowser = false;
+  if (await isBrowserRunning(def.processName)) {
     if (!(opts && opts.autoClose)) throw new Error('BROWSER_RUNNING');
     if (!(await closeBrowserForImport(def.processName))) throw new Error('BROWSER_CLOSE_FAILED');
-    reopen = true;
+    closedBrowser = true;
   }
+  if (opts) opts.closedBrowser = closedBrowser;
 
   const portFile = path.join(userDataDir, 'DevToolsActivePort');
-  try {
-    if (fs.existsSync(portFile)) fs.unlinkSync(portFile);
-  } catch {
-    /* noop */
-  }
+  const portCutoff = devToolsPortCutoff(portFile);
 
   const args = [
     '--remote-debugging-port=0',
@@ -740,35 +761,27 @@ async function fetchAllCookies(browserId, directory, opts) {
     '--disable-extensions',
     '--no-first-run',
     '--no-default-browser-check',
+    '--noerrdialogs',
+    '--disable-session-crashed-bubble',
     'about:blank',
   ];
   const child = spawn(exe, args, { detached: false, stdio: 'ignore', windowsHide: true });
-  const killChild = () => {
+  try {
+    const port = await waitForDevToolsPort(portFile, 15000, portCutoff);
+    return await fetchCookiesViaCdp(port, 12000);
+  } finally {
+    await killPidTree(child.pid);
     try {
       if (!child.killed) child.kill();
     } catch {
       /* noop */
     }
-    if (child.pid) {
-      try {
-        execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
-          stdio: 'ignore',
-          windowsHide: true,
-        });
-      } catch {
-        /* noop */
-      }
+    // La instancia headless también se llama chrome.exe / msedge.exe. Hay que
+    // esperar a que suelte el perfil antes del próximo perfil o de reabrir.
+    if (!(await waitImageExit(def.processName, 8000))) {
+      await closeImage(def.processName);
     }
-  };
-  try {
-    const port = await waitForDevToolsPort(portFile, 12000);
-    return await fetchCookiesViaCdp(port, 12000);
-  } finally {
-    killChild();
-    if (reopen) {
-      await waitForExit(def.processName, 8000);
-      relaunchBrowser(browserId);
-    }
+    if (closedBrowser && mayRelaunch) relaunchBrowser(browserId);
   }
 }
 

@@ -959,13 +959,18 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
   z-index: 2;
 }
 
-/* Contador del atajo: una manito más por cada apretada. Va al lado del copy,
-   a su derecha, sin empujarlo a otra línea. */
-.onboarding-bubble-body.has-count {
-  display: flex;
+/* Contador del atajo: una manito más por cada apretada. Va en el pie, al lado
+   del texto que pide las tres veces. */
+.onboarding-action-pending {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.onboarding-action-pending .onboarding-action-hint {
+  text-wrap: pretty;
 }
 
 .onboarding-hotkey-count {
@@ -1656,6 +1661,7 @@ html.onboarding-active #toggle-btn.is-onboarding-target {
 }
 
 .onboarding-bubble-actions:not(.is-pending) .onboarding-action-hint,
+.onboarding-bubble-actions:not(.is-pending) .onboarding-action-pending,
 .onboarding-bubble-actions.is-pending .onboarding-btn-primary {
   display: none;
 }
@@ -2652,6 +2658,14 @@ button.onboarding-hotkey-check:focus-visible {
   justify-content: center;
 }
 
+/* El atajo suma las teclas bajo el título: el encabezado crece lo justo y la
+   computadora cede ese alto. El teclado de abajo no se achica. */
+.onboarding-bubble[data-kind][data-step-id='hotkey'] .onboarding-bubble-header {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+}
+
 .onboarding-bubble[data-kind][data-step-id='welcome'] .onboarding-bubble-title,
 .onboarding-bubble[data-kind][data-step-id='personalize'] .onboarding-bubble-title,
 .onboarding-bubble[data-kind][data-step-id='import-sessions'] .onboarding-bubble-title,
@@ -2694,10 +2708,15 @@ button.onboarding-hotkey-check:focus-visible {
 
   .onboarding-bubble[data-kind][data-step-id='welcome'] .onboarding-bubble-header,
   .onboarding-bubble[data-kind][data-step-id='personalize'] .onboarding-bubble-header,
-  .onboarding-bubble[data-kind][data-step-id='import-sessions'] .onboarding-bubble-header,
-  .onboarding-bubble[data-kind][data-step-id='hotkey'] .onboarding-bubble-header {
+  .onboarding-bubble[data-kind][data-step-id='import-sessions'] .onboarding-bubble-header {
     flex-basis: 118px;
     height: 118px;
+    margin-bottom: 14px;
+  }
+
+  .onboarding-bubble[data-kind][data-step-id='hotkey'] .onboarding-bubble-header {
+    flex-basis: auto;
+    height: auto;
     margin-bottom: 14px;
   }
 

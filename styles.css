@@ -1932,7 +1932,9 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .dock-viewport {
   -webkit-app-region: no-drag;
 }
 
-#dock-home-panel[data-home-view='todos'] > #image-drawer {
+#dock-home-panel[data-home-view='todos'] > #image-drawer,
+#dock-home-panel[data-home-view='todos'] > #downloads-home,
+#dock-home-panel[data-home-view='downloads'] > .canvas-rail {
   display: none;
 }
 
@@ -3810,7 +3812,7 @@ html.strip-swap-out[data-dock-layout='topbar'] .loose-nav-accounts {
 .loose-nav-account.is-active:hover {
   opacity: 1;
   background: var(--ud-chrome-icon-active-bg);
-  border-color: var(--ud-chrome-edit-tab);
+  border-color: var(--ud-chrome-icon-border);
 }
 
 .loose-nav-account.is-busy {
@@ -4437,10 +4439,86 @@ html[data-loose-nav='on'] #dock-inline-editor {
   pointer-events: none;
 }
 
-/* ---- Franja de descargas en la vista de tareas ----
-   Fila horizontal al pie, debajo de las tareas, con scroll lateral; "Ver todo" (a la
-   izquierda) abre la vista completa. */
-.downloads-expand-btn {
+/* ---- Submenú de la home ----
+   Dos ítems a la izquierda: Notas (la página) y Descargas (la vista ampliada). */
+.home-nav {
+  /* Mismo borde derecho que el segmento inplaize | www:
+     margen de la franja + dos lados de 32px + separación + padding y borde. */
+  --home-nav-w: calc(var(--ud-chrome-strip-pad-x) + (32px * 2) + 2px + 6px + 2px);
+  flex: 0 0 var(--home-nav-w);
+  width: var(--home-nav-w);
+  min-height: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 4px 8px 6px;
+  box-sizing: border-box;
+  border-right: 1px solid var(--dock-border, #252530);
+  background: rgba(255, 255, 255, 0.025);
+  -webkit-app-region: no-drag;
+}
+
+#dock-home-panel[data-home-view='history'] > .home-nav {
+  display: none;
+}
+
+.home-nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 7px 5px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(236, 236, 241, 0.62);
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.home-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.home-nav-item:focus-visible {
+  outline: 2px solid var(--accent, #7c5cff);
+  outline-offset: 1px;
+}
+
+.home-nav-item[aria-pressed='true'] {
+  background: rgba(167, 139, 250, 0.18);
+  color: #fff;
+}
+
+html[data-canvas-theme='light'] .home-nav {
+  border-right-color: rgba(0, 0, 0, 0.08);
+  background: #f6f6f8;
+}
+
+html[data-canvas-theme='light'] .home-nav-item {
+  color: #52525b;
+}
+
+html[data-canvas-theme='light'] .home-nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .home-nav-item[aria-pressed='true'] {
+  background: rgba(91, 76, 224, 0.12);
+  color: #3b2fb5;
+}
+
+.downloads-expand-btn,
+.downloads-strip-resizer {
   display: none;
 }
 
@@ -4450,125 +4528,14 @@ html[data-loose-nav='on'] #dock-inline-editor {
   display: none;
 }
 
-#dock-home-panel[data-home-view='todos'] {
-  flex-direction: column;
-}
-
-#dock-home-panel[data-home-view='todos'] > #downloads-home {
-  order: 10;
-  flex: 0 0 auto;
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
-  border-top: 1px solid var(--border);
-}
-
 #dock-home-panel[data-home-view='todos'] > #todo-home,
 #dock-home-panel[data-home-view='todos'] > #image-drawer {
   flex: 1 1 auto;
-}
-
-#dock-home-panel[data-home-view='todos'] > #todo-home,
-#dock-home-panel[data-home-view='todos'] > #image-drawer {
+  min-width: 0;
   min-height: 0;
 }
 
-#dock-home-panel[data-home-view='todos'] .downloads-expand-btn {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  align-self: stretch;
-  margin: 10px 0 10px 10px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-#dock-home-panel[data-home-view='todos'] .downloads-expand-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
-}
-
-.downloads-expand-btn svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-#dock-home-panel[data-home-view='todos'] .downloads-home-grid {
-  flex: 1 1 auto;
-  min-width: 0;
-  grid-auto-flow: column;
-  grid-template-columns: none;
-  grid-template-rows: var(--downloads-strip-tile, 96px);
-  grid-auto-columns: var(--downloads-strip-tile, 96px);
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 10px;
-}
-
-#dock-home-panel[data-home-view='todos'] .downloads-home-grid::-webkit-scrollbar {
-  height: 0;
-}
-
-#dock-home-panel[data-home-view='todos'] .download-tile {
-  width: var(--downloads-strip-tile, 96px);
-  height: var(--downloads-strip-tile, 96px);
-}
-
-/* Borde superior arrastrable: cambia el alto de la franja y el tamaño de los tiles. */
-.downloads-strip-resizer {
-  display: none;
-}
-
-#dock-home-panel[data-home-view='todos'] .downloads-strip-resizer {
-  display: block;
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -4px;
-  height: 8px;
-  z-index: 5;
-  cursor: row-resize;
-  -webkit-app-region: no-drag;
-}
-
-#dock-home-panel[data-home-view='todos'] .downloads-strip-resizer::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 3px;
-  height: 2px;
-  background: transparent;
-  transition: background 0.15s ease;
-}
-
-#dock-home-panel[data-home-view='todos'] .downloads-strip-resizer:hover::after,
-#dock-home-panel[data-home-view='todos'] .downloads-strip-resizer.is-dragging::after {
-  background: var(--accent, #7c5cff);
-}
-
-#dock-home-panel.is-strip-resizing,
-#dock-home-panel.is-strip-resizing * {
-  cursor: row-resize !important;
-  user-select: none;
-}
-
-/* Archivo abierto desde la franja: el visor toma el lugar de la página. */
+/* Archivo abierto desde la columna: el visor toma el lugar de la página. */
 #dock-home-panel[data-home-view='todos'].is-file-preview > #todo-home {
   display: none;
 }
@@ -4603,9 +4570,6 @@ html[data-loose-nav='on'] #dock-inline-editor {
   pointer-events: none;
 }
 
-html[data-canvas-theme='light'] #dock-home-panel[data-home-view='todos'] > #downloads-home {
-  border-top-color: rgba(0, 0, 0, 0.08);
-}
 
 /* Icono de pestaña bajo un drag de archivo: aviso de que al mantener el
    archivo encima se activa esa ventana (spring-loading). */

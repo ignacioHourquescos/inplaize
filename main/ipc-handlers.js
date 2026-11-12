@@ -58,7 +58,7 @@ const {
 const { webMapKey } = require('./web-map-key');
 const focusMode = require('./focus-mode');
 const { applyDockWindowBounds } = require('./window-bounds');
-const { raiseAlwaysOnTopWindow } = require('./window-focus');
+const { raiseAlwaysOnTopWindow, showAppMessageBox } = require('./window-focus');
 const { registerShellIpc } = require('./web-shell');
 const { registerDetachedFrameIpc } = require('./detached-web-frame');
 const {
@@ -1550,12 +1550,12 @@ function registerIpcHandlers(state) {
 
   /* ---- Importar perfil completo de otro navegador (estilo Comet) ---- */
 
-  ipcMain.handle('browser-import-list-profiles', () => {
+  ipcMain.handle('browser-import-list-profiles', async () => {
     try {
       const profiles = browserImport.listAllProfiles();
       const running = {};
       for (const b of browserImport.listInstalledBrowsers()) {
-        running[b.id] = browserImport.isBrowserRunning(browserImport.BROWSERS[b.id].processName);
+        running[b.id] = await browserImport.isBrowserRunning(browserImport.BROWSERS[b.id].processName);
       }
       return {
         platformSupported: process.platform === 'win32',
@@ -1594,33 +1594,33 @@ function registerIpcHandlers(state) {
     // usuario no quiere cerrarlo, seguimos sin cookies (historial/marcadores/
     // contraseñas se leen con el navegador abierto).
     let importCookies = wantsCookies;
-    if (wantsCookies && browserImport.isBrowserRunning(def.processName)) {
-      const { response } = await dialog.showMessageBox(
-        state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined,
-        {
-          type: 'question',
-          message: `Hay que cerrar ${def.name} un momento`,
-          detail:
-            `Para traer las cookies necesitamos leer la sesión de ${def.name}, y eso solo se puede con `
-            + `${def.name} cerrado. Lo cerramos y lo reabrimos con tus pestañas apenas termine.`,
-          buttons: [`Cerrar ${def.name} y continuar`, 'Continuar sin cookies', 'Cancelar'],
-          defaultId: 0,
-          cancelId: 2,
-        },
-      );
+    const host = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : undefined;
+    if (wantsCookies && (await browserImport.isBrowserRunning(def.processName))) {
+      const { response } = await showAppMessageBox(host, {
+        type: 'question',
+        title: 'inplaize',
+        message: `Hay que cerrar ${def.name} un momento`,
+        detail:
+          `Para traer las cookies necesitamos leer la sesión de ${def.name}, y eso solo se puede con `
+          + `${def.name} cerrado. Lo cerramos y lo reabrimos con tus pestañas apenas termine.`,
+        buttons: [`Cerrar ${def.name} y continuar`, 'Continuar sin cookies', 'Cancelar'],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      });
       if (response === 2) return { ok: false, error: 'CANCELLED' };
       if (response === 1) importCookies = false;
     }
 
-    // Con varios perfiles lo cerramos una sola vez acá: cada perfil levanta su
-    // propia instancia headless, así que reabrirlo entre perfiles obligaría a
-    // cerrarlo de nuevo en el siguiente.
-    let closedHere = false;
-    if (importCookies && browserImport.isBrowserRunning(def.processName)) {
+    // Una sola vez para todos los perfiles. Cada perfil levanta su propio
+    // navegador headless (también se llama chrome.exe): reabrirlo entre
+    // perfiles obliga a cerrarlo de nuevo y la app parece trabada.
+    let reopenBrowser = false;
+    if (importCookies && (await browserImport.isBrowserRunning(def.processName))) {
       if (!(await browserImport.closeBrowserForImport(def.processName))) {
         return { ok: false, error: 'BROWSER_CLOSE_FAILED' };
       }
-      closedHere = true;
+      reopenBrowser = true;
     }
 
     const totals = {
@@ -1635,15 +1635,13 @@ function registerIpcHandlers(state) {
     let anyDone = false;
     try {
       for (let i = 0; i < directories.length; i += 1) {
-        // Un respiro entre perfiles: la instancia headless anterior tiene que
-        // soltar el directorio del navegador antes de levantar la siguiente.
-        if (i > 0 && importCookies) await new Promise((r) => setTimeout(r, 1200));
         let summary = null;
         try {
           summary = await profileImport.importFullProfile({
             browser,
             directory: directories[i],
             autoClose: true,
+            relaunch: false,
             parts: parts ? { ...parts, cookies: importCookies } : { cookies: importCookies },
           });
         } catch (err) {
@@ -1651,6 +1649,7 @@ function registerIpcHandlers(state) {
           continue;
         }
         anyDone = true;
+        if (summary.closedBrowser) reopenBrowser = true;
         totals.partition = summary.partition;
         totals.cookies += summary.cookies || 0;
         totals.history += summary.history || 0;
@@ -1661,7 +1660,7 @@ function registerIpcHandlers(state) {
         if (summary.passwordsVaultAvailable === false) totals.passwordsVaultAvailable = false;
       }
     } finally {
-      if (closedHere) browserImport.relaunchBrowser(browser);
+      if (reopenBrowser) browserImport.relaunchBrowser(browser);
     }
 
     if (!anyDone) return { ok: false, error: lastError || 'IMPORT_FAILED' };

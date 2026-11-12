@@ -31,9 +31,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawn, execFileSync } = require('child_process');
-const { session, app, dialog } = require('electron');
+const { spawn } = require('child_process');
+const { session, app } = require('electron');
 const { toSetDetails, removeCookies } = require('./cookie-jar');
+const { isImageRunning, closeImage, waitImageExit, killPidTree } = require('./win-image');
+const { showAppMessageBox } = require('./window-focus');
 
 /**
  * Logger persistente de la importación a `<userData>/chrome-import.log`.
@@ -117,64 +119,24 @@ function findChromeExecutable() {
   return null;
 }
 
-function isChromeRunning() {
-  if (process.platform !== 'win32') return false;
-  try {
-    const out = execFileSync(
-      'tasklist',
-      ['/FI', 'IMAGENAME eq chrome.exe', '/FO', 'CSV', '/NH'],
-      { encoding: 'utf8', windowsHide: true },
-    );
-    return /chrome\.exe/i.test(out);
-  } catch {
-    return false;
-  }
-}
-
-/** @param {string[]} args */
-function taskkillChrome(args) {
-  try {
-    execFileSync('taskkill', ['/IM', 'chrome.exe', '/T', ...args], {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-  } catch {
-    // taskkill devuelve error si algún proceso hijo no tiene ventana; los que
-    // importan (el proceso browser) sí la tienen y reciben el cierre igual.
-  }
-}
-
-/** @param {number} timeoutMs */
-async function waitForChromeExit(timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!isChromeRunning()) {
-      // Chrome libera el lock del perfil un instante después de que el
-      // proceso desaparece; sin este margen la instancia headless arranca
-      // contra un perfil todavía tomado y no ve ninguna cookie.
-      await sleep(800);
-      return true;
-    }
-    await sleep(250);
-  }
-  return false;
+async function isChromeRunning() {
+  return isImageRunning('chrome.exe');
 }
 
 /**
  * Cierra Chrome para poder leer su perfil. Primero pide un cierre normal (así
  * guarda la sesión y no aparece el aviso de "Chrome no se cerró
- * correctamente"); si se resiste, lo fuerza.
+ * correctamente"); si se resiste, lo fuerza. Ninguno de los dos pasos puede
+ * dejar colgado el hilo de la app.
  * @returns {Promise<boolean>} true si quedó cerrado
  */
 async function closeChromeForImport() {
   if (process.platform !== 'win32') return false;
-  if (!isChromeRunning()) return true;
-  logLine('Chrome abierto: pidiendo cierre normal');
-  taskkillChrome([]);
-  if (await waitForChromeExit(12000)) return true;
-  logLine('Chrome sigue abierto: cierre forzado');
-  taskkillChrome(['/F']);
-  return waitForChromeExit(6000);
+  if (!(await isChromeRunning())) return true;
+  logLine('Chrome abierto: pidiendo cierre');
+  const ok = await closeImage('chrome.exe');
+  logLine(ok ? 'Chrome cerrado' : 'Chrome sigue abierto');
+  return ok;
 }
 
 /**
@@ -185,9 +147,10 @@ async function closeChromeForImport() {
  * @returns {Promise<boolean>} false si el usuario prefiere no cerrarlo
  */
 async function confirmChromeCloseForImport(host) {
-  if (!isChromeRunning()) return true;
+  if (!(await isChromeRunning())) return true;
   const opts = {
     type: /** @type {const} */ ('question'),
+    title: 'inplaize',
     message: 'Hay que cerrar Google Chrome un momento',
     detail:
       'Para traer tu cuenta necesitamos leer la sesión de Chrome, y eso solo se puede con Chrome cerrado. '
@@ -195,10 +158,9 @@ async function confirmChromeCloseForImport(host) {
     buttons: ['Cerrar Chrome y continuar', 'Cancelar'],
     defaultId: 0,
     cancelId: 1,
+    noLink: true,
   };
-  const { response } = host && !host.isDestroyed()
-    ? await dialog.showMessageBox(host, opts)
-    : await dialog.showMessageBox(opts);
+  const { response } = await showAppMessageBox(host, opts);
   return response === 0;
 }
 
@@ -261,28 +223,58 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function waitForDevToolsPort(portFile, timeoutMs) {
+/**
+ * Si el archivo viejo no se pudo borrar, solo vale uno reescrito después.
+ * Conectar al puerto de una sesión anterior deja el pedido de cookies colgado.
+ * @param {string} portFile
+ * @returns {number}
+ */
+function devToolsPortCutoff(portFile) {
+  let cutoff = 0;
+  try {
+    if (!fs.existsSync(portFile)) return 0;
+    cutoff = fs.statSync(portFile).mtimeMs;
+    fs.unlinkSync(portFile);
+    return 0;
+  } catch {
+    return cutoff;
+  }
+}
+
+/** @param {string} portFile @param {number} timeoutMs @param {number} [staleCutoffMs] */
+async function waitForDevToolsPort(portFile, timeoutMs, staleCutoffMs) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      if (fs.existsSync(portFile)) {
-        const txt = fs.readFileSync(portFile, 'utf8');
-        const portStr = String(txt).split('\n')[0].trim();
-        const port = parseInt(portStr, 10);
-        if (Number.isFinite(port) && port > 0) return port;
+      const st = fs.statSync(portFile);
+      if (staleCutoffMs && st.mtimeMs <= staleCutoffMs) {
+        await sleep(100);
+        continue;
       }
+      const portStr = String(fs.readFileSync(portFile, 'utf8')).split('\n')[0].trim();
+      const port = parseInt(portStr, 10);
+      if (Number.isFinite(port) && port > 0) return port;
     } catch {
-      /* noop, retry */
+      /* todavía arrancando */
     }
     await sleep(100);
   }
   throw new Error('Timeout esperando que Chrome inicie el puerto de depuración.');
 }
 
-async function fetchJson(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} en ${url}`);
-  return resp.json();
+async function fetchJson(url, timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} en ${url}`);
+    return await resp.json();
+  } catch (err) {
+    if (err && err.name === 'AbortError') throw new Error(`Timeout leyendo ${url}`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -320,12 +312,24 @@ function openCdp(wsUrl, timeoutMs = 12000) {
         send(method, params) {
           return new Promise((res, rej) => {
             const id = nextId++;
-            pending.set(id, { res, rej });
+            const timer = setTimeout(() => {
+              if (!pending.has(id)) return;
+              pending.delete(id);
+              rej(new Error(`Timeout CDP: ${method}`));
+            }, timeoutMs);
+            const finish = (fn, value) => {
+              clearTimeout(timer);
+              fn(value);
+            };
+            pending.set(id, {
+              res: (value) => finish(res, value),
+              rej: (err) => finish(rej, err),
+            });
             try {
               ws.send(JSON.stringify({ id, method, params: params || {} }));
             } catch (err) {
               pending.delete(id);
-              rej(err);
+              finish(rej, err);
             }
           });
         },
@@ -390,7 +394,7 @@ function openCdp(wsUrl, timeoutMs = 12000) {
  */
 async function fetchCookiesFromChrome(port, timeoutMs = 12000) {
   // 1) browser-level WS
-  const version = await fetchJson(`http://127.0.0.1:${port}/json/version`);
+  const version = await fetchJson(`http://127.0.0.1:${port}/json/version`, timeoutMs);
   const browserWs = version && version.webSocketDebuggerUrl;
   if (!browserWs) throw new Error('No se obtuvo el endpoint WebSocket browser de Chrome.');
 
@@ -413,7 +417,7 @@ async function fetchCookiesFromChrome(port, timeoutMs = 12000) {
 
   // 2) page-level WS de about:blank → Network.getAllCookies
   try {
-    const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`);
+    const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`, timeoutMs);
     const list = Array.isArray(targets) ? targets : [];
     const pageTarget = list.find((t) => t && t.type === 'page' && t.webSocketDebuggerUrl);
     if (!pageTarget) throw new Error('Sin targets de página en Chrome headless.');
@@ -463,7 +467,7 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory, opts) {
   }
 
   let reopenChrome = false;
-  if (isChromeRunning()) {
+  if (await isChromeRunning()) {
     if (!autoCloseChrome) {
       logLine('CHROME_RUNNING');
       logFlush();
@@ -478,11 +482,7 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory, opts) {
   }
 
   const portFile = path.join(userDataDir, 'DevToolsActivePort');
-  try {
-    if (fs.existsSync(portFile)) fs.unlinkSync(portFile);
-  } catch {
-    /* noop */
-  }
+  const portCutoff = devToolsPortCutoff(portFile);
 
   const args = [
     '--remote-debugging-port=0',
@@ -496,6 +496,8 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory, opts) {
     '--disable-extensions',
     '--no-first-run',
     '--no-default-browser-check',
+    '--noerrdialogs',
+    '--disable-session-crashed-bubble',
     '--disable-features=ChromeWhatsNewUI,InterestFeedContentSuggestions',
     'about:blank',
   ];
@@ -507,36 +509,24 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory, opts) {
     windowsHide: true,
   });
 
-  const killChild = () => {
+  try {
+    const port = await waitForDevToolsPort(portFile, 15000, portCutoff);
+    logLine('Puerto CDP =', String(port));
+    return await fetchCookiesFromChrome(port, 12000);
+  } finally {
+    await killPidTree(child.pid);
     try {
       if (!child.killed) child.kill();
     } catch {
       /* noop */
     }
-    if (process.platform === 'win32' && child.pid) {
-      try {
-        execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
-          stdio: 'ignore',
-          windowsHide: true,
-        });
-      } catch {
-        /* noop */
-      }
+    // La instancia headless también es chrome.exe. Si se superpone con el
+    // Chrome del usuario, el nuevo se cierra solo.
+    if (!(await waitImageExit('chrome.exe', 8000))) {
+      logLine('La instancia headless sigue viva: cierre forzado');
+      await closeImage('chrome.exe');
     }
-  };
-
-  try {
-    const port = await waitForDevToolsPort(portFile, 12000);
-    logLine('Puerto CDP =', String(port));
-    return await fetchCookiesFromChrome(port, 12000);
-  } finally {
-    killChild();
-    if (reopenChrome) {
-      // La instancia headless tiene que soltar el perfil antes de devolvérselo
-      // al Chrome del usuario; si se superponen, el nuevo se cierra solo.
-      await waitForChromeExit(8000);
-      relaunchChrome();
-    }
+    if (reopenChrome) relaunchChrome();
   }
 }
 

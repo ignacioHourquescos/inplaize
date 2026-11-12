@@ -284,6 +284,16 @@ function finishExternalDownload(id, result) {
   sendToDock('dock-download-done', toPayload(rec));
 }
 
+/** Ruta comparable: resuelve 8.3 y mayúsculas para no duplicar el mismo archivo. */
+function canonicalPath(fullPath) {
+  const raw = path.resolve(String(fullPath || ''));
+  try {
+    return fs.realpathSync.native(raw).toLowerCase();
+  } catch {
+    return raw.toLowerCase();
+  }
+}
+
 /**
  * ¿La ruta ya está registrada en el historial? (dedupe entre el watcher y las
  * descargas propias de inplaize, que caen en la misma carpeta).
@@ -291,8 +301,27 @@ function finishExternalDownload(id, result) {
  * @returns {boolean}
  */
 function isPathTracked(fullPath) {
-  const norm = path.resolve(String(fullPath || '')).toLowerCase();
-  return history.some((r) => path.resolve(r.savePath || '').toLowerCase() === norm);
+  const norm = canonicalPath(fullPath);
+  return history.some((r) => canonicalPath(r.savePath || '') === norm);
+}
+
+/** Nombre estable para comparar lo que ya estaba en la carpeta (Windows no distingue mayúsculas). */
+function watchKey(name) {
+  return String(name || '').replace(/\0/g, '').normalize('NFC').toLowerCase();
+}
+
+/**
+ * ¿El archivo apareció después de que empezamos a mirar la carpeta?
+ * Un aviso de `fs.watch` sobre un archivo viejo no cuenta: en Windows esos
+ * eventos llegan con demora y no son una descarga de ahora.
+ * @param {fs.Stats} stat
+ * @param {number} since
+ */
+function appearedAfter(stat, since) {
+  const slack = 4000;
+  const born = Number(stat.birthtimeMs) || 0;
+  const modified = Number(stat.mtimeMs) || 0;
+  return Math.max(born, modified) >= since - slack;
 }
 
 /* ---------------------------------------------------------------------------
@@ -332,13 +361,21 @@ const pendingWatched = new Map();
 /**
  * Espera a que el archivo deje de crecer (otros navegadores lo escriben de a
  * pedazos) y recién ahí lo registra en el historial como completado.
+ * No avisa si el archivo ya estaba cuando empezó el watcher: `fs.watch` en
+ * Windows vuelve a nombrar archivos viejos un rato después de abrir la app.
  * @param {string} fullPath
  * @param {string} [sourceName]
+ * @param {number} since ms en que empezamos a mirar la carpeta
+ * @param {() => void} [onSettle] marca el nombre como ya visto, con o sin aviso
  */
-function trackWatchedFileWhenStable(fullPath, sourceName) {
+function trackWatchedFileWhenStable(fullPath, sourceName, since, onSettle) {
   if (pendingWatched.has(fullPath)) return;
   const entry = { timer: null, lastSize: -1, stableTicks: 0 };
   pendingWatched.set(fullPath, entry);
+
+  const settle = () => {
+    if (typeof onSettle === 'function') onSettle();
+  };
 
   const poll = () => {
     let stat;
@@ -361,13 +398,15 @@ function trackWatchedFileWhenStable(fullPath, sourceName) {
     // Dos lecturas iguales seguidas (~1.6 s) = escritura terminada.
     if (entry.stableTicks >= 2) {
       pendingWatched.delete(fullPath);
-      if (isPathTracked(fullPath)) return;
+      settle();
+      if (isPathTracked(fullPath) || !appearedAfter(stat, since)) return;
       addExternalDownload({
         filename: path.basename(fullPath),
         savePath: fullPath,
         sourceName: sourceName || 'Sistema',
         totalBytes: stat.size,
         state: 'completed',
+        startedAt: Math.round(Math.max(Number(stat.birthtimeMs) || 0, Number(stat.mtimeMs) || 0) || Date.now()),
       });
       return;
     }
@@ -387,26 +426,30 @@ let watcherStarted = false;
 function watchUserFolder(dir, opts) {
   const sourceName = opts.sourceName || 'Sistema';
   const seedCount = opts.seedCount;
+  const since = Date.now();
+  /** Nombres que ya estaban (o que ya avisamos). Un evento posterior no es una descarga nueva. */
+  const known = new Set();
 
   // Siembra inicial: los N archivos más recientes, para que el panel no
   // arranque vacío (el historial vive en memoria y se pierde al cerrar).
-  if (seedCount > 0) {
-    try {
-      const seeded = fs
-        .readdirSync(dir)
-        .filter((name) => !isIgnoredWatcherName(name))
-        .map((name) => {
-          const full = path.join(dir, name);
-          try {
-            const st = fs.statSync(full);
-            return st.isFile() ? { full, name, mtime: st.mtimeMs, size: st.size } : null;
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean)
-        .sort((a, b) => b.mtime - a.mtime)
-        .slice(0, seedCount);
+  // El resto de la carpeta queda anotado en `known` y no dispara avisos.
+  try {
+    const listed = fs
+      .readdirSync(dir)
+      .filter((name) => !isIgnoredWatcherName(name))
+      .map((name) => {
+        const full = path.join(dir, name);
+        try {
+          const st = fs.statSync(full);
+          return st.isFile() ? { full, name, mtime: st.mtimeMs, size: st.size } : null;
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
+    for (const f of listed) known.add(watchKey(f.name));
+    if (seedCount > 0) {
+      const seeded = listed.slice().sort((a, b) => b.mtime - a.mtime).slice(0, seedCount);
       // Se insertan de más viejo a más nuevo para que el orden por startedAt quede bien.
       for (const f of seeded.reverse()) {
         if (isPathTracked(f.full)) continue;
@@ -425,20 +468,36 @@ function watchUserFolder(dir, opts) {
         };
         history.unshift(rec);
       }
-    } catch {
-      /* carpeta ilegible: seguimos solo con el watcher */
     }
+  } catch {
+    /* carpeta ilegible: seguimos solo con el watcher */
   }
 
   try {
     fs.watch(dir, (_eventType, filename) => {
       if (!filename) return;
-      const name = filename.toString();
-      if (isIgnoredWatcherName(name)) return;
+      const name = path.basename(String(filename).replace(/\0/g, ''));
+      if (!name || isIgnoredWatcherName(name)) return;
+      const key = watchKey(name);
       const fullPath = path.join(dir, name);
-      if (isPathTracked(fullPath)) return;
-      if (!fs.existsSync(fullPath)) return; // 'rename' también dispara al borrar
-      trackWatchedFileWhenStable(fullPath, sourceName);
+      if (known.has(key)) {
+        // Sigue en la carpeta: no es una descarga de ahora. Si lo borraron,
+        // el mismo nombre puede volver a avisar.
+        if (!fs.existsSync(fullPath)) known.delete(key);
+        return;
+      }
+      let stat;
+      try {
+        stat = fs.statSync(fullPath);
+      } catch {
+        return;
+      }
+      if (!stat.isFile()) return;
+      if (isPathTracked(fullPath)) {
+        known.add(key);
+        return;
+      }
+      trackWatchedFileWhenStable(fullPath, sourceName, since, () => known.add(key));
     });
   } catch {
     /* fs.watch no disponible: el resto de la app sigue funcionando */

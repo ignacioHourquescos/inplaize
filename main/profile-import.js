@@ -67,6 +67,7 @@ async function setAllCookies(cookies, targetPartition) {
  *   directory: string,
  *   partition?: string,
  *   autoClose?: boolean,
+ *   relaunch?: boolean,
  *   parts?: { cookies?: boolean, history?: boolean, bookmarks?: boolean, passwords?: boolean },
  * }} opts
  * @returns {Promise<{
@@ -79,6 +80,7 @@ async function setAllCookies(cookies, targetPartition) {
  *   passwordsSkipped: number,
  *   passwordsVaultAvailable: boolean,
  *   cookiesError?: string,
+ *   closedBrowser?: boolean,
  * }>}
  */
 async function importFullProfile(opts) {
@@ -100,6 +102,7 @@ async function importFullProfile(opts) {
     passwords: 0,
     passwordsSkipped: 0,
     passwordsVaultAvailable: passwordsStore.available(),
+    closedBrowser: false,
   };
 
   if (parts.history) {
@@ -128,14 +131,17 @@ async function importFullProfile(opts) {
     }
   }
   if (parts.cookies) {
+    const fetchOpts = {
+      autoClose: !!(opts && opts.autoClose),
+      relaunch: !(opts && opts.relaunch === false),
+    };
     try {
-      const cookies = await engine.fetchAllCookies(browser, directory, {
-        autoClose: !!(opts && opts.autoClose),
-      });
+      const cookies = await engine.fetchAllCookies(browser, directory, fetchOpts);
       summary.cookies = await setAllCookies(cookies, partition);
     } catch (err) {
       summary.cookiesError = (err && err.message) || 'IMPORT_FAILED';
     }
+    if (fetchOpts.closedBrowser) summary.closedBrowser = true;
   }
 
   return summary;

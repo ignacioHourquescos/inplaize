@@ -139,6 +139,11 @@ function createDockWindow(display, state) {
   }
 
   function restoreDockLayer() {
+    try {
+      if (require('./window-focus').systemDialogOpen()) return;
+    } catch {
+      /* noop */
+    }
     if (!win || win.isDestroyed() || !state.isExpanded || state.docModalOpen) return;
     try {
       if (process.platform === 'win32') win.setAlwaysOnTop(true, 'screen-saver');
@@ -185,6 +190,11 @@ function createDockWindow(display, state) {
   }
 
   win.on('blur', () => {
+    try {
+      if (require('./window-focus').systemDialogOpen()) return;
+    } catch {
+      /* noop */
+    }
     // El tour de primera vez vive dentro de esta ventana. En un equipo recién
     // instalado el primer arranque se come el foco con el aviso de firewall de
     // Windows: si acá bajamos la ventana de capa o la colapsamos, el tour se va
