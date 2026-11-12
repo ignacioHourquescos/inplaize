@@ -419,8 +419,12 @@ function getLastFocusedChromeWindow() {
 function setLastFocusedWebMapKey(mapKey) {
   if (!mapKey || typeof mapKey !== 'string') return;
   if (Date.now() < ignoreSurfaceUntil) return;
+  const changed = lastFocusedWebMapKey !== mapKey;
   lastFocusedWebMapKey = mapKey;
   lastFocusedSurfaceKind = 'web';
+  // Solo reenviar al dock si esta clave es una ventana suelta conocida.
+  // Si el shell es dueño de la franja, él ya manda keys + activeKey.
+  if (changed && webWindowsByUrlKey.has(mapKey)) syncOpenWebKeysToDock();
 }
 
 /**
@@ -661,7 +665,7 @@ function installWebNotificationPermissionHandlers(partition) {
 }
 
 function syncOpenWebKeysToDock() {
-  broadcastOpenWebWindowKeys([...webWindowsByUrlKey.keys()]);
+  broadcastOpenWebWindowKeys([...webWindowsByUrlKey.keys()], lastFocusedWebMapKey);
   try {
     require('./detached-web-frame').broadcastChromeToAllDetachedHosts();
   } catch {

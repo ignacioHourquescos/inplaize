@@ -8,7 +8,7 @@
 
 const path = require('path');
 const { pathToFileURL } = require('url');
-const { app, BrowserView, Menu, nativeImage, shell, ipcMain } = require('electron');
+const { app, BrowserView, BrowserWindow, Menu, nativeImage, shell, ipcMain } = require('electron');
 const { LOOSE_NAV_NEW_TAB_URL } = require('./constants');
 const { getDockWindow } = require('./dock-window-bridge');
 const { setEmbeddedPageBackground } = require('./embedded-page-background');
@@ -252,12 +252,16 @@ function buildStatePayload() {
 
 function broadcastState() {
   scheduleSaveTabs();
-  const dock = getDockWindow();
-  if (!dock) return;
-  try {
-    dock.webContents.send('loose-nav-state', buildStatePayload());
-  } catch {
-    /* noop */
+  const payload = buildStatePayload();
+  // Dock + ventanas web (misma franja unificada con perfiles).
+  const wins = BrowserWindow.getAllWindows();
+  for (const win of wins) {
+    try {
+      if (!win || win.isDestroyed() || !win.webContents || win.webContents.isDestroyed()) continue;
+      win.webContents.send('loose-nav-state', payload);
+    } catch {
+      /* noop */
+    }
   }
 }
 
@@ -1471,6 +1475,20 @@ async function useAccount(payload) {
     broadcastState();
     return false;
   }
+  // Clic en un perfil desde la franja unificada: entra a la navegación si
+  // todavía no está abierta, y luego cambia a esa sesión.
+  if (!modeActive) {
+    modeActive = true;
+    refreshProfilesInBackground();
+    if (typeof expandDockHook === 'function') {
+      try {
+        expandDockHook();
+      } catch {
+        /* noop */
+      }
+    }
+    ensureTabsRestored();
+  }
   return switchToSession(partition);
 }
 
@@ -1512,6 +1530,8 @@ function registerLooseNavIpc() {
   }
 
   passwordManager.registerPasswordIpc({ host: () => getDockWindow() });
+  // Sembrar el riel de perfiles en la franja unificada sin esperar a abrir internet.
+  setTimeout(refreshProfilesInBackground, 400);
   setTimeout(refreshProfilesInBackground, 5000);
 
   ipcMain.handle('loose-nav-open', async () => {

@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   openPastedUrl: (url) => ipcRenderer.invoke('open-pasted-url', url),
   showUrlPrompt: () => ipcRenderer.invoke('url-prompt-show'),
   openAppBrowser: () => ipcRenderer.invoke('app-browser-open'),
+  looseNavGetState: () => ipcRenderer.invoke('loose-nav-get-state'),
+  looseNavUseAccount: (payload) => ipcRenderer.invoke('loose-nav-use-account', payload || {}),
+  onLooseNavState: (callback) => {
+    ipcRenderer.on('loose-nav-state', (_event, payload) => callback(payload));
+  },
   setUrlPromptOpen: (open) => ipcRenderer.invoke('url-prompt-open', open === true),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
   openAppearance: () => ipcRenderer.invoke('chrome-open-appearance'),

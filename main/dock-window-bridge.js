@@ -57,12 +57,16 @@ function broadcastShortcutTitleBadge(shortcutId, count) {
 /**
  * Lista de claves `${partition}::${urlKey}` con ventana web abierta (ver open-shortcut.js).
  * @param {string[]} keys
+ * @param {string | null} [activeKey] icono seleccionado (el que estás mirando)
  */
-function broadcastOpenWebWindowKeys(keys) {
+function broadcastOpenWebWindowKeys(keys, activeKey) {
   const w = dockWindow;
   if (!w || w.isDestroyed()) return;
   try {
-    w.webContents.send('open-web-window-keys', { keys });
+    w.webContents.send('open-web-window-keys', {
+      keys,
+      activeKey: typeof activeKey === 'string' && activeKey ? activeKey : null,
+    });
   } catch {
     /* ventana cerrando */
   }

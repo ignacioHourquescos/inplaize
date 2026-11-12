@@ -148,27 +148,11 @@ function bindFileDragSpringTarget(btn, shortcutId) {
   });
 }
 
-/** Segmentado "inplaize | www": un acceso guardado es inplaize; un enlace pegado, internet. */
-function syncStripModeSeg(items) {
-  const onShortcut = items.some((it) => it.isActive);
-  const homeBtn = document.getElementById('shell-home-btn');
-  const internetBtn = document.getElementById('open-url-btn');
-  if (homeBtn) {
-    homeBtn.classList.toggle('is-active', onShortcut);
-    homeBtn.setAttribute('aria-pressed', onShortcut ? 'true' : 'false');
-  }
-  if (internetBtn) {
-    internetBtn.classList.toggle('is-active', !onShortcut);
-    internetBtn.setAttribute('aria-pressed', onShortcut ? 'false' : 'true');
-  }
-}
-
 function renderChrome(payload) {
   if (payload && payload.focusMode) {
     applyFocusModeToDom(payload.focusMode);
   }
   const items = payload && Array.isArray(payload.items) ? payload.items : [];
-  syncStripModeSeg(items);
   if (!strip) return;
   stripAddInlineEl?.remove();
   stripEndActionsEl?.remove();
@@ -618,3 +602,4 @@ initFramelessChrome();
 mountPageMenuButton();
 bindPageCommands();
 bindShellFileDragAcceptance();
+window.UsualDeskShellNavProfiles?.init?.();

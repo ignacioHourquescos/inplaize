@@ -309,9 +309,8 @@
   function navMarkup(url) {
     return (
       '<div class="setup-nav">' +
-        '<span class="setup-nav-pin">Fijar</span>' +
         '<span class="setup-nav-btns"><i>‹</i><i>›</i><i>↻</i></span>' +
-        `<span class="setup-nav-url">${url}</span>` +
+        `<span class="setup-nav-url">${url}<span class="setup-nav-pin" aria-hidden="true"></span></span>` +
       '</div>'
     );
   }

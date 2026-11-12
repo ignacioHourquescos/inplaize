@@ -1,6 +1,7 @@
 /**
- * Icono de internet (el primero de la franja): abre el navegador de la app.
- * En el dock es un switch: si el navegador ya está abierto, vuelve al inicio.
+ * Icono "www" de las ventanas web (web-shell / detached): abre el navegador
+ * integrado de la app. En el dock ya no hay segmented ni este botón: los
+ * perfiles de la franja unificada abren la navegación directo.
  */
 (function initOpenUrlBar() {
   const btn = document.getElementById('open-url-btn');
@@ -25,7 +26,7 @@
     api.openAppBrowser().catch(() => {});
   });
 
-  /* En el dock, el padding y el hueco entre opciones también alternan el modo.
+  /* En web-shell, el padding y el hueco del segmented también alternan el modo.
      Los botones frenan el burbujeo y se encargan solos. */
   const seg = btn.closest('.strip-mode-seg');
   if (seg) {

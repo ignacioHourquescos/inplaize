@@ -28,6 +28,8 @@
   --ud-chrome-edit-tab: #7c6cff;
   /* Borde de los iconos y perfiles en modo edición. */
   --ud-chrome-edit-border: #ffffff;
+  /* Lima de marca (botón “Generar acceso directo…”, foco de icono). */
+  --secondary: #c8f542;
   --ud-chrome-seg-bg: #1c1c22;
   --ud-chrome-seg-muted: #8e8ea0;
   --ud-chrome-soft-hover: rgba(255, 255, 255, 0.07);
@@ -76,7 +78,7 @@ html[data-canvas-theme='light'] .strip-mode-seg {
   align-self: center;
   padding: 0;
   gap: 0;
-  border: 1px solid var(--ud-chrome-icon-border);
+  border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
   color: var(--ud-chrome-text);
@@ -90,7 +92,7 @@ html[data-canvas-theme='light'] .strip-mode-seg {
 
 .shell-shortcut-item:hover {
   background: var(--ud-chrome-icon-bg-hover);
-  border-color: var(--ud-chrome-icon-border-hover);
+  border-color: transparent;
 }
 
 /* Alta de acceso: "+" violeta, borde violeta, sin fondo. Queda fuera del
@@ -123,6 +125,29 @@ html[data-canvas-theme='light'] .shell-shortcut-item.strip-add-shortcut:hover,
 html[data-canvas-theme='light'] .shell-shortcut-item.strip-add-shortcut:active {
   border-color: #5b4bd6;
   color: #5b4bd6;
+}
+
+/* Lápiz: sin marco; lima secondary (antes violeta). */
+#strip-edit-toggle.shell-shortcut-item.strip-add-shortcut,
+#strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:hover,
+#strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:active,
+#strip-edit-toggle.shell-shortcut-item.strip-add-shortcut.is-active {
+  border-color: transparent;
+  background: transparent;
+  color: var(--secondary, #c8f542);
+}
+
+#strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:hover,
+#strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:active {
+  background: var(--ud-chrome-icon-bg-hover);
+  border-color: transparent;
+  color: #d7ff6a;
+}
+
+html[data-canvas-theme='light'] #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:hover,
+html[data-canvas-theme='light'] #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:active {
+  border-color: transparent;
+  color: #9bc21a;
 }
 
 /* Acciones al final de la franja: lápiz en uso normal; "+" y "listo" en modo
@@ -214,16 +239,25 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   display: block;
 }
 
+/* Prendido (ventana abierta): fondito gris + color a plena saturación. */
+.shell-shortcut-item.is-open,
+.shell-shortcut-item.is-open:hover {
+  background: var(--ud-chrome-icon-active-bg);
+  border-color: transparent;
+  box-shadow: none;
+  opacity: 1;
+  filter: none;
+}
+
+/* Seleccionado (el que estás mirando): borde violeta inplaize. */
 .shell-shortcut-item.is-active,
 .shell-shortcut-item.is-active:hover,
 .shell-shortcut-item.is-active:active {
   background: var(--ud-chrome-icon-active-bg);
-  border-color: var(--ud-chrome-icon-active-border);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
-}
-
-.shell-shortcut-item.is-open:not(.is-active) {
-  border-color: var(--ud-chrome-icon-border-hover);
+  border: 2px solid var(--ud-chrome-edit-tab);
+  box-shadow: none;
+  opacity: 1;
+  filter: none;
 }
 
 /* Drag de archivo encima del icono: aviso de spring-loading (mantener el
@@ -719,7 +753,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
    MODO FOCO
    ========================================================================== */
 
-/* Modo foco: indicador violeta — semicírculo centrado arriba (radio 5px), sin franja a todo el ancho. */
+/* Modo foco: indicador secondary (lima) — semicírculo centrado arriba. */
 html.focus-mode-active .shell-top {
   position: relative;
   background: var(--ud-chrome-strip-bg);
@@ -735,22 +769,22 @@ html.focus-mode-active .shell-top::before {
   width: 10px;
   height: 5px;
   border-radius: 0;
-  background: var(--ud-chrome-edit-tab);
+  background: var(--secondary, #c8f542);
   clip-path: circle(5px at 50% 0);
   pointer-events: none;
   z-index: 2;
 }
 
-/* Miembros de la colección: marco violeta de 3px, sin sombra. */
+/* Miembros de la colección (click derecho / foco): marco lima secondary. */
 .shell-shortcut-item.shell-focus-member {
-  border: 3px solid var(--ud-chrome-edit-tab) !important;
+  border: 3px solid var(--secondary, #c8f542) !important;
   box-shadow: none !important;
   opacity: 1 !important;
   filter: none !important;
 }
 
 .shell-shortcut-item.shell-focus-member:hover {
-  border-color: var(--ud-chrome-edit-tab) !important;
+  border-color: var(--secondary, #c8f542) !important;
   box-shadow: none !important;
 }
 

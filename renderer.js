@@ -92,6 +92,8 @@ let shortcuts = [];
 const titleBadges = {};
 /** Claves `${partition}::${url}` con ventana web abierta (main/open-shortcut.js). */
 let openWebWindowKeys = new Set();
+/** @type {string | null} clave del icono seleccionado (ventana al frente) */
+let activeWebWindowKey = null;
 let editingId = null;
 let dragOperationActive = false;
 /** Panel de accesos: en modo edición se reordenan los iconos, el lápiz abre el editor y el tacho elimina. */
@@ -239,11 +241,6 @@ function syncDockHomeStripBtn() {
     const on = homeView === 'downloads' && homeVisible;
     downloadsBtn.classList.toggle('is-active', on);
     downloadsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-  }
-  const internetBtn = document.getElementById('open-url-btn');
-  if (internetBtn) {
-    internetBtn.classList.toggle('is-active', !!looseOpen);
-    internetBtn.setAttribute('aria-pressed', looseOpen ? 'true' : 'false');
   }
 }
 
@@ -2001,6 +1998,7 @@ function setTitleBadgeOnCard(shortcutId, count) {
 }
 
 async function exitDockShortcutEditModeFromChrome() {
+  setLooseNavProfilesEditMode(false);
   if (!shortcutsEditMode) {
     try {
       await window.usualDesk.collapseSidebar();
@@ -2073,8 +2071,9 @@ async function init() {
   window.usualDesk.onShortcutTitleBadge(({ shortcutId, count }) => {
     setTitleBadgeOnCard(shortcutId, count);
   });
-  window.usualDesk.onOpenWebWindowKeys((keys) => {
+  window.usualDesk.onOpenWebWindowKeys((keys, activeKey) => {
     openWebWindowKeys = new Set(Array.isArray(keys) ? keys : []);
+    activeWebWindowKey = typeof activeKey === 'string' && activeKey ? activeKey : null;
     updateAllShortcutWebInactiveStates();
     // Las cerraduras de arrastre sólo valen para ventanas abiertas; repintamos
     // para re-enlazar los gestos en base al nuevo set de aperturas.
@@ -2094,7 +2093,7 @@ async function init() {
   if (window.usualDesk.onOpenShortcutEditor) {
     window.usualDesk.onOpenShortcutEditor((payload) => {
       const raw = payload && payload.shortcutId != null ? String(payload.shortcutId).trim() : '';
-      shortcutsEditMode = true;
+      enterStripEditMode({ skipRender: true });
       const s = raw ? shortcuts.find((x) => String(x.id) === raw) : null;
       if (s) {
         openEditModal(s);
@@ -2275,10 +2274,20 @@ async function refreshOpenWebWindowKeys() {
 function applyWebInactiveClassToCard(card, shortcut) {
   if (!card || !shortcut) return;
   if (shortcut.type !== 'web') {
-    card.classList.remove('shortcut-web-inactive');
+    card.classList.remove('shortcut-web-inactive', 'is-open', 'is-active');
     return;
   }
-  card.classList.toggle('shortcut-web-inactive', !openWebWindowKeys.has(webShortcutMapKey(shortcut)));
+  const mapKey = webShortcutMapKey(shortcut);
+  const isOpen = openWebWindowKeys.has(mapKey);
+  // En navegación libre el seleccionado es el perfil, no un acceso.
+  const selected =
+    isOpen &&
+    !!activeWebWindowKey &&
+    mapKey === activeWebWindowKey &&
+    !(looseNavState && looseNavState.active);
+  card.classList.toggle('shortcut-web-inactive', !isOpen);
+  card.classList.toggle('is-open', isOpen);
+  card.classList.toggle('is-active', selected);
 }
 
 function updateAllShortcutWebInactiveStates() {
@@ -3041,13 +3050,15 @@ function applyShortcutsEditModeUi() {
     shortcutsEditToggleBtn.classList.toggle('is-on', shortcutsEditMode);
     shortcutsEditToggleBtn.setAttribute(
       'aria-label',
-      shortcutsEditMode ? 'Modo edición activo; desactivar para uso normal' : 'Modo edición desactivado; activar para editar accesos',
+      shortcutsEditMode
+        ? 'Modo edición activo; desactivar para uso normal'
+        : 'Modo edición desactivado; activar para editar accesos y perfiles',
     );
     shortcutsEditToggleBtn.setAttribute(
       'data-tooltip',
       shortcutsEditMode
-        ? 'Modo edición activo: arrastra los iconos para moverlos. Desactivar para volver a abrir las ventanas'
-        : 'Modo edición inactivo: activar para mover, editar o eliminar accesos',
+        ? 'Modo edición activo: mové accesos y perfiles. Listo para volver al uso normal'
+        : 'Editar accesos y perfiles',
     );
   }
   requestAnimationFrame(() => {
@@ -3307,7 +3318,7 @@ function initDockHomeMenu() {
       } catch {
         /* noop */
       }
-      shortcutsEditMode = true;
+      enterStripEditMode({ skipRender: true });
       const s =
         prefId != null ? shortcuts.find((x) => String(x.id) === String(prefId)) : null;
       if (s) {
@@ -3361,7 +3372,7 @@ if (dockHomeBtn) {
   dockHomeBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    window.__dockToggleInternet?.();
+    goToDockWelcomeHome(homeView).catch(() => {});
   });
 }
 
@@ -3772,11 +3783,19 @@ const DOWNLOADS_STRIP_MAX = 260;
   });
 })();
 
+/** Un solo lápiz: edita accesos directos y perfiles de navegación juntos. */
+function enterStripEditMode(opts = {}) {
+  shortcutsEditMode = true;
+  setLooseNavProfilesEditMode(true);
+  if (!opts.skipRender) renderShortcuts();
+}
+
 async function exitShortcutsEditModeFromUi() {
   const formWasOpen =
     (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) ||
     (modalOverlay && !modalOverlay.classList.contains('hidden'));
   const looseNavOpen = looseNavSurface && !looseNavSurface.classList.contains('hidden');
+  setLooseNavProfilesEditMode(false);
   shortcutsEditMode = false;
   closeModal();
   if (formWasOpen || looseNavOpen) {
@@ -4017,8 +4036,7 @@ if (stripAddShortcutBtn) {
 
 document.getElementById('strip-edit-toggle')?.addEventListener('click', () => {
   if (shortcutsEditMode) return;
-  shortcutsEditMode = true;
-  renderShortcuts();
+  enterStripEditMode();
 });
 
 document.getElementById('strip-edit-done')?.addEventListener('click', () => {
@@ -4031,7 +4049,7 @@ document.getElementById('strip-edit-done')?.addEventListener('click', () => {
 document.addEventListener(
   'keydown',
   (e) => {
-    if (e.key !== 'Escape' || !shortcutsEditMode || shortcutReorder) return;
+    if (e.key !== 'Escape' || !shortcutsEditMode || shortcutReorder || looseNavProfileDrag) return;
     if (!modalOverlay.classList.contains('hidden')) return;
     if (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) return;
     if (appearanceModalOverlay && !appearanceModalOverlay.classList.contains('hidden')) return;
@@ -4232,7 +4250,7 @@ let looseNavState = {
   activeLoading: false,
 };
 
-/** Dock oculto con "www" abierto: la franja se queda como está hasta que se retome al volver. */
+/** Dock oculto con navegación abierta: se retoma el estado al volver a expandir. */
 let looseNavResumePending = false;
 
 let lastSentViewportBounds = null;
@@ -4758,18 +4776,16 @@ let looseNavProfilesEditMode = false;
 /** @type {{ el: HTMLElement, pointerId: number, startX: number, active: boolean } | null} */
 let looseNavProfileDrag = null;
 let looseNavAccountsRenderPending = false;
-const looseNavProfilesEditBtn = document.getElementById('loose-nav-profiles-edit');
-const looseNavProfilesDoneBtn = document.getElementById('loose-nav-profiles-done');
 function setLooseNavProfilesEditMode(on) {
   const next = on === true;
   if (looseNavProfilesEditMode === next) return;
   looseNavProfilesEditMode = next;
-  if (looseNavProfilesEditBtn) looseNavProfilesEditBtn.hidden = next;
-  if (looseNavProfilesDoneBtn) looseNavProfilesDoneBtn.hidden = !next;
   looseNavAccountsRail?.classList.toggle('is-editing', next);
   document.documentElement.setAttribute('data-profiles-edit', next ? 'on' : 'off');
-  // Mientras se editan los perfiles la página no se ve, como la home en los accesos.
-  window.usualDesk.setUrlPromptOpen?.(next)?.catch?.(() => {});
+  // Mientras se editan los perfiles, tapar la página embebida si está abierta.
+  if (looseNavState.active || !next) {
+    window.usualDesk.setUrlPromptOpen?.(next)?.catch?.(() => {});
+  }
   renderLooseNavAccounts(looseNavState);
 }
 
@@ -4875,7 +4891,7 @@ async function runLooseNavAccountAction(key, el, action) {
 }
 
 function looseNavAccountButton({
-  key, label, tooltip, avatar, seed, incognito, active, isDefault, count = 0, partition, onClick, onSetDefault, onRemove,
+  key, label, tooltip, avatar, seed, incognito, active, isDefault, partition, onClick, onSetDefault, onRemove,
 }) {
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -4908,13 +4924,6 @@ function looseNavAccountButton({
     letter.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(seed)));
     btn.appendChild(letter);
   }
-  if (count > 0) {
-    const badge = document.createElement('span');
-    badge.className = 'loose-nav-account-count';
-    badge.setAttribute('aria-hidden', 'true');
-    badge.textContent = count > 99 ? '99+' : String(count);
-    btn.appendChild(badge);
-  }
   if (looseNavProfilesEditMode && onRemove) {
     const remove = document.createElement('span');
     remove.className = 'loose-nav-account-remove';
@@ -4943,30 +4952,38 @@ function looseNavAccountButton({
 }
 
 /**
- * Fila de perfiles en la franja de arriba (en lugar de los accesos directos):
- * cada sesión con sus pestañas; tocar una entra a las de esa sesión. Clic
- * derecho la deja como predeterminada de las pestañas nuevas (estrella).
+ * Riel de perfiles siempre visible a la izquierda de los accesos: tocar uno
+ * abre (o cambia a) esa sesión con sus pestañas debajo. Clic derecho la deja
+ * como predeterminada de las pestañas nuevas.
  */
+function activateLooseNavAccount(payload) {
+  return window.usualDesk.looseNavUseAccount?.(payload);
+}
+
 function renderLooseNavAccounts(state) {
   if (!looseNavAccountsRail) return;
   const accounts = (state.accounts && state.accounts.accounts) || [];
   const chrome = (state.accounts && state.accounts.chrome) || [];
   const counts = state.tabCounts || {};
   const defaultPartition = (state.defaultProfile && state.defaultProfile.partition) || '';
-  const show = !!state.active;
+  const navActive = !!state.active;
   if (looseNavProfileDrag) {
     looseNavAccountsRenderPending = true;
     return;
   }
-  const sig = show
-    ? JSON.stringify([
-      state.activePartition, defaultPartition, looseNavAccountBusy, looseNavProfilesEditMode, counts, accounts, chrome,
-    ])
-    : '';
+  const sig = JSON.stringify([
+    navActive,
+    navActive ? state.activePartition : '',
+    defaultPartition,
+    looseNavAccountBusy,
+    looseNavProfilesEditMode,
+    counts,
+    accounts,
+    chrome,
+  ]);
   if (sig === looseNavAccountsSig) return;
   looseNavAccountsSig = sig;
   looseNavAccountsRail.innerHTML = '';
-  if (!show) return;
 
   for (const a of accounts) {
     const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
@@ -4981,11 +4998,10 @@ function renderLooseNavAccounts(state) {
       avatar: a.avatar,
       seed: a.email || a.partition,
       incognito: !!a.incognito,
-      active: a.partition === state.activePartition,
+      active: navActive && a.partition === state.activePartition,
       isDefault,
-      count,
       partition: a.partition,
-      onClick: () => window.usualDesk.looseNavUseAccount({ partition: a.partition }),
+      onClick: () => activateLooseNavAccount({ partition: a.partition }),
       onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ partition: a.partition }),
       onRemove: a.incognito ? null : () => window.usualDesk.looseNavRemoveProfile({ partition: a.partition }),
     };
@@ -5001,7 +5017,7 @@ function renderLooseNavAccounts(state) {
         avatar: c.avatar,
         seed: c.email || c.name,
         active: false,
-        onClick: () => window.usualDesk.looseNavUseAccount({ chromeDirectory: c.directory }),
+        onClick: () => activateLooseNavAccount({ chromeDirectory: c.directory }),
         onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ chromeDirectory: c.directory }),
         onRemove: () => window.usualDesk.looseNavRemoveProfile({ chromeDirectory: c.directory }),
       };
@@ -5054,9 +5070,13 @@ function syncLooseNavAddShortcutBtn() {
   if (!tab) return;
   const saved = !!findShortcutForLooseNavTab(tab);
   looseNavAddShortcutBtn.classList.toggle('is-saved', saved);
-  looseNavAddShortcutBtn.querySelector('.loose-nav-add-shortcut-label').textContent = saved ? 'Fijado' : 'Fijar';
+  looseNavAddShortcutBtn.querySelector('.loose-nav-add-shortcut-label').textContent = saved
+    ? 'Acceso directo creado'
+    : 'Generar acceso directo…';
   const profile = tab.profileLabel ? ` con el perfil ${tab.profileLabel}` : '';
-  const hint = saved ? 'Esta página ya está fijada en inplaize' : `Fijar esta página en inplaize${profile}`;
+  const hint = saved
+    ? 'Esta página ya está fijada en la barra de arriba'
+    : `Generar acceso directo en la barra de arriba${profile}`;
   looseNavAddShortcutBtn.setAttribute('aria-label', hint);
   looseNavAddShortcutBtn.dataset.tooltip = hint;
 }
@@ -5145,10 +5165,17 @@ function initLooseNavOmnibox() {
       looseNavOmniboxInput.focus();
     }
   });
-  looseNavAddShortcutBtn?.addEventListener('click', () => {
+  looseNavAddShortcutBtn?.addEventListener('mousedown', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+  });
+  looseNavAddShortcutBtn?.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
     addLooseNavPageShortcut().catch(() => {});
   });
   looseNavOmnibox.addEventListener('mousedown', (ev) => {
+    if (ev.target.closest('#loose-nav-add-shortcut-btn')) return;
     if (ev.target !== looseNavOmnibox) return;
     ev.preventDefault();
     looseNavOmniboxInput.focus();
@@ -5177,31 +5204,6 @@ function initLooseNavOmnibox() {
   });
 }
 
-const STRIP_SWAP_FADE_MS = 80;
-let stripSwapTimer = null;
-let stripSwapSeq = 0;
-
-/** Franja de arriba: accesos directos o perfiles. Apaga la fila vieja, cambia y enciende la nueva. */
-function applyStripMode(mode) {
-  const root = document.documentElement;
-  const current = root.getAttribute('data-strip-mode');
-  if (current === null) {
-    root.setAttribute('data-strip-mode', mode);
-    return;
-  }
-  if (current === mode && !root.classList.contains('strip-swap-out')) return;
-  const seq = ++stripSwapSeq;
-  clearTimeout(stripSwapTimer);
-  root.classList.add('strip-swap-out');
-  stripSwapTimer = setTimeout(() => {
-    if (seq !== stripSwapSeq) return;
-    root.setAttribute('data-strip-mode', mode);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (seq === stripSwapSeq) root.classList.remove('strip-swap-out');
-    }));
-  }, STRIP_SWAP_FADE_MS);
-}
-
 function renderLooseNavBar(state) {
   const wasLoose = !!looseNavState.active;
   looseNavState = state || looseNavState;
@@ -5215,24 +5217,20 @@ function renderLooseNavBar(state) {
   }
 
   const show = !!looseNavState.active;
-  if (!show) setLooseNavProfilesEditMode(false);
+  // Al salir de la navegación, soltá la edición de perfiles salvo que el lápiz
+  // unificado siga activo (se siguen editando accesos + perfiles).
+  if (!show && wasLoose && !shortcutsEditMode) setLooseNavProfilesEditMode(false);
   looseNavBar.classList.toggle('hidden', !show);
   if (looseNavSurface) looseNavSurface.classList.toggle('hidden', !show);
   document.documentElement.setAttribute('data-loose-nav', show ? 'on' : 'off');
-  applyStripMode(show ? 'accounts' : 'shortcuts');
 
-  // Marcar el acceso directo “Navegación suelta” como activo visualmente.
+  // El violeta de “seleccionado” vive en el perfil activo, no en un acceso.
   const looseSc = findLooseShortcut();
   looseNavActiveShortcutId = show && looseSc ? looseSc.id : null;
   shortcutsContainer?.querySelectorAll('.shortcut-card.loose-nav-active').forEach((c) => {
     c.classList.remove('loose-nav-active');
   });
-  if (looseNavActiveShortcutId) {
-    const card = shortcutsContainer?.querySelector(
-      `.shortcut-card[data-shortcut-id="${looseNavActiveShortcutId}"]`,
-    );
-    card?.classList.add('loose-nav-active');
-  }
+  updateAllShortcutWebInactiveStates();
 
   renderLooseNavAccounts(looseNavState);
   renderLooseNavOmnibox(looseNavState);
@@ -5259,16 +5257,6 @@ function initLooseNavUiEvents() {
 
   looseNavNewTabBtn?.addEventListener('click', () => {
     openLooseNavBlankTab();
-  });
-
-  looseNavProfilesEditBtn?.addEventListener('click', () => setLooseNavProfilesEditMode(true));
-  looseNavProfilesDoneBtn?.addEventListener('click', () => setLooseNavProfilesEditMode(false));
-  document.addEventListener('keydown', (ev) => {
-    if (ev.key !== 'Escape' || !looseNavProfilesEditMode || looseNavProfileDrag) return;
-    const target = ev.target instanceof Element ? ev.target : null;
-    if (target && target.closest('input, textarea, select, [contenteditable="true"]')) return;
-    ev.preventDefault();
-    setLooseNavProfilesEditMode(false);
   });
 
   initLooseNavOmnibox();

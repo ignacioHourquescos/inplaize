@@ -35,12 +35,114 @@ html[data-shell-frameless='true'] .dock-app-version,
 html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
 html[data-shell-frameless='true'] .strip-add-shortcut,
-html[data-shell-frameless='true'] .strip-mode-seg {
+html[data-shell-frameless='true'] .shell-home-strip-btn,
+html[data-shell-frameless='true'] .loose-nav-accounts,
+html[data-shell-frameless='true'] .strip-rail-divider {
   -webkit-app-region: no-drag;
 }
 
-.shell-top > .strip-mode-seg {
+.shell-top > .shell-home-strip-btn {
+  flex-shrink: 0;
+  align-self: center;
   margin-left: var(--ud-chrome-strip-pad-x);
+}
+
+.strip-rail-divider {
+  flex: 0 0 2px;
+  align-self: center;
+  width: 2px;
+  height: calc(var(--ud-chrome-icon) - 10px);
+  margin: 0 2px;
+  border-radius: 999px;
+  background: #a78bfa;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-accounts {
+  flex: 0 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ud-chrome-strip-gap);
+  padding-right: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-accounts:empty {
+  display: none;
+}
+
+.loose-nav-accounts::-webkit-scrollbar {
+  display: none;
+}
+
+.loose-nav-account {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ud-chrome-icon);
+  height: var(--ud-chrome-icon);
+  padding: 7px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 120ms ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.loose-nav-account:hover {
+  opacity: 1;
+  background: var(--ud-chrome-icon-bg-hover);
+  border-color: transparent;
+}
+
+.loose-nav-account.is-active,
+.loose-nav-account.is-active:hover {
+  opacity: 1;
+  background: var(--ud-chrome-icon-active-bg);
+  border: 2px solid var(--ud-chrome-edit-tab);
+}
+
+.loose-nav-account-incognito {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background: #f4f4f5;
+  color: #27272a;
+}
+
+.loose-nav-account img,
+.loose-nav-account-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.loose-nav-account-letter {
+  background: hsl(var(--loose-nav-profile-hue, 220) 55% 45%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.loose-nav-account-count {
+  display: none;
 }
 
 .shortcut-strip {
@@ -61,9 +163,9 @@ html[data-shell-frameless='true'] .shortcut-strip {
   -webkit-app-region: drag;
 }
 
-.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary),
-.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):hover,
-.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):active {
+.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):not(#strip-edit-toggle),
+.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):not(#strip-edit-toggle):hover,
+.shortcut-strip .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):not(#strip-edit-toggle):active {
   background: var(--ud-chrome-strip-bg);
 }
 

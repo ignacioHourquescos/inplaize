@@ -9,46 +9,19 @@
 </head>
 <body>
   <header class="shell-top" role="banner">
-    <div class="strip-mode-seg" role="group" aria-label="inplaize o internet">
     <button
       type="button"
       id="shell-home-btn"
-      class="shell-home-strip-btn shell-shortcut-item is-active"
-      aria-pressed="true"
+      class="shell-home-strip-btn shell-shortcut-item"
+      aria-pressed="false"
       data-tooltip="inplaize"
       data-tooltip-placement="bottom"
       aria-label="Abrir inplaize"
     >
       <span class="dock-home-logo-mark" aria-hidden="true"></span>
     </button>
-    <div class="open-url-slot" id="open-url-slot">
-      <button
-        type="button"
-        id="open-url-btn"
-        class="shell-shortcut-item open-url-btn"
-        aria-pressed="false"
-        data-tooltip="Internet"
-        data-tooltip-placement="bottom"
-        aria-label="Abrir el navegador"
-      >
-        <span class="open-url-icon" aria-hidden="true">www</span>
-      </button>
-      <form id="open-url-form" class="open-url-form" hidden autocomplete="off">
-        <div class="open-url-card">
-          <input
-            id="open-url-input"
-            class="open-url-input"
-            type="text"
-            placeholder="Pegar enlace"
-            spellcheck="false"
-            enterkeyhint="go"
-            aria-label="Enlace para abrir"
-          />
-        </div>
-        <p class="open-url-error" hidden></p>
-      </form>
-    </div>
-    </div>
+    <nav id="loose-nav-accounts" class="loose-nav-accounts" aria-label="Perfiles de navegación"></nav>
+    <div class="strip-rail-divider" aria-hidden="true"></div>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos">
     <button
       type="button"
@@ -68,9 +41,9 @@
         type="button"
         id="strip-edit-toggle"
         class="shell-shortcut-item strip-add-shortcut"
-        data-tooltip="Editar accesos"
+        data-tooltip="Editar accesos y perfiles"
         data-tooltip-placement="bottom"
-        aria-label="Editar accesos"
+        aria-label="Editar accesos y perfiles"
       >
         <span class="shell-shortcut-icon-wrap" aria-hidden="true">
           <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
@@ -103,7 +76,7 @@
     </div>
   </header>
   <script src="ui-tooltip.js"></script>
-  <script src="open-url-bar.js"></script>
+  <script src="shell-nav-profiles.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="web-shell-renderer.js"></script>

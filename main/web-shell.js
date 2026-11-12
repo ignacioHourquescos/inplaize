@@ -79,7 +79,7 @@ function iconFromShortcut(shortcut) {
 }
 
 function syncKeysToDock() {
-  broadcastOpenWebWindowKeys([...tabs.keys()]);
+  broadcastOpenWebWindowKeys([...tabs.keys()], activeMapKey);
 }
 
 function buildChromePayload() {
@@ -469,6 +469,7 @@ function selectTabByMapKey(mapKey) {
   activeMapKey = mapKey;
   attachActiveViewOnly();
   broadcastChromeToRenderer();
+  syncKeysToDock();
   if (shellWin && !shellWin.isDestroyed()) {
     forceWindowForeground(shellWin);
   }
@@ -507,6 +508,7 @@ function focusTabByMapKey(mapKey) {
   const w = ensureShellWindow();
   attachActiveViewOnly();
   broadcastChromeToRenderer();
+  syncKeysToDock();
   if (w && !w.isDestroyed()) {
     forceWindowForeground(w);
   }

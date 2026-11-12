@@ -50,7 +50,11 @@ contextBridge.exposeInMainWorld('usualDesk', {
   onOpenWebWindowKeys: (callback) => {
     ipcRenderer.on('open-web-window-keys', (_event, payload) => {
       const keys = payload && Array.isArray(payload.keys) ? payload.keys : [];
-      callback(keys);
+      const activeKey =
+        payload && typeof payload.activeKey === 'string' && payload.activeKey
+          ? payload.activeKey
+          : null;
+      callback(keys, activeKey);
     });
   },
   peekSuggestedShortcutEditorTarget: () =>
