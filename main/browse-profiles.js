@@ -371,6 +371,7 @@ const IMPORT_ERRORS = {
   CHROME_CLOSE_FAILED: 'No se pudo cerrar Google Chrome. Cerralo a mano y volvé a intentarlo.',
   CHROME_NOT_FOUND: 'No se encontró Google Chrome instalado.',
   CHROME_PROFILE_DIR_NOT_FOUND: 'No se encontró la carpeta de perfiles de Google Chrome.',
+  PROFILE_COOKIES_NOT_FOUND: 'Ese perfil de Chrome no tiene una sesión guardada para traer.',
   NOT_SUPPORTED_PLATFORM: 'Importar perfiles de Chrome solo está disponible en Windows.',
 };
 

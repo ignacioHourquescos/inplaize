@@ -12,7 +12,7 @@
   /* El menú de la izquierda ya separa la página del borde. */
   padding: 12px 28px 24px 16px;
   box-sizing: border-box;
-  color: #ececf1;
+  color: var(--ud-chrome-text);
   -webkit-app-region: no-drag;
 }
 
@@ -407,6 +407,40 @@ body.notion-selecting * {
   text-decoration: line-through;
 }
 
+/* Resultado de un renglón que empieza con "=": a la derecha, se copia con un clic. */
+.notion-calc {
+  flex: 0 0 auto;
+  max-width: 60%;
+  margin: 0;
+  padding: 3px 6px 2px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #8d8d9c;
+  font: inherit;
+  font-size: 15.5px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.notion-calc:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f2f6;
+}
+
+.notion-calc.is-copied {
+  color: #a78bfa;
+}
+
+.notion-calc.is-copied::after {
+  content: '✓';
+  margin-left: 6px;
+}
+
 .notion-drop-line {
   display: none;
   position: fixed;
@@ -507,10 +541,10 @@ body.notion-selecting * {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--ud-chrome-strip-border);
   border-radius: 50%;
-  background: #1c1c24;
-  color: #ececf1;
+  background: var(--ud-chrome-icon-bg);
+  color: var(--ud-chrome-text);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -531,7 +565,7 @@ body.notion-selecting * {
 .canvas-options-btn:hover,
 .canvas-options-btn[aria-expanded='true'],
 .canvas-history-btn:hover:not([aria-disabled='true']) {
-  background: #2a2a34;
+  background: var(--ud-chrome-icon-bg-hover);
 }
 
 .canvas-rail .canvas-options-btn {
@@ -554,8 +588,8 @@ body.notion-selecting * {
 
 .canvas-downloads-btn[aria-pressed='true'],
 .canvas-downloads-btn[aria-pressed='true']:hover {
-  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
-  border-color: rgba(167, 139, 250, 0.7);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -568,12 +602,12 @@ body.notion-selecting * {
 
 /* Modo claro: fondo blanco y texto negro en el canvas de tareas. */
 html[data-canvas-theme='light'] #dock-home-panel[data-home-view='todos'] {
-  background: #ffffff;
+  background: var(--ud-chrome-canvas);
 }
 
 html[data-canvas-theme='light'] .todo-home {
-  background: #ffffff;
-  color: #111111;
+  background: var(--ud-chrome-canvas);
+  color: var(--ud-chrome-text);
 }
 
 html[data-canvas-theme='light'] .todo-home::-webkit-scrollbar-thumb {
@@ -621,24 +655,28 @@ html[data-canvas-theme='light'] .notion-block.is-done .notion-content {
   color: #71717a;
 }
 
-html[data-canvas-theme='light'] .canvas-options-btn,
-html[data-canvas-theme='light'] .canvas-history-btn {
-  background: #ffffff;
-  color: #18181b;
-  border-color: rgba(0, 0, 0, 0.12);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+html[data-canvas-theme='light'] .notion-calc {
+  color: #71717a;
 }
 
-html[data-canvas-theme='light'] .canvas-options-btn:hover,
-html[data-canvas-theme='light'] .canvas-options-btn[aria-expanded='true'],
-html[data-canvas-theme='light'] .canvas-history-btn:hover:not([aria-disabled='true']) {
-  background: #f4f4f5;
+html[data-canvas-theme='light'] .notion-calc:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .notion-calc.is-copied {
+  color: #7c3aed;
+}
+
+html[data-canvas-theme='light'] .canvas-options-btn,
+html[data-canvas-theme='light'] .canvas-history-btn {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
 }
 
 html[data-canvas-theme='light'] .canvas-downloads-btn[aria-pressed='true'],
 html[data-canvas-theme='light'] .canvas-downloads-btn[aria-pressed='true']:hover:not([aria-disabled='true']) {
-  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
-  border-color: rgba(109, 40, 217, 0.5);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 

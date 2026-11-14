@@ -373,6 +373,8 @@ async function openOrFocusTab(shortcut) {
     session.fromPartition(partition).setUserAgent(chromeLikeUserAgent());
   }
 
+  const crmJustLoaded = await require('./whatsapp-crm-extension').ensureCrmExtension(shortcut, partition);
+
   if (tabs.has(mapKey)) {
     const entry = tabs.get(mapKey);
     if (entry) {
@@ -382,6 +384,7 @@ async function openOrFocusTab(shortcut) {
       if (!wc.isDestroyed()) {
         wc.__usualDeskNotificationsMuted = desiredNotificationsMuted;
         wc.setAudioMuted(desiredAudioMuted);
+        if (crmJustLoaded) wc.reload();
       }
     }
     activeMapKey = mapKey;

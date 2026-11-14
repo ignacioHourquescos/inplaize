@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('usualDesk', {
   onOpenAddShortcutModal: (callback) => {
     ipcRenderer.on('open-add-shortcut-modal', () => callback());
   },
+  onOpenAddShortcutForPage: (callback) => {
+    ipcRenderer.on('open-add-shortcut-for-page', (_event, page) => callback(page));
+  },
   onOpenAppearanceModal: (callback) => {
     ipcRenderer.on('open-appearance-modal', () => callback());
   },
@@ -120,7 +123,13 @@ contextBridge.exposeInMainWorld('usualDesk', {
   looseNavReorderProfiles: (partitions) =>
     ipcRenderer.invoke('loose-nav-reorder-profiles', Array.isArray(partitions) ? partitions.map(String) : []),
   looseNavCoverPage: (cover) => ipcRenderer.invoke('loose-nav-cover-page', cover === true),
-  looseNavOpenAddProfileMenu: (x, y) => ipcRenderer.invoke('loose-nav-add-profile-menu', { x, y }),
+  looseNavAddProfileOptions: () => ipcRenderer.invoke('loose-nav-add-profile-options'),
+  looseNavAddProfile: (target) =>
+    ipcRenderer.invoke('loose-nav-add-profile', {
+      google: !!(target && target.google),
+      partition: target && target.partition ? String(target.partition) : '',
+      chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
+    }),
   onLooseNavShortcut: (callback) => {
     ipcRenderer.on('loose-nav-shortcut', (_event, action) => callback(String(action || '')));
   },

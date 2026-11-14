@@ -5,7 +5,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import Suggestion from '@tiptap/suggestion';
-import { NodeSelection, Plugin, TextSelection } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, TextSelection } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import notesCalc from '../notes-calc.js';
 
 const PLACEHOLDER = 'Escribí, presioná / para insertar bloques...';
 const MAX_DOC_COLUMNS = 4;
@@ -174,6 +176,93 @@ const Column = Node.create({
   },
   renderHTML({ HTMLAttributes }) {
     return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'column', class: 'doc-column' }), 0];
+  },
+});
+
+// Renglones del documento para los cálculos: cada párrafo, en orden de lectura.
+// Un encabezado, una imagen, un separador o el borde de una columna cortan el
+// modo cálculo, igual que un párrafo vacío.
+function collectCalcLines(parent, start, lines, ends) {
+  const cut = () => {
+    lines.push('');
+    ends.push(-1);
+  };
+  parent.forEach((node, offset) => {
+    const pos = start + offset;
+    if (node.type.name === 'paragraph') {
+      lines.push(node.textBetween(0, node.content.size, ' ', ' '));
+      ends.push(pos + node.nodeSize - 1);
+      return;
+    }
+    if (node.isTextblock || node.isLeaf) {
+      cut();
+      return;
+    }
+    const isColumn = node.type.name === 'column';
+    if (isColumn) cut();
+    collectCalcLines(node, pos + 1, lines, ends);
+    if (isColumn) cut();
+  });
+}
+
+function calcWidget(result) {
+  return () => {
+    const out = document.createElement('span');
+    out.className = 'doc-calc';
+    out.contentEditable = 'false';
+    out.textContent = `= ${result.display}`;
+    out.setAttribute('data-tooltip', 'Copiar resultado');
+    out.setAttribute('data-tooltip-placement', 'top');
+    out.addEventListener('mousedown', (event) => event.preventDefault());
+    out.addEventListener('click', (event) => {
+      event.preventDefault();
+      const clipboard = navigator.clipboard;
+      if (!clipboard || typeof clipboard.writeText !== 'function') return;
+      clipboard.writeText(result.copy).then(() => {
+        out.classList.add('is-copied');
+        setTimeout(() => out.classList.remove('is-copied'), 1200);
+      }, () => {});
+    });
+    return out;
+  };
+}
+
+function calcDecorations(doc) {
+  const lines = [];
+  const ends = [];
+  collectCalcLines(doc, 0, lines, ends);
+  const widgets = [];
+  notesCalc.evaluateLines(lines).forEach((result, index) => {
+    if (!result || ends[index] < 0) return;
+    widgets.push(Decoration.widget(ends[index], calcWidget(result), {
+      side: 1,
+      key: `calc:${result.display}`,
+      ignoreSelection: true,
+      stopEvent: () => true,
+    }));
+  });
+  return DecorationSet.create(doc, widgets);
+}
+
+// Mismos cálculos que en Notas (ver notes-calc.js): el resultado se muestra
+// al final del párrafo, sin guardarse en el documento.
+const CalcResults = Extension.create({
+  name: 'calcResults',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('calcResults'),
+        state: {
+          init: (_config, state) => calcDecorations(state.doc),
+          apply: (tr, current) => (tr.docChanged ? calcDecorations(tr.doc) : current),
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state);
+          },
+        },
+      }),
+    ];
   },
 });
 
@@ -880,6 +969,7 @@ export function mount(host, options) {
       }),
       SlashCommand,
       LinkShortcut,
+      CalcResults,
     ],
     editorProps: {
       attributes: {

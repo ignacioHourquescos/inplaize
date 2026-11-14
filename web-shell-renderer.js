@@ -72,7 +72,9 @@ const SUPPRESS_CLICK_MS =
  *  desde el home de descargas del dock). */
 function isFileDrag(e) {
   const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
-  return types.includes('Files');
+  if (types.includes('Files') || types.includes('FileNameW') || types.includes('FileName')) return true;
+  const files = e.dataTransfer && e.dataTransfer.files;
+  return !!(files && files.length);
 }
 
 function getDroppedFilePaths(e) {
@@ -155,7 +157,6 @@ function renderChrome(payload) {
   }
   const items = payload && Array.isArray(payload.items) ? payload.items : [];
   if (!strip) return;
-  stripAddInlineEl?.remove();
   stripEndActionsEl?.remove();
   strip.innerHTML = '';
   stripHasShortcuts = items.length > 0;
@@ -246,25 +247,24 @@ function renderChrome(payload) {
   appendStripTrailing();
 }
 
-const stripAddInlineEl = document.getElementById('strip-add-shortcut');
 const stripEndActionsEl = document.getElementById('strip-end-actions');
 let stripHasShortcuts = false;
 let stripEditMode = false;
 
 function appendStripTrailing() {
-  if (stripAddInlineEl) strip.appendChild(stripAddInlineEl);
   if (stripEndActionsEl) strip.appendChild(stripEndActionsEl);
 }
 
 /**
- * Lápiz a la derecha en uso normal; mientras el dock está en modo edición,
- * "+" tras el último icono y "listo" a la derecha.
+ * A la derecha: solo el lápiz en uso normal; mientras el dock está en modo
+ * edición, "+" y a su derecha "listo". Sin accesos, solo el "+".
  */
 function syncStripEndActions() {
+  const addBtn = stripEndActionsEl?.querySelector('#strip-add-new');
   const editBtn = stripEndActionsEl?.querySelector('#strip-edit-toggle');
   const doneBtn = stripEndActionsEl?.querySelector('#strip-edit-done');
+  if (addBtn) addBtn.hidden = stripHasShortcuts && !stripEditMode;
   if (editBtn) editBtn.hidden = !stripHasShortcuts || stripEditMode;
-  if (stripAddInlineEl) stripAddInlineEl.hidden = stripHasShortcuts && !stripEditMode;
   if (doneBtn) doneBtn.hidden = !stripEditMode;
 }
 
@@ -318,12 +318,9 @@ if (window.usualDeskShell.onTitleBadge) {
 
 refreshChromeFromMain();
 
-const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
-if (stripAddShortcutBtn) {
-  stripAddShortcutBtn.addEventListener('click', () => {
-    window.usualDeskShell.openAddShortcut?.().catch(() => {});
-  });
-}
+document.getElementById('strip-add-new')?.addEventListener('click', () => {
+  window.usualDeskShell.openAddShortcut?.().catch(() => {});
+});
 
 document.getElementById('strip-edit-toggle')?.addEventListener('click', () => {
   window.usualDeskShell.enterShortcutsEditMode?.().catch(() => {});

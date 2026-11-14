@@ -1,6 +1,9 @@
+@import url('themes.css');
+
 /**
- * Medidas y colores compartidos entre la franja de la ventana web (web-shell)
- * y la barra superior del dock en modo topbar.
+ * Medidas compartidas entre la franja de la ventana web (web-shell) y la barra
+ * superior del dock en modo topbar. Los colores de cada tema están en
+ * themes.css; los de acá abajo son el respaldo oscuro si no hay tema aplicado.
  */
 :root {
   --ud-chrome-strip-h: 58px;
@@ -8,12 +11,20 @@
   --ud-chrome-strip-pad-x: 8px;
   --ud-chrome-strip-gap: 6px;
   --ud-chrome-icon: 40px;
-  /* Margen + "www" + espacio + línea violeta: mismo ancho que el menú lateral de WhatsApp Web. */
+  /* Margen + "www" + espacio + línea de color: mismo ancho que el menú lateral de WhatsApp Web. */
   --ud-chrome-lead-w: 64px;
   --ud-chrome-open-url-w: calc(var(--ud-chrome-lead-w) - var(--ud-chrome-strip-pad-x) - var(--ud-chrome-strip-gap) - 2px);
   --ud-chrome-action-w: 46px;
+  /* Ancho de la columna de dirección. tab-strip-fit.js lo pisa con el que dejó el usuario. */
+  --ud-url-col: 33%;
+  /* Mínimo del riel de perfiles: su separador cae justo sobre el borde derecho de la
+     dirección. Se resta lo que hay a los lados: inicio, dos huecos y el margen del separador. */
+  --ud-chrome-profiles-min-w: calc(
+    var(--ud-url-col) - var(--ud-chrome-strip-pad-x) - var(--ud-chrome-icon) - 2 * var(--ud-chrome-strip-gap) - 4px
+  );
   --ud-chrome-strip-bg: #121216;
   --ud-chrome-strip-border: #33333d;
+  --ud-chrome-field-bg: #2c2c34;
   --ud-chrome-icon-bg: #2a2a32;
   --ud-chrome-icon-bg-hover: #36363f;
   --ud-chrome-icon-border: #33333d;
@@ -28,35 +39,20 @@
   --ud-chrome-edit-tab: #7c6cff;
   /* Borde de los iconos y perfiles en modo edición. */
   --ud-chrome-edit-border: #ffffff;
-  /* Lima de marca (botón “Generar acceso directo…”, foco de icono). */
+  /* Lima de marca (botón "Generar acceso directo…", foco de icono). */
   --secondary: #c8f542;
   --ud-chrome-seg-bg: #1c1c22;
   --ud-chrome-seg-muted: #8e8ea0;
   --ud-chrome-soft-hover: rgba(255, 255, 255, 0.07);
-}
-
-html[data-canvas-theme='light'] {
-  --ud-chrome-strip-bg: #f7f7fa;
-  --ud-chrome-strip-border: #e3e3ea;
-  --ud-chrome-icon-bg: #ededf2;
-  --ud-chrome-icon-bg-hover: #ebebf1;
-  --ud-chrome-icon-border: #e1e1e8;
-  --ud-chrome-icon-border-hover: #c9c9d4;
-  --ud-chrome-icon-active-bg: #ffffff;
-  --ud-chrome-icon-active-border: #b9b9c8;
-  --ud-chrome-icon-muted: #5a5a68;
-  --ud-chrome-text: #1f1f2b;
-  --ud-chrome-action-hover: #e9e9ef;
-  --ud-chrome-action-color: #2a2a35;
-  --ud-chrome-canvas: #ffffff;
-  --ud-chrome-seg-bg: #ececf2;
-  --ud-chrome-edit-border: #1f1f2b;
-  --ud-chrome-seg-muted: #6b6b7a;
-  --ud-chrome-soft-hover: rgba(20, 20, 40, 0.06);
-}
-
-html[data-canvas-theme='light'] .strip-mode-seg {
-  border-color: #7c3aed;
+  /* Lápiz, +, navegación, fijar y menú usan el secundario del tema. */
+  --key-edit: var(--secondary);
+  --key-add: var(--secondary);
+  --key-nav: var(--secondary);
+  --key-pin: var(--secondary);
+  --key-menu: var(--secondary);
+  --key-close: #ff9a9a;
+  --key-line: #a78bfa;
+  --accent-ink: #a5a0f2;
 }
 
 /* ==========================================================================
@@ -95,8 +91,8 @@ html[data-canvas-theme='light'] .strip-mode-seg {
   border-color: transparent;
 }
 
-/* Alta de acceso: "+" violeta, borde violeta, sin fondo. Queda fuera del
-   scroll de iconos para que siempre se vea al final de la franja. */
+/* Alta de acceso o perfil: "+" violeta, borde violeta, sin fondo. Queda fuera
+   del scroll de iconos para que siempre se vea al final de la franja. */
 .shell-shortcut-item.strip-add-shortcut,
 .shell-shortcut-item.strip-add-shortcut:hover,
 .shell-shortcut-item.strip-add-shortcut:active,
@@ -117,41 +113,27 @@ html[data-canvas-theme='light'] .strip-mode-seg {
 
 .shell-shortcut-item.strip-add-shortcut:hover,
 .shell-shortcut-item.strip-add-shortcut:active {
-  border-color: #b3a8ff;
-  color: #b3a8ff;
+  border-color: color-mix(in srgb, var(--ud-chrome-edit-tab) 70%, var(--ud-chrome-text));
+  color: color-mix(in srgb, var(--ud-chrome-edit-tab) 70%, var(--ud-chrome-text));
 }
 
-html[data-canvas-theme='light'] .shell-shortcut-item.strip-add-shortcut:hover,
-html[data-canvas-theme='light'] .shell-shortcut-item.strip-add-shortcut:active {
-  border-color: #5b4bd6;
-  color: #5b4bd6;
-}
-
-/* Lápiz: sin marco; lima secondary (antes violeta). */
+/* Lápiz: sin marco, con el color de "editar" del tema. */
 #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut,
 #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:hover,
 #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:active,
 #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut.is-active {
   border-color: transparent;
   background: transparent;
-  color: var(--secondary, #c8f542);
+  color: var(--key-edit);
 }
 
 #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:hover,
 #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:active {
-  background: var(--ud-chrome-icon-bg-hover);
-  border-color: transparent;
-  color: #d7ff6a;
+  background: color-mix(in srgb, var(--key-edit) 16%, transparent);
 }
 
-html[data-canvas-theme='light'] #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:hover,
-html[data-canvas-theme='light'] #strip-edit-toggle.shell-shortcut-item.strip-add-shortcut:active {
-  border-color: transparent;
-  color: #9bc21a;
-}
-
-/* Acciones al final de la franja: lápiz en uso normal; "+" y "listo" en modo
-   edición. El grupo es el que queda fijo, no cada botón. */
+/* Acciones al final de la franja: solo el lápiz en uso normal; "+" y, a su
+   derecha, "listo" en modo edición. El grupo es el que queda fijo, no cada botón. */
 .strip-end-actions {
   position: sticky;
   right: 0;
@@ -174,62 +156,15 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   position: static;
 }
 
-.strip-end-actions [hidden],
-.shell-shortcut-item.strip-add-inline[hidden] {
+.strip-end-actions [hidden] {
   display: none !important;
-}
-
-/* El "+" de modo edición va pegado al último icono, no fijo a la derecha. */
-.shell-shortcut-item.strip-add-shortcut.strip-add-inline {
-  position: static;
-}
-
-/* Agregar en modo edición: botón violeta con texto. */
-.shell-shortcut-item.strip-add-shortcut.strip-add-secondary {
-  width: auto;
-  min-width: 0;
-  max-width: none;
-  height: var(--ud-chrome-icon);
-  min-height: var(--ud-chrome-icon);
-  max-height: var(--ud-chrome-icon);
-  gap: 6px;
-  padding: 0 14px 0 11px;
-  border: 1px solid var(--ud-chrome-edit-tab);
-  border-radius: 10px;
-  background: var(--ud-chrome-edit-tab);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.shell-shortcut-item.strip-add-shortcut.strip-add-secondary:hover {
-  background: #8b7dff;
-  border-color: #8b7dff;
-  color: #fff;
-}
-
-.shell-shortcut-item.strip-add-shortcut.strip-add-secondary:active {
-  background: #6b5bf0;
-  border-color: #6b5bf0;
-}
-
-.strip-add-secondary .shell-shortcut-icon-wrap {
-  display: flex;
-  width: auto;
-  height: auto;
-}
-
-.strip-add-secondary .strip-add-plus {
-  width: 16px;
-  height: 16px;
 }
 
 .shell-shortcut-item.strip-edit-done,
 .shell-shortcut-item.strip-edit-done:hover,
 .shell-shortcut-item.strip-edit-done:active {
-  background: var(--ud-chrome-edit-tab) !important;
-  border-color: var(--ud-chrome-edit-tab);
+  background: var(--accent) !important;
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -239,7 +174,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   display: block;
 }
 
-/* Prendido (ventana abierta): fondito gris + color a plena saturación. */
+/* Prendido (ventana abierta): fondito gris y el icono a color. */
 .shell-shortcut-item.is-open,
 .shell-shortcut-item.is-open:hover {
   background: var(--ud-chrome-icon-active-bg);
@@ -268,16 +203,15 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   box-shadow: 0 0 0 2px var(--accent, #7c5cff);
 }
 
+/* Cerrada: se atenúa. El gris del dibujo lo pone la regla de abajo. */
 .shell-shortcut-item.shell-shortcut-inactive,
 .shell-shortcut-item.shortcut-web-inactive {
   opacity: 0.42;
-  filter: grayscale(0.75);
 }
 
 .shell-shortcut-item.shell-shortcut-inactive:hover,
 .shell-shortcut-item.shortcut-web-inactive:hover {
   opacity: 0.58;
-  filter: grayscale(0.5);
 }
 
 .shell-shortcut-icon-wrap {
@@ -297,6 +231,22 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   border-radius: 4px;
   display: block;
   pointer-events: none;
+  transition: filter 0.15s ease;
+}
+
+/* Cerrada: el dibujo va a gris. Si la ventana está abierta, el icono queda a color. */
+.shell-shortcut-item:not(.is-open):not(.is-active):not(.strip-add-shortcut):not(.reorder-ghost):not(.shortcut-card-editing) .shell-shortcut-icon-wrap {
+  filter: grayscale(1) !important;
+}
+
+.shell-shortcut-item:not(.is-open):not(.is-active):not(.strip-add-shortcut):not(.reorder-ghost):not(.shortcut-card-editing):hover .shell-shortcut-icon-wrap {
+  filter: grayscale(0.35) !important;
+}
+
+/* Modo edición y el icono que se arrastra: a color, para reconocer cada acceso. */
+#shortcuts-container.shortcuts-edit-mode .shell-shortcut-icon-wrap,
+.reorder-ghost .shell-shortcut-icon-wrap {
+  filter: none !important;
 }
 
 .shell-shortcut-icon-emoji,
@@ -308,6 +258,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   justify-content: center;
   width: auto;
   height: auto;
+  transition: filter 0.15s ease;
 }
 
 .shell-shortcut-icon-fallback {
@@ -399,8 +350,8 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   padding: 3px;
   border-radius: 12px;
   background: var(--ud-chrome-seg-bg);
-  /* Violeta para que el logo y "www" se lean como un solo control. */
-  border: 1px solid #a78bfa;
+  /* Mismo color que las líneas, para que el logo y "www" se lean como un solo control. */
+  border: 1px solid var(--key-line);
   position: relative;
   cursor: pointer;
   -webkit-app-region: no-drag;
@@ -422,7 +373,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   border-radius: 8px;
   pointer-events: none;
   z-index: 0;
-  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
   opacity: 0;
 }
@@ -584,7 +535,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
 }
 
 .dock-history-strip-btn.is-active .dock-history-strip-icon {
-  background: rgba(124, 92, 255, 0.18);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
   color: var(--ud-chrome-text);
 }
 
@@ -838,8 +789,8 @@ html.focus-mode-active .shell-top::before {
 
 .ud-switch.is-on,
 .ud-switch[aria-checked='true'] {
-  background: var(--ud-chrome-edit-tab);
-  border-color: rgba(124, 108, 255, 0.88);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .ud-switch.is-on .ud-switch-thumb,
@@ -881,4 +832,51 @@ html.focus-mode-active .shell-top::before {
 .shell-win-btn.is-close:hover {
   background: #e81123;
   color: #fff;
+}
+
+.omnibox-face {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 8px 0 2px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12.5px;
+  line-height: 1;
+  color: var(--ud-chrome-text, #f2f2f4);
+  pointer-events: none;
+}
+
+.omnibox-face.is-empty,
+.loose-nav-omnibox.is-editing .omnibox-face,
+.shortcut-browser-toolbar.is-editing .omnibox-face {
+  display: none;
+}
+
+.omnibox-scheme {
+  flex: 0 0 auto;
+  font-size: 8px;
+  font-weight: 300;
+  opacity: 0.22;
+  margin-right: 1px;
+  letter-spacing: -0.04em;
+}
+
+.omnibox-host {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.omnibox-rest {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  opacity: 0.48;
 }

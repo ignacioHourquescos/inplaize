@@ -490,6 +490,7 @@ function attachTabEvents(tab) {
       /* noop */
     }
     broadcastState();
+    nudgeAddressPrompt(tab.id);
   });
 
   wc.on('did-navigate', (_e, url) => {
@@ -504,6 +505,7 @@ function attachTabEvents(tab) {
     if (!/browse-guest/.test(String(tab.partition || ''))) recordHistoryVisit(tab.url, wc);
     maybeRefreshAccountsAfterLogin(tab);
     broadcastState();
+    nudgeAddressPrompt(tab.id);
   });
 
   wc.on('did-navigate-in-page', (_e, url) => {
@@ -522,10 +524,9 @@ function attachTabEvents(tab) {
     if (!url || /^chrome[-:]/i.test(url) || url.startsWith('about:blank')) {
       return { action: 'deny' };
     }
-    const background =
-      disposition === 'background-tab' ||
-      disposition === 'save-to-disk' ||
-      disposition === 'other';
+    // Igual que en las ventanas de un acceso: la pestaña nueva queda adelante.
+    // Chromium marca como background-tab varios clics que el usuario quiere ver.
+    const background = disposition === 'save-to-disk' || disposition === 'other';
     setImmediate(() => {
       openTabFromUrl(url, { background, partition: tab.partition }).catch(() => {});
     });
@@ -577,7 +578,10 @@ const pageMenuContext = {
   },
   newTab: () => sendShortcutToDock('new-tab'),
   openIncognitoTab: () => {
-    openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: browseProfiles.guestPartition() }).catch(() => {});
+    openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, {
+      partition: browseProfiles.guestPartition(),
+      promptAddress: true,
+    }).catch(() => {});
   },
   profileMenu: () => profileMenuItem(),
   recentlyClosed: () => closedTabs.map((t) => ({ title: t.title, url: t.url })),
@@ -606,7 +610,7 @@ const pageMenuContext = {
   },
 };
 
-/** @param {'edit-address' | 'new-tab' | 'exit-profiles-edit'} action */
+/** @param {'edit-address' | 'new-tab' | 'blank-address' | 'exit-profiles-edit'} action */
 function sendShortcutToDock(action) {
   const dock = getDockWindow();
   if (!dock) return;
@@ -616,6 +620,46 @@ function sendShortcutToDock(action) {
   } catch {
     /* noop */
   }
+}
+
+/** Pestañas que se abrieron solas (sesión vacía o incógnito) y deben dejar el cursor en la barra. */
+const addressPromptTabs = new Set();
+
+/** Trae el teclado a la barra de dirección, por encima de la página. */
+function focusAddressBar() {
+  const dock = getDockWindow();
+  if (!dock || dock.isDestroyed()) return;
+  try {
+    dock.focus();
+  } catch {
+    /* noop */
+  }
+  sendShortcutToDock('blank-address');
+}
+
+function isStartPageUrl(url) {
+  const value = String(url || '').trim();
+  if (!value || /^about:/i.test(value)) return true;
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    if (!/^google\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host)) return false;
+    const path = parsed.pathname.replace(/\/+$/, '');
+    if (path && path.toLowerCase() !== '/webhp') return false;
+    return !parsed.searchParams.has('q');
+  } catch {
+    return false;
+  }
+}
+
+function nudgeAddressPrompt(tabId) {
+  if (!tabId || activeTabId !== tabId || !addressPromptTabs.has(tabId)) return;
+  const tab = tabs.get(tabId);
+  if (tab && tab.url && !isStartPageUrl(tab.url)) {
+    addressPromptTabs.delete(tabId);
+    return;
+  }
+  focusAddressBar();
 }
 
 /** @param {string} partition */
@@ -663,7 +707,7 @@ function wireTab(tab, url) {
  * Crea una pestaña y opcionalmente la activa. Si el modo está activo,
  * se ajusta el BrowserView inmediatamente.
  * @param {string} url
- * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions, afterId?: string, freshLogin?: boolean, skipRestore?: boolean }} [opts]
+ * @param {{ background?: boolean, activateMode?: boolean, partition?: string, loadOptions?: Electron.LoadURLOptions, afterId?: string, freshLogin?: boolean, skipRestore?: boolean, promptAddress?: boolean }} [opts]
  * @returns {Promise<string>} id de la pestaña creada
  */
 async function openTabFromUrl(url, opts = {}) {
@@ -710,9 +754,20 @@ async function openTabFromUrl(url, opts = {}) {
   if (!opts.background || !activeTabId || !browserWasOpen) {
     setActiveTab(id);
     if (modeActive) attachActiveViewOnly();
+    // Un evento de la pestaña anterior puede volver a pegar su vista en el mismo turno.
+    setImmediate(() => {
+      if (activeTabId === id && modeActive) attachActiveViewOnly();
+    });
   }
 
   broadcastState();
+
+  if (opts.promptAddress && !opts.background && activeTabId === id) {
+    addressPromptTabs.add(id);
+    setImmediate(() => nudgeAddressPrompt(id));
+    setTimeout(() => nudgeAddressPrompt(id), 450);
+    setTimeout(() => addressPromptTabs.delete(id), 1600);
+  }
 
   try {
     await view.webContents.loadURL(url || LOOSE_NAV_NEW_TAB_URL, opts.loadOptions);
@@ -756,7 +811,7 @@ async function switchToSession(partition) {
   if (!partition) return false;
   const ids = tabIdsOfSession(partition);
   if (!ids.length) {
-    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition });
+    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition, promptAddress: true });
     return true;
   }
   const last = lastTabBySession.get(partition);
@@ -954,7 +1009,7 @@ async function enterLooseNavMode() {
   }
   ensureTabsRestored();
   if (tabs.size === 0) {
-    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { activateMode: false, skipRestore: true });
+    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { activateMode: false, skipRestore: true, promptAddress: true });
   } else if (modeActive) {
     attachActiveViewOnly();
   }
@@ -1114,7 +1169,7 @@ function duplicateTab(tab) {
 
 /** @param {LooseTab} tab */
 function newTabRightOf(tab) {
-  return openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: tab.partition, afterId: tab.id });
+  return openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: tab.partition, afterId: tab.id, promptAddress: true });
 }
 
 /** @param {LooseTab} tab */
@@ -1393,7 +1448,7 @@ async function removeProfile(payload) {
   profilesCache = null;
   const ids = tabIdsOfSession(partition);
   if (ids.length && ids.length === tabs.size) {
-    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: defaultPartition() });
+    await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition: defaultPartition(), promptAddress: true });
   }
   for (const id of ids) closeTab(id);
   for (let i = closedTabs.length - 1; i >= 0; i -= 1) {
@@ -1435,37 +1490,34 @@ async function restoreChromeProfile(directory) {
   await useAccount({ chromeDirectory: directory });
 }
 
-/**
- * Menú del "+" del riel en modo edición: cuenta nueva o volver a mostrar las quitadas.
- * @param {{ x?: number, y?: number }} [at]
- */
-function popupAddProfileMenu(at = {}) {
-  const dock = getDockWindow();
-  if (!dock) return false;
-  const escape = (text) => String(text || '').replace(/&/g, '&&');
-  const run = (fn) => () => {
-    Promise.resolve(fn()).catch(() => {});
+/** Lo que ofrece el alta de perfil además de una cuenta nueva: los perfiles quitados del riel. */
+function addProfileOptions() {
+  return {
+    hidden: browseProfiles.hiddenProfiles(),
+    hiddenChrome: browseProfiles.hiddenChromeProfiles(),
   };
-  /** @type {Electron.MenuItemConstructorOptions[]} */
-  const template = [{ label: 'Iniciar sesión con otra cuenta de Google…', click: run(addGoogleAccount) }];
-  const hidden = browseProfiles.hiddenProfiles();
-  const hiddenChrome = browseProfiles.hiddenChromeProfiles();
-  if (hidden.length || hiddenChrome.length) {
-    template.push({ type: 'separator' }, { label: 'Volver a mostrar', enabled: false });
-    for (const h of hidden) {
-      template.push({ label: escape(h.label), click: run(() => restoreProfile(h.partition)) });
-    }
-    for (const c of hiddenChrome) {
-      template.push({ label: escape(`${c.label} · traer desde Chrome`), click: run(() => restoreChromeProfile(c.directory)) });
-    }
+}
+
+/**
+ * Alta de perfil desde el "+" de la franja: cuenta nueva de Google o volver a
+ * mostrar uno quitado.
+ * @param {unknown} payload `{ google: true }`, `{ partition }` o `{ chromeDirectory }`
+ */
+async function addProfile(payload) {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  if (p.google === true) {
+    await addGoogleAccount();
+    return true;
   }
-  const opts = { window: dock };
-  if (Number.isFinite(at.x) && Number.isFinite(at.y)) {
-    opts.x = Math.round(at.x);
-    opts.y = Math.round(at.y);
+  if (typeof p.chromeDirectory === 'string' && p.chromeDirectory) {
+    await restoreChromeProfile(p.chromeDirectory);
+    return true;
   }
-  Menu.buildFromTemplate(template).popup(opts);
-  return true;
+  if (typeof p.partition === 'string' && p.partition) {
+    restoreProfile(p.partition);
+    return true;
+  }
+  return false;
 }
 
 /** @param {unknown} payload */
@@ -1518,7 +1570,8 @@ function registerLooseNavIpc() {
     'loose-nav-find-stop',
     'loose-nav-remove-profile',
     'loose-nav-reorder-profiles',
-    'loose-nav-add-profile-menu',
+    'loose-nav-add-profile-options',
+    'loose-nav-add-profile',
     'loose-nav-cover-page',
   ];
   for (const ch of channels) {
@@ -1556,6 +1609,7 @@ function registerLooseNavIpc() {
     await openTabFromUrl(target, {
       partition: picked || (current && current.partition) || defaultPartition(),
       afterId: p.nextToActive && current ? current.id : undefined,
+      promptAddress: !raw,
     });
     return true;
   });
@@ -1564,9 +1618,8 @@ function registerLooseNavIpc() {
   ipcMain.handle('loose-nav-remove-profile', (_e, payload) => removeProfile(payload));
   ipcMain.handle('loose-nav-cover-page', (_e, cover) => coverActivePage(cover === true));
   ipcMain.handle('loose-nav-reorder-profiles', (_e, partitions) => reorderProfiles(partitions));
-  ipcMain.handle('loose-nav-add-profile-menu', (_e, at) =>
-    popupAddProfileMenu(at && typeof at === 'object' ? at : {})
-  );
+  ipcMain.handle('loose-nav-add-profile-options', () => addProfileOptions());
+  ipcMain.handle('loose-nav-add-profile', (_e, payload) => addProfile(payload));
 
   ipcMain.handle('loose-nav-set-default-profile', async (_e, payload) => {
     const partition = await resolveAccountTarget(payload);

@@ -9,6 +9,9 @@
  * justo antes de un documento, o encima de él para meterlos en esa página.
  * Enter en un checkbox o una viñeta abre otro igual. En uno vacío, pasa a texto.
  * "/" elige el tipo. Tab sangra.
+ * Un renglón que empieza con "=" se calcula (ver notes-calc.js), y los que
+ * siguen también, hasta el primer renglón vacío. El resultado se muestra a la
+ * derecha y se copia con un clic. En disco queda solo el texto.
  * Un documento se edita en un modal, sin cambiar de página.
  * Ctrl+Z deshace y Ctrl+Mayús+Z (o Ctrl+Y) rehace. El historial es de esta
  * sesión; en disco se sigue guardando solo el estado actual.
@@ -1061,7 +1064,85 @@
     return content.length ? { type: 'paragraph', content } : { type: 'paragraph' };
   }
 
-  function nodesFromBlock(block) {
+  /** Resultados de una columna, en el orden de sus renglones. */
+  function calcResults(column) {
+    const calc = window.InplaizeNotesCalc;
+    if (!calc) return [];
+    return calc.evaluateLines(column.blocks.map((block) => (
+      block.type === 'document' || block.type === 'image' ? '' : block.text
+    )));
+  }
+
+  /** Texto con el resultado incluido, por renglón: lo que se lleva un documento. */
+  function calcTextsById() {
+    const texts = new Map();
+    state.columns.forEach((column) => {
+      calcResults(column).forEach((result, index) => {
+        if (result) texts.set(column.blocks[index].id, result.text);
+      });
+    });
+    return texts;
+  }
+
+  function copyCalc(out) {
+    const text = out.dataset.copy || '';
+    const clipboard = navigator.clipboard;
+    if (!text || !clipboard || typeof clipboard.writeText !== 'function') return;
+    clipboard.writeText(text).then(() => {
+      out.classList.add('is-copied');
+      clearTimeout(out.copiedTimer);
+      out.copiedTimer = setTimeout(() => out.classList.remove('is-copied'), 1200);
+    }, () => {});
+  }
+
+  function calcButton() {
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.className = 'notion-calc';
+    out.tabIndex = -1;
+    out.dataset.tooltip = 'Copiar resultado';
+    out.dataset.tooltipPlacement = 'top';
+    out.addEventListener('mousedown', (e) => e.preventDefault());
+    out.addEventListener('click', () => {
+      if (swallowClick) return;
+      copyCalc(out);
+    });
+    return out;
+  }
+
+  /** Pone, actualiza o quita el resultado de cada renglón de la columna. */
+  function paintCalc(column) {
+    const columnEl = rootEl.querySelector(`.notion-column[data-column-id="${CSS.escape(column.id)}"]`);
+    if (!columnEl) return;
+    const results = calcResults(column);
+    if (!results.some(Boolean) && !columnEl.querySelector('.notion-calc')) return;
+    const rows = new Map();
+    columnEl.querySelectorAll('.notion-block').forEach((row) => rows.set(row.dataset.blockId, row));
+    column.blocks.forEach((block, index) => {
+      const row = rows.get(block.id);
+      if (!row) return;
+      const result = results[index] || null;
+      let out = row.querySelector('.notion-calc');
+      row.classList.toggle('is-calc', !!result);
+      if (!result) {
+        if (out) out.remove();
+        return;
+      }
+      if (!out) {
+        out = calcButton();
+        row.appendChild(out);
+      }
+      const label = `= ${result.display}`;
+      if (out.textContent !== label) out.textContent = label;
+      out.dataset.copy = result.copy;
+      out.setAttribute('aria-label', `Copiar resultado ${result.display}`);
+    });
+  }
+
+  function nodesFromBlock(block, calcTexts) {
+    if (calcTexts && calcTexts.has(block.id)) {
+      return nodesFromBlock({ ...block, text: calcTexts.get(block.id) });
+    }
     if (block.type === 'document') {
       const doc = ensureDoc(block, '');
       const nodes = [];
@@ -1100,7 +1181,7 @@
     return [paragraphNode(block.text)];
   }
 
-  function nodesFromBlocks(blocks) {
+  function nodesFromBlocks(blocks, calcTexts) {
     const out = [];
     let tasks = [];
     let bullets = [];
@@ -1117,17 +1198,17 @@
     blocks.forEach((block) => {
       if (block.type === 'todo') {
         flushBullets();
-        nodesFromBlock(block).forEach((node) => tasks.push(node));
+        nodesFromBlock(block, calcTexts).forEach((node) => tasks.push(node));
         return;
       }
       if (block.type === 'bullet') {
         flushTasks();
-        nodesFromBlock(block).forEach((node) => bullets.push(node));
+        nodesFromBlock(block, calcTexts).forEach((node) => bullets.push(node));
         return;
       }
       flushTasks();
       flushBullets();
-      nodesFromBlock(block).forEach((node) => out.push(node));
+      nodesFromBlock(block, calcTexts).forEach((node) => out.push(node));
     });
     flushTasks();
     flushBullets();
@@ -1156,7 +1237,7 @@
     if (!idSet.size) return false;
     const moving = blocksInOrder(idSet);
     if (!moving.length) return false;
-    const nodes = nodesFromBlocks(moving);
+    const nodes = nodesFromBlocks(moving, calcTextsById());
     if (!nodes.length) return false;
     appendDocNodes(ensureDoc(found.block, found.column.id), nodes);
     pullBlocks(idSet);
@@ -2172,7 +2253,10 @@
       focusBlock(block.id, 4000);
     }
     const hostNow = findBlock(block.id);
-    if (hostNow) syncColumnEmptyHint(hostNow.column);
+    if (hostNow) {
+      syncColumnEmptyHint(hostNow.column);
+      paintCalc(hostNow.column);
+    }
     const pending = clearColumnOnEmpty;
     clearColumnOnEmpty = null;
     if (pending && pending.blockId === block.id && !blockHasText(block)) {
@@ -2270,6 +2354,8 @@
     if (lines.length <= 1) {
       insertPlain(lines[0] || '');
       block.text = content.textContent || '';
+      const host = findBlock(block.id);
+      if (host) paintCalc(host.column);
       scheduleSave(`text:${block.id}`);
       if (block.text.trim() === '/') openMenu(content, block, 'slash');
       return;
@@ -2373,6 +2459,7 @@
 
     sheet.appendChild(columnsEl);
     rootEl.appendChild(sheet);
+    state.columns.forEach(paintCalc);
     applySelectionClasses();
     stretchColumns();
     syncTrash();
@@ -2631,18 +2718,19 @@
     });
   });
 
-  loadCanvasTheme();
-
-  window.InplaizeCanvasTheme = {
-    isLight: canvasIsLight,
-    set: setCanvasTheme,
-  };
+  if (!window.InplaizeCanvasTheme) {
+    loadCanvasTheme();
+    window.InplaizeCanvasTheme = {
+      isLight: canvasIsLight,
+      set: setCanvasTheme,
+    };
+  }
 
   homeEl.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 || blockGesture || (press && press.dragging)) return;
     const origin = eventElement(e);
     if (!origin || !homeEl.contains(origin)) return;
-    if (origin.closest('.notion-col-resize, .notion-col-remove, .notion-col-add, .notion-menu')) return;
+    if (origin.closest('.notion-col-resize, .notion-col-remove, .notion-col-add, .notion-menu, .notion-calc')) return;
 
     const row = origin.closest('.notion-block');
     if (row && origin.closest('.notion-grip')) {

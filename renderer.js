@@ -18,6 +18,9 @@ const dockToastRegistry = new Map();
 const DOCK_TOAST_MAX = 5;
 const DOCK_TOAST_TTL_MS = 11000;
 const modalTitle = document.getElementById('modal-title');
+const modalBack = document.getElementById('modal-back');
+const createKindPanel = document.getElementById('create-kind-panel');
+const profilePanel = document.getElementById('profile-panel');
 const shortcutForm = document.getElementById('shortcut-form');
 const inputName = document.getElementById('input-name');
 const inputType = document.getElementById('input-type');
@@ -96,13 +99,8 @@ let openWebWindowKeys = new Set();
 let activeWebWindowKey = null;
 let editingId = null;
 let dragOperationActive = false;
-/** Panel de accesos: en modo edición se reordenan los iconos, el lápiz abre el editor y el tacho elimina. */
+/** Panel de accesos: en modo edición los iconos se reordenan arrastrando y un clic abre su editor (cambiar o eliminar). */
 let shortcutsEditMode = false;
-/** Cruz para quitar en modo edición: accesos y perfiles de la navegación libre. */
-const LOOSE_NAV_REMOVE_SVG =
-  '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-  '<path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>' +
-  '</svg>';
 /** Sesión de arrastre para reordenar iconos. Null si no hay un dedo/puntero apoyado. */
 let shortcutReorder = null;
 /** Ignora el click que dispara el navegador al soltar un arrastre. */
@@ -244,15 +242,23 @@ function syncDockHomeStripBtn() {
   }
 }
 
+/** Mientras esto está activo, expandir el dock no reabre el navegador del último perfil. */
+let blockLooseNavResume = false;
+
 async function goToDockWelcomeHome(view) {
+  blockLooseNavResume = true;
+  looseNavResumePending = false;
   applyHomeView(view === 'downloads' ? 'downloads' : view === 'history' ? 'history' : 'todos');
   try {
     closeModal();
-    if (looseNavState?.active && typeof window.usualDesk?.looseNavClose === 'function') {
+    if (typeof window.usualDesk?.looseNavClose === 'function') {
       await window.usualDesk.looseNavClose().catch(() => {});
     }
   } finally {
     syncDockHomeStripBtn();
+    setTimeout(() => {
+      blockLooseNavResume = false;
+    }, 400);
   }
 }
 
@@ -268,7 +274,7 @@ function refreshShortcutCardsAccessibility() {
     const s = shortcuts.find((x) => x.id === id);
     if (!s) return;
     const hint = shortcutsEditMode
-      ? `${s.name}. Arrastra para mover de lugar; la cruz lo elimina.`
+      ? `${s.name}. Clic para editarlo o eliminarlo; arrastrá para moverlo de lugar.`
       : s.name;
     card.setAttribute('aria-label', hint);
     card.setAttribute('data-tooltip', hint);
@@ -285,43 +291,121 @@ function syncLooseNavForDockModals() {
   window.usualDesk.setUrlPromptOpen?.(open)?.catch?.(() => {});
 }
 
-function currentCanvasTheme() {
-  if (window.InplaizeCanvasTheme && typeof window.InplaizeCanvasTheme.isLight === 'function') {
-    return window.InplaizeCanvasTheme.isLight() === true ? 'light' : 'dark';
+const THEME_PREVIEW_KEYS = ['edit', 'add', 'nav', 'pin', 'close'];
+
+/** Miniatura de un tema: la franja con sus colores clave y un pedazo de lienzo. */
+function buildThemePreview(themeId) {
+  const preview = document.createElement('span');
+  preview.className = 'theme-preview';
+  preview.dataset.uiTheme = themeId;
+  const strip = document.createElement('span');
+  strip.className = 'theme-preview-strip';
+  for (const key of THEME_PREVIEW_KEYS) {
+    const dot = document.createElement('i');
+    dot.className = `theme-preview-key is-${key}`;
+    strip.appendChild(dot);
   }
-  return document.documentElement.getAttribute('data-canvas-theme') === 'light' ? 'light' : 'dark';
+  const body = document.createElement('span');
+  body.className = 'theme-preview-body';
+  for (const cls of ['theme-preview-text', 'theme-preview-text is-muted', 'theme-preview-accent']) {
+    const line = document.createElement('i');
+    line.className = cls;
+    body.appendChild(line);
+  }
+  preview.append(strip, body);
+  return preview;
 }
 
-function syncAppearanceThemeUI(theme) {
-  const group = document.getElementById('appearance-theme-options');
-  if (!group) return;
-  const next = theme === 'light' ? 'light' : 'dark';
-  group.querySelectorAll('.appearance-theme-option').forEach((btn) => {
-    const on = btn.dataset.value === next;
+/** Arma las tarjetas de tema de Configuración, agrupadas, a partir de canvas-theme.js. */
+function renderThemePicker() {
+  const host = document.getElementById('appearance-theme-grid');
+  const api = window.InplaizeCanvasTheme;
+  if (!host || !api || host.childElementCount) return;
+  for (const group of api.groups) {
+    const title = document.createElement('div');
+    title.className = 'theme-group-title';
+    title.textContent = group.label;
+    const grid = document.createElement('div');
+    grid.className = 'theme-grid';
+    for (const theme of api.themes) {
+      if (theme.group !== group.id) continue;
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'theme-card';
+      card.setAttribute('role', 'radio');
+      card.dataset.value = theme.id;
+      const art = document.createElement('span');
+      art.className = 'theme-card-art';
+      art.setAttribute('aria-hidden', 'true');
+      art.append(buildThemePreview(theme.id));
+      const name = document.createElement('span');
+      name.className = 'theme-card-name';
+      name.textContent = theme.label;
+      card.append(art, name);
+      grid.appendChild(card);
+    }
+    host.append(title, grid);
+  }
+}
+
+function syncRadioGroup(groupId, value) {
+  document.getElementById(groupId)?.querySelectorAll('[role="radio"]').forEach((btn) => {
+    const on = btn.dataset.value === value;
     btn.classList.toggle('is-selected', on);
     btn.setAttribute('aria-checked', on ? 'true' : 'false');
+    btn.tabIndex = on ? 0 : -1;
   });
 }
 
-function applyCanvasTheme(theme) {
-  const next = theme === 'light' ? 'light' : 'dark';
-  if (window.InplaizeCanvasTheme && typeof window.InplaizeCanvasTheme.set === 'function') {
-    window.InplaizeCanvasTheme.set(next);
-  } else {
-    if (next === 'light') document.documentElement.setAttribute('data-canvas-theme', 'light');
-    else document.documentElement.removeAttribute('data-canvas-theme');
-    try {
-      localStorage.setItem('inplaize.canvasTheme', next);
-    } catch {
-      /* el tema sigue en esta sesión */
+function syncAppearanceControls() {
+  const api = window.InplaizeCanvasTheme;
+  if (!api) return;
+  syncRadioGroup('appearance-theme-grid', api.get());
+  syncRadioGroup('appearance-color-options', api.getColor());
+}
+
+/** Tarjeta a la que pasa el foco con las flechas, Inicio y Fin. */
+function nextThemeCard(cards, current, key) {
+  const i = cards.indexOf(current);
+  if (key === 'ArrowRight') return cards[(i + 1) % cards.length];
+  if (key === 'ArrowLeft') return cards[(i - 1 + cards.length) % cards.length];
+  if (key === 'Home') return cards[0];
+  if (key === 'End') return cards[cards.length - 1];
+  // Arriba y abajo: la tarjeta más cercana en horizontal dentro de la fila vecina.
+  const from = current.getBoundingClientRect();
+  let best = current;
+  let bestScore = Infinity;
+  for (const card of cards) {
+    const r = card.getBoundingClientRect();
+    const dy = key === 'ArrowDown' ? r.top - from.top : from.top - r.top;
+    if (dy < 1) continue;
+    const score = dy * 1000 + Math.abs(r.left - from.left);
+    if (score < bestScore) {
+      best = card;
+      bestScore = score;
     }
   }
-  syncAppearanceThemeUI(next);
+  return best;
+}
+
+function applyCanvasTheme(theme) {
+  if (window.InplaizeCanvasTheme && typeof window.InplaizeCanvasTheme.set === 'function') {
+    window.InplaizeCanvasTheme.set(theme);
+  }
+  syncAppearanceControls();
+}
+
+function applyColorTheme(color) {
+  if (window.InplaizeCanvasTheme && typeof window.InplaizeCanvasTheme.setColor === 'function') {
+    window.InplaizeCanvasTheme.setColor(color);
+  }
+  syncAppearanceControls();
 }
 
 function openAppearanceModal() {
   if (!appearanceModalOverlay) return;
-  syncAppearanceThemeUI(currentCanvasTheme());
+  renderThemePicker();
+  syncAppearanceControls();
   window.usualDesk
     .getAppSettings()
     .then(syncAnalyticsCheckboxFromSettings)
@@ -329,7 +413,7 @@ function openAppearanceModal() {
   appearanceModalOverlay.classList.remove('hidden');
   syncLooseNavForDockModals();
   schedulePointerPassthroughSync();
-  appearanceModalOverlay.querySelector('.appearance-theme-option.is-selected')?.focus();
+  document.querySelector('#appearance-theme-grid [aria-checked="true"]')?.focus();
 }
 
 function closeAppearanceModal() {
@@ -1554,14 +1638,44 @@ function initAppSettingsUI() {
     }, 120);
   });
 
-  const appearanceGroup = document.getElementById('appearance-theme-options');
-  appearanceGroup?.querySelectorAll('.appearance-theme-option').forEach((btn) => {
+  renderThemePicker();
+  const themeGrid = document.getElementById('appearance-theme-grid');
+  themeGrid?.addEventListener('click', (e) => {
+    const card = e.target.closest('[role="radio"]');
+    if (card?.dataset.value) applyCanvasTheme(card.dataset.value);
+  });
+  themeGrid?.addEventListener('keydown', (e) => {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const cards = [...themeGrid.querySelectorAll('[role="radio"]')];
+    const current = cards.includes(document.activeElement) ? document.activeElement : null;
+    if (!current) return;
+    e.preventDefault();
+    const next = nextThemeCard(cards, current, e.key);
+    applyCanvasTheme(next.dataset.value);
+    next.focus();
+  });
+
+  const colorGroup = document.getElementById('appearance-color-options');
+  colorGroup?.querySelectorAll('[role="radio"]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const v = btn.dataset.value;
-      if (v !== 'light' && v !== 'dark') return;
-      applyCanvasTheme(v);
+      if (!v) return;
+      applyColorTheme(v);
     });
   });
+  colorGroup?.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const radios = [...colorGroup.querySelectorAll('[role="radio"]')];
+    const i = radios.indexOf(document.activeElement);
+    if (i < 0) return;
+    e.preventDefault();
+    const delta = e.key === 'ArrowRight' ? 1 : -1;
+    const next = radios[(i + delta + radios.length) % radios.length];
+    next?.focus();
+    if (next?.dataset.value) applyColorTheme(next.dataset.value);
+  });
+  syncAppearanceControls();
+
   document.getElementById('appearance-modal-close')?.addEventListener('click', () => closeAppearanceModal());
   appearanceModalOverlay?.addEventListener('click', (e) => {
     if (e.target === appearanceModalOverlay) closeAppearanceModal();
@@ -2065,6 +2179,8 @@ async function init() {
   }
   if (typeof window.usualDesk.onDockOpenWelcomeHome === 'function') {
     window.usualDesk.onDockOpenWelcomeHome((view) => {
+      blockLooseNavResume = true;
+      looseNavResumePending = false;
       goToDockWelcomeHome(view === 'downloads' ? 'downloads' : 'todos').catch(() => {});
     });
   }
@@ -2414,9 +2530,11 @@ async function addShortcutFromDroppedUrl(url) {
 /** ¿El drag en curso lleva archivos locales (p. ej. desde el Explorador)? */
 function isFileDrag(e) {
   const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
-  // En Windows el Explorador suele incluir Files y text/uri-list (file://…).
-  // Los drags de URL desde el navegador traen text/uri-list pero no Files.
-  return types.includes('Files');
+  // En Windows el Explorador avisa con FileNameW además de Files.
+  // Un drag de URL trae text/uri-list y no estos tipos.
+  if (types.includes('Files') || types.includes('FileNameW') || types.includes('FileName')) return true;
+  const files = e.dataTransfer && e.dataTransfer.files;
+  return !!(files && files.length);
 }
 
 function getDroppedFilePaths(e) {
@@ -2756,9 +2874,8 @@ function commitShortcutOrderFromDom() {
 
 function restoreShortcutDomOrder(ids) {
   if (!shortcutsContainer || !Array.isArray(ids)) return;
-  const anchor = ['strip-add-shortcut', 'strip-end-actions']
-    .map((id) => document.getElementById(id))
-    .find((el) => el && el.parentElement === shortcutsContainer);
+  const endActions = document.getElementById('strip-end-actions');
+  const anchor = endActions && endActions.parentElement === shortcutsContainer ? endActions : null;
   const byId = new Map();
   shortcutCardsInStrip().forEach((el) => {
     byId.set(el.dataset.shortcutId, el);
@@ -2927,7 +3044,7 @@ function activateShortcutReorder(session) {
   const ghost = session.card.cloneNode(true);
   ghost.classList.add('reorder-ghost');
   ghost.classList.remove('reorder-placeholder');
-  ghost.querySelectorAll('.shortcut-badge, .shortcut-card-remove').forEach((el) => el.remove());
+  ghost.querySelectorAll('.shortcut-badge').forEach((el) => el.remove());
   ghost.removeAttribute('data-tooltip');
   ghost.removeAttribute('data-onboarding-target');
   ghost.style.left = `${rect.left}px`;
@@ -2979,7 +3096,6 @@ function bindShortcutReorder(card, suppressClick) {
   card.addEventListener('pointerdown', (event) => {
     if (!shortcutsEditMode || event.button !== 0) return;
     if (shortcutReorder) return;
-    if (event.target instanceof Element && event.target.closest('.shortcut-card-remove')) return;
     const session = {
       card,
       pointerId: event.pointerId,
@@ -3082,19 +3198,16 @@ function renderShortcuts() {
       restore: false,
     });
   }
-  const addBtn = document.getElementById('strip-add-shortcut');
   const endActions = document.getElementById('strip-end-actions');
-  if (addBtn) addBtn.remove();
   if (endActions) endActions.remove();
   shortcutsContainer.innerHTML = '';
-  syncStripEndActions(addBtn, endActions);
+  syncStripEndActions(endActions);
 
   if (shortcuts.length === 0) {
     // El strip queda vacío: durante el onboarding el spotlight apunta al
     // menú (≡) de la cabecera, donde se crean ventanas.
     applyShortcutsEditModeUi();
     syncDockHomeStripBtn();
-    if (addBtn) shortcutsContainer.appendChild(addBtn);
     if (endActions) shortcutsContainer.appendChild(endActions);
     return;
   }
@@ -3124,23 +3237,14 @@ function renderShortcuts() {
       <span class="shell-shortcut-icon-wrap">${iconHtml}</span>
       <span class="shortcut-badge shell-strip-badge"${badgeHidden}${badgeAria}>${badgeText}</span>
     `;
-    if (shortcutsEditMode) {
-      const remove = document.createElement('span');
-      remove.className = 'shortcut-card-remove';
-      remove.setAttribute('role', 'button');
-      remove.setAttribute('aria-label', `Eliminar ${shortcut.name}`);
-      remove.innerHTML = LOOSE_NAV_REMOVE_SVG;
-      card.appendChild(remove);
-    }
 
     let ignoreClickUntil = 0;
-    card.addEventListener('click', (ev) => {
+    card.addEventListener('click', () => {
       if (Date.now() < ignoreClickUntil) return;
       if (Date.now() < shortcutReorderSuppressClicksUntil) return;
       if (shortcutsEditMode) {
-        if (ev.target instanceof Element && ev.target.closest('.shortcut-card-remove')) {
-          deleteShortcutById(shortcut.id).catch((err) => console.error('shortcut-delete', err));
-        }
+        // En modo edición el clic abre el editor del acceso: ahí se cambia o se elimina.
+        openEditModal(shortcut);
         return;
       }
       // Left-click sobre un icono que NO es miembro del Modo Foco lo cancela
@@ -3191,20 +3295,20 @@ function renderShortcuts() {
     window.UsualDeskOnboarding.advance('shortcuts-non-empty');
   }
   syncDockHomeStripBtn();
-  if (addBtn) shortcutsContainer.appendChild(addBtn);
   if (endActions) shortcutsContainer.appendChild(endActions);
 }
 
 /**
- * Lápiz a la derecha en uso normal; en modo edición, "+" tras el último icono
- * y "listo" a la derecha. Sin accesos, solo el "+".
+ * A la derecha: solo el lápiz en uso normal; en modo edición, "+" y a su
+ * derecha "listo". Sin accesos, solo el "+".
  */
-function syncStripEndActions(addBtn, endActions) {
+function syncStripEndActions(endActions) {
   const empty = shortcuts.length === 0;
+  const addBtn = endActions && endActions.querySelector('#strip-add-new');
   const editBtn = endActions && endActions.querySelector('#strip-edit-toggle');
   const doneBtn = endActions && endActions.querySelector('#strip-edit-done');
-  if (editBtn) editBtn.hidden = empty || shortcutsEditMode;
   if (addBtn) addBtn.hidden = !(empty || shortcutsEditMode);
+  if (editBtn) editBtn.hidden = empty || shortcutsEditMode;
   if (doneBtn) doneBtn.hidden = !shortcutsEditMode;
 }
 
@@ -3790,14 +3894,19 @@ function enterStripEditMode(opts = {}) {
   if (!opts.skipRender) renderShortcuts();
 }
 
+/** Apaga el modo edición de accesos y perfiles y cierra el formulario que hubiera abierto. */
+function leaveStripEditMode() {
+  setLooseNavProfilesEditMode(false);
+  shortcutsEditMode = false;
+  closeModal();
+}
+
 async function exitShortcutsEditModeFromUi() {
   const formWasOpen =
     (dockInlineEditor && !dockInlineEditor.classList.contains('hidden')) ||
     (modalOverlay && !modalOverlay.classList.contains('hidden'));
   const looseNavOpen = looseNavSurface && !looseNavSurface.classList.contains('hidden');
-  setLooseNavProfilesEditMode(false);
-  shortcutsEditMode = false;
-  closeModal();
+  leaveStripEditMode();
   if (formWasOpen || looseNavOpen) {
     try {
       await window.usualDesk.collapseSidebar();
@@ -3827,7 +3936,45 @@ let addShortcutPageSessionId = '';
 /** Favicon que ya mostró la pestaña: vale solo mientras la URL del formulario siga siendo la de la página. */
 let addShortcutPageFavicon = null;
 
-function openAddModal() {
+/**
+ * Qué muestra el modal: el paso de elegir qué agregar, el formulario de acceso
+ * directo o el panel de perfil. `back` muestra la flecha para volver a elegir.
+ * @param {'kind' | 'shortcut' | 'profile'} view
+ * @param {{ back?: boolean }} [opts]
+ */
+function setModalView(view, opts = {}) {
+  if (createKindPanel) createKindPanel.hidden = view !== 'kind';
+  if (profilePanel) {
+    profilePanel.hidden = view !== 'profile';
+    if (view !== 'profile') profilePanel.replaceChildren();
+  }
+  shortcutForm.hidden = view !== 'shortcut';
+  if (modalBack) modalBack.hidden = opts.back !== true;
+}
+
+/**
+ * El "+" de la franja: primero se elige si se agrega un acceso directo o un
+ * perfil; después siguen las opciones de lo elegido.
+ */
+async function openCreateModal() {
+  // Fuera del modo edición la página embebida sigue a la vista y taparía el modal.
+  if (looseNavState?.active && !looseNavProfilesEditMode) await coverLooseNavPage();
+  showCreateKindChooser();
+}
+
+function showCreateKindChooser() {
+  editingId = null;
+  clearShortcutNameError();
+  modalTitle.textContent = '¿Qué querés agregar?';
+  setModalView('kind');
+  showShortcutFormShell();
+  lastPassthroughIgnore = null;
+  syncPointerPassthrough(lastPointer.x, lastPointer.y);
+  createKindPanel?.querySelector('.create-kind-option')?.focus();
+}
+
+/** @param {{ fromChooser?: boolean }} [opts] `fromChooser`: se llegó desde el "+", con flecha para volver. */
+function openAddModal(opts = {}) {
   editingId = null;
   addShortcutPageSessionId = '';
   addShortcutPageFavicon = null;
@@ -3835,6 +3982,7 @@ function openAddModal() {
   autoFaviconValue = '';
   suppressAutoFavicon = false;
   clearShortcutNameError();
+  setModalView('shortcut', { back: opts.fromChooser === true });
   modalTitle.textContent = 'Añadir acceso directo';
   modalDelete.classList.add('hidden');
   if (shortcutOrderGroup) shortcutOrderGroup.classList.add('hidden');
@@ -3921,6 +4069,7 @@ function openEditModal(shortcut) {
   autoFaviconValue = isSiteIconValue(existingIcon) ? existingIcon : '';
   suppressAutoFavicon = !!(existingIcon && !autoFaviconValue);
   clearShortcutNameError();
+  setModalView('shortcut');
   modalTitle.textContent = 'Editar acceso directo';
   modalDelete.classList.remove('hidden');
   if (shortcutOrderGroup) shortcutOrderGroup.classList.remove('hidden');
@@ -3974,6 +4123,7 @@ function closeModal() {
   if (iconDropdownOpen) closeIconDropdown();
   setCustomEmojiPanel(false);
   editingId = null;
+  setModalView('shortcut');
   if (shortcutOrderGroup) shortcutOrderGroup.classList.add('hidden');
   lastPassthroughIgnore = null;
   schedulePointerPassthroughSync();
@@ -3982,6 +4132,18 @@ function closeModal() {
 
 modalCancel.addEventListener('click', closeModal);
 document.getElementById('modal-close')?.addEventListener('click', closeModal);
+modalBack?.addEventListener('click', showCreateKindChooser);
+
+createKindPanel?.addEventListener('click', (e) => {
+  const option = e.target instanceof Element ? e.target.closest('.create-kind-option') : null;
+  if (!option) return;
+  if (option.dataset.kind === 'profile') {
+    openAddProfilePanel().catch((err) => console.error('add-profile-panel', err));
+  } else {
+    openAddModal({ fromChooser: true });
+    inputName?.focus();
+  }
+});
 
 modalOverlay.addEventListener('click', (e) => {
   if (e.target === modalOverlay) closeModal();
@@ -4029,10 +4191,9 @@ if (inputUrl) {
   });
 }
 
-const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
-if (stripAddShortcutBtn) {
-  stripAddShortcutBtn.addEventListener('click', () => openAddModal());
-}
+document.getElementById('strip-add-new')?.addEventListener('click', () => {
+  openCreateModal().catch((err) => console.error('open-create-modal', err));
+});
 
 document.getElementById('strip-edit-toggle')?.addEventListener('click', () => {
   if (shortcutsEditMode) return;
@@ -4168,8 +4329,13 @@ modalDelete.addEventListener('click', () => {
   deleteShortcutById(editingId).catch((err) => console.error('shortcut-delete', err));
 });
 
+// El "+" de la franja de una ventana web: mismo alta que el "+" del dock.
 window.usualDesk.onOpenAddShortcutModal(() => {
-  openAddModal();
+  openCreateModal().catch((err) => console.error('open-create-modal', err));
+});
+
+window.usualDesk.onOpenAddShortcutForPage?.((page) => {
+  openAddShortcutForPage(page).catch(() => {});
 });
 
 window.usualDesk.onOpenAppearanceModal(() => {
@@ -4660,19 +4826,60 @@ function looseNavProfileHue(partition) {
   return h % 360;
 }
 
+/** Ignora el editor de la URL para ver si el clic cae en una pestaña de atrás. */
+function elementBehindUrlEditor(editor, x, y) {
+  if (!editor) return null;
+  const fields = editor.querySelectorAll('input, button');
+  const prev = editor.style.pointerEvents;
+  const prevFields = [];
+  editor.style.pointerEvents = 'none';
+  fields.forEach((el) => {
+    prevFields.push(el.style.pointerEvents);
+    el.style.pointerEvents = 'none';
+  });
+  const under = document.elementFromPoint(x, y);
+  editor.style.pointerEvents = prev;
+  fields.forEach((el, i) => {
+    el.style.pointerEvents = prevFields[i];
+  });
+  return under;
+}
+
 /** Pone el cursor en la barra de dirección; `clear` la deja vacía para escribir de cero. */
 function focusLooseNavOmnibox({ clear = false } = {}) {
   if (!looseNavOmniboxInput || !looseNavState.active) return;
+  if (clear) looseNavBlankAddress = true;
   looseNavOmniboxInput.focus();
   if (clear) looseNavOmniboxInput.value = '';
-  else looseNavOmniboxInput.select();
+  else if (!looseNavBlankAddress) looseNavOmniboxInput.select();
 }
 
 /** Como Chrome: el "+" abre la pestaña y lleva a la barra de dirección para escribir ahí. */
 function openLooseNavBlankTab() {
   if (!looseNavState.active) return;
+  looseNavBlankAddress = true;
+  looseNavBlankTabId = '';
   focusLooseNavOmnibox({ clear: true });
-  window.usualDesk.looseNavNewTab('', { partition: looseNavOmniboxPartition(), nextToActive: true }).catch(() => {});
+  window.usualDesk.looseNavNewTab('', { partition: looseNavOmniboxPartition() }).catch(() => {
+    forgetLooseNavBlankAddress();
+  });
+}
+
+/** Sesión vacía (incógnito u otro perfil sin pestañas): el cursor ya queda en la barra, vacía. */
+function focusFreshAddress() {
+  if (!looseNavOmniboxInput || !looseNavState.active) return;
+  const url = String(looseNavState.activeUrl || '');
+  if (url && !isLooseNavStartPage(url)) return;
+  const field = looseNavOmniboxInput;
+  if (document.activeElement === field && field.value.trim()) return;
+  looseNavBlankAddress = true;
+  const tabId = looseNavState.activeTabId ? String(looseNavState.activeTabId) : '';
+  if (tabId) looseNavBlankTabId = tabId;
+  focusLooseNavOmnibox({ clear: true });
+  window.UsualDeskTabStripFit?.paintAddressFace(
+    document.getElementById('loose-nav-omnibox-face'),
+    ''
+  );
 }
 
 function renderLooseNavTabs(state) {
@@ -4764,17 +4971,21 @@ function renderLooseNavTabs(state) {
     looseNavTabsStrip.appendChild(el);
   }
 
-  looseNavTabsStrip
-    .querySelector('.loose-nav-tab.is-active')
-    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const fit = window.UsualDeskTabStripFit;
+  if (fit) {
+    fit.watchTabStrip(looseNavTabsStrip, '.loose-nav-tab');
+    fit.fitTabStrip(looseNavTabsStrip, '.loose-nav-tab');
+  }
 }
 
 let looseNavAccountBusy = '';
 let looseNavAccountsSig = '';
-/** Modo edición del riel de perfiles: se reordenan arrastrando, la cruz quita y el "+" agrega. */
+/** Modo edición del riel de perfiles: se reordenan arrastrando y un clic abre su editor. */
 let looseNavProfilesEditMode = false;
 /** @type {{ el: HTMLElement, pointerId: number, startX: number, active: boolean } | null} */
 let looseNavProfileDrag = null;
+/** Ignora el click que dispara el navegador al soltar un perfil arrastrado. */
+let looseNavProfileDragSuppressClicksUntil = 0;
 let looseNavAccountsRenderPending = false;
 function setLooseNavProfilesEditMode(on) {
   const next = on === true;
@@ -4812,7 +5023,6 @@ function moveLooseNavProfileToPointer(btn, x) {
 function bindLooseNavProfileReorder(btn) {
   btn.addEventListener('pointerdown', (ev) => {
     if (!looseNavProfilesEditMode || ev.button !== 0 || looseNavProfileDrag) return;
-    if (ev.target instanceof Element && ev.target.closest('.loose-nav-account-remove')) return;
     const drag = { el: btn, pointerId: ev.pointerId, startX: ev.clientX, active: false };
     looseNavProfileDrag = drag;
     const onMove = (e) => {
@@ -4836,6 +5046,7 @@ function bindLooseNavProfileReorder(btn) {
       document.documentElement.classList.remove('is-shortcut-reordering');
       looseNavProfileDrag = null;
       if (drag.active) {
+        looseNavProfileDragSuppressClicksUntil = Date.now() + 500;
         const order = looseNavReorderableProfiles().map((el) => el.dataset.partition);
         window.usualDesk.looseNavReorderProfiles?.(order).catch(() => {});
       }
@@ -4849,22 +5060,6 @@ function bindLooseNavProfileReorder(btn) {
     window.addEventListener('pointercancel', finish);
     window.addEventListener('blur', finish);
   });
-}
-
-function looseNavAddProfileButton() {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'shell-shortcut-item strip-add-shortcut strip-add-inline strip-add-secondary';
-  btn.innerHTML =
-    '<span class="shell-shortcut-icon-wrap" aria-hidden="true">' +
-    '<svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">' +
-    '<path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' +
-    '</svg></span><span>Agregar perfil</span>';
-  btn.addEventListener('click', () => {
-    const r = btn.getBoundingClientRect();
-    window.usualDesk.looseNavOpenAddProfileMenu?.(r.left, r.bottom).catch(() => {});
-  });
-  return btn;
 }
 
 const LOOSE_NAV_INCOGNITO_SVG =
@@ -4890,56 +5085,52 @@ async function runLooseNavAccountAction(key, el, action) {
   }
 }
 
-function looseNavAccountButton({
-  key, label, tooltip, avatar, seed, incognito, active, isDefault, partition, onClick, onSetDefault, onRemove,
-}) {
+/** Foto, inicial o antifaz de un perfil: el mismo dibujo en el riel y en su editor. */
+function looseNavProfileAvatarNode({ label, avatar, seed, incognito }) {
+  if (incognito) {
+    const glyph = document.createElement('span');
+    glyph.className = 'loose-nav-account-incognito';
+    glyph.innerHTML = LOOSE_NAV_INCOGNITO_SVG;
+    return glyph;
+  }
+  if (avatar && avatar.startsWith('data:image/')) {
+    const img = document.createElement('img');
+    img.src = avatar;
+    img.alt = '';
+    return img;
+  }
+  const letter = document.createElement('span');
+  letter.className = 'loose-nav-account-letter';
+  letter.textContent = (label || '?').trim().charAt(0).toUpperCase() || '?';
+  letter.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(seed)));
+  return letter;
+}
+
+function looseNavAccountButton(profile) {
+  const { key, label, active, isDefault, partition, onClick, onSetDefault } = profile;
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'loose-nav-account';
   if (partition) btn.dataset.partition = partition;
-  if (looseNavProfilesEditMode) {
-    const hints = [partition ? 'arrastrá para moverlo' : '', onRemove ? 'la cruz lo quita' : ''].filter(Boolean);
-    tooltip = hints.length ? `${label} · ${hints.join(' · ')}` : label;
-  }
+  const tooltip = looseNavProfilesEditMode
+    ? `${label} · clic para editarlo${partition ? ' · arrastrá para moverlo' : ''}`
+    : profile.tooltip;
   btn.title = tooltip;
   btn.setAttribute('aria-label', tooltip);
   btn.setAttribute('aria-pressed', active ? 'true' : 'false');
   if (active) btn.classList.add('is-active');
   if (isDefault) btn.classList.add('is-default');
   if (looseNavAccountBusy === key) btn.classList.add('is-busy');
-  if (incognito) {
-    const glyph = document.createElement('span');
-    glyph.className = 'loose-nav-account-incognito';
-    glyph.innerHTML = LOOSE_NAV_INCOGNITO_SVG;
-    btn.appendChild(glyph);
-  } else if (avatar && avatar.startsWith('data:image/')) {
-    const img = document.createElement('img');
-    img.src = avatar;
-    img.alt = '';
-    btn.appendChild(img);
-  } else {
-    const letter = document.createElement('span');
-    letter.className = 'loose-nav-account-letter';
-    letter.textContent = (label || '?').trim().charAt(0).toUpperCase() || '?';
-    letter.style.setProperty('--loose-nav-profile-hue', String(looseNavProfileHue(seed)));
-    btn.appendChild(letter);
-  }
-  if (looseNavProfilesEditMode && onRemove) {
-    const remove = document.createElement('span');
-    remove.className = 'loose-nav-account-remove';
-    remove.title = `Quitar ${label}`;
-    remove.innerHTML = LOOSE_NAV_REMOVE_SVG;
-    btn.appendChild(remove);
-  }
+  btn.appendChild(looseNavProfileAvatarNode(profile));
   if (looseNavProfilesEditMode && partition) bindLooseNavProfileReorder(btn);
-  btn.addEventListener('click', (ev) => {
+  btn.addEventListener('click', () => {
     if (!looseNavProfilesEditMode) {
       runLooseNavAccountAction(key, btn, onClick);
       return;
     }
-    if (onRemove && ev.target instanceof Element && ev.target.closest('.loose-nav-account-remove')) {
-      runLooseNavAccountAction(key, btn, onRemove);
-    }
+    if (Date.now() < looseNavProfileDragSuppressClicksUntil) return;
+    // En modo edición el clic abre el editor del perfil: ahí se cambia o se quita.
+    openProfileEditor(profile);
   });
   if (onSetDefault) {
     btn.addEventListener('contextmenu', (ev) => {
@@ -4994,6 +5185,7 @@ function renderLooseNavAccounts(state) {
     const opts = {
       key: a.partition,
       label: a.name || a.email,
+      detail: [a.incognito ? 'Incógnito' : a.name ? a.email : '', tabsLabel].filter(Boolean).join(' · '),
       tooltip: `${who} · ${tabsLabel} · ${isDefault ? 'predeterminado' : 'clic derecho: usar como predeterminado'}`,
       avatar: a.avatar,
       seed: a.email || a.partition,
@@ -5013,6 +5205,8 @@ function renderLooseNavAccounts(state) {
       const opts = {
         key: `chrome:${c.directory}`,
         label: c.email || c.name,
+        detail: 'Perfil de Chrome · se trae a inplaize la primera vez que lo usás',
+        fromChrome: true,
         tooltip: `${who} · traer desde Chrome · clic derecho: usar como predeterminado`,
         avatar: c.avatar,
         seed: c.email || c.name,
@@ -5024,12 +5218,232 @@ function renderLooseNavAccounts(state) {
       looseNavAccountsRail.appendChild(looseNavAccountButton(opts));
     }
   }
-  if (looseNavProfilesEditMode) looseNavAccountsRail.appendChild(looseNavAddProfileButton());
+}
+
+/** Nodo con clase y texto para los paneles de perfil del modal. */
+function profilePanelNode(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  if (tag === 'button') node.type = 'button';
+  return node;
+}
+
+let profilePanelBusy = false;
+
+/** Corre una acción del panel de perfil con sus botones bloqueados hasta que termine. */
+async function runProfilePanelAction(action) {
+  if (profilePanelBusy || !profilePanel) return undefined;
+  profilePanelBusy = true;
+  profilePanel.classList.add('is-busy');
+  try {
+    return await action();
+  } catch (err) {
+    console.error('profile-panel', err);
+    return undefined;
+  } finally {
+    profilePanelBusy = false;
+    profilePanel.classList.remove('is-busy');
+  }
+}
+
+function showProfilePanel(title, opts) {
+  editingId = null;
+  modalTitle.textContent = title;
+  setModalView('profile', opts);
+  showShortcutFormShell();
+  lastPassthroughIgnore = null;
+  syncPointerPassthrough(lastPointer.x, lastPointer.y);
+}
+
+/**
+ * Editor de un perfil del riel (clic sobre él en modo edición): dejarlo como
+ * predeterminado de las pestañas nuevas o quitarlo.
+ * @param {object} profile el mismo objeto con el que se dibuja el perfil en el riel
+ */
+function openProfileEditor(profile) {
+  if (!profilePanel) return;
+  showProfilePanel('Editar perfil');
+  renderProfileEditor(profile);
+}
+
+function renderProfileEditor(profile) {
+  const head = profilePanelNode('div', 'profile-panel-head');
+  const avatar = profilePanelNode('span', 'profile-panel-avatar');
+  avatar.appendChild(looseNavProfileAvatarNode(profile));
+  const who = profilePanelNode('div', 'profile-panel-who');
+  who.append(
+    profilePanelNode('div', 'profile-panel-name', profile.label),
+    profilePanelNode('div', 'profile-panel-detail', profile.detail),
+  );
+  head.append(avatar, who);
+
+  const defaultRow = profilePanelNode('div', 'profile-panel-row');
+  const defaultText = profilePanelNode('div', 'profile-panel-row-text');
+  defaultText.append(
+    profilePanelNode('div', 'type-field-label', 'Pestañas nuevas'),
+    profilePanelNode(
+      'p',
+      'profile-panel-help',
+      profile.isDefault
+        ? 'Es el perfil predeterminado: las pestañas nuevas se abren con esta sesión.'
+        : 'Las pestañas nuevas se abren con el perfil predeterminado.',
+    ),
+  );
+  defaultRow.appendChild(defaultText);
+  if (!profile.isDefault && profile.onSetDefault) {
+    const setDefault = profilePanelNode('button', 'btn-secondary', 'Usar como predeterminado');
+    setDefault.addEventListener('click', async () => {
+      const ok = await runProfilePanelAction(profile.onSetDefault);
+      if (profilePanel.hidden) return;
+      // Uno de Chrome se trae al usarlo y pasa a ser otro perfil del riel: el editor ya no lo describe.
+      if (profile.fromChrome) closeModal();
+      else if (ok) renderProfileEditor({ ...profile, isDefault: true });
+    });
+    defaultRow.appendChild(setDefault);
+  }
+
+  const actions = profilePanelNode('div', 'form-actions');
+  if (profile.onRemove) {
+    const remove = profilePanelNode('button', 'btn-danger', 'Quitar perfil');
+    remove.addEventListener('click', async () => {
+      const removed = await runProfilePanelAction(profile.onRemove);
+      if (removed && !profilePanel.hidden) closeModal();
+    });
+    actions.appendChild(remove);
+  }
+  const close = profilePanelNode('button', 'btn-secondary', 'Cerrar');
+  close.addEventListener('click', closeModal);
+  actions.appendChild(close);
+
+  profilePanel.replaceChildren(head, defaultRow, actions);
+}
+
+/**
+ * Alta de perfil desde el "+": iniciar sesión con otra cuenta de Google o
+ * volver a mostrar un perfil que se había quitado del riel.
+ */
+async function openAddProfilePanel() {
+  if (!profilePanel) return;
+  showProfilePanel('Agregar perfil', { back: true });
+  let options = null;
+  try {
+    options = await window.usualDesk.looseNavAddProfileOptions();
+  } catch (err) {
+    console.error('add-profile-options', err);
+  }
+  // Mientras llegaba la respuesta se pudo cerrar el modal o volver a elegir.
+  if (profilePanel.hidden) return;
+  renderAddProfilePanel(options || {});
+}
+
+/** @param {{ hidden?: Array<{ partition: string, label: string }>, hiddenChrome?: Array<{ directory: string, label: string }> }} options */
+function renderAddProfilePanel(options) {
+  const google = profilePanelNode('button', 'create-kind-option');
+  const googleText = profilePanelNode('span', 'create-kind-text');
+  googleText.append(
+    profilePanelNode('span', 'create-kind-title', 'Iniciar sesión con otra cuenta de Google'),
+    profilePanelNode(
+      'span',
+      'create-kind-desc',
+      'Se abre una pestaña para iniciar sesión; al entrar, la cuenta queda como perfil en la franja.',
+    ),
+  );
+  google.appendChild(googleText);
+  google.addEventListener('click', () => {
+    // La página de inicio de sesión se ve en la navegación: se sale del modo edición para mostrarla.
+    leaveStripEditMode();
+    window.usualDesk.looseNavAddProfile({ google: true }).catch((err) => console.error('add-profile', err));
+  });
+  const nodes = [google];
+
+  const hidden = Array.isArray(options.hidden) ? options.hidden : [];
+  const hiddenChrome = Array.isArray(options.hiddenChrome) ? options.hiddenChrome : [];
+  if (hidden.length || hiddenChrome.length) {
+    const group = profilePanelNode('div', 'profile-panel-restore');
+    group.appendChild(profilePanelNode('div', 'type-field-label', 'Volver a mostrar'));
+    for (const h of hidden) {
+      const item = profilePanelNode('button', 'profile-panel-restore-item', h.label);
+      item.addEventListener('click', async () => {
+        const ok = await runProfilePanelAction(() => window.usualDesk.looseNavAddProfile({ partition: h.partition }));
+        if (ok && !profilePanel.hidden) closeModal();
+      });
+      group.appendChild(item);
+    }
+    for (const c of hiddenChrome) {
+      const item = profilePanelNode('button', 'profile-panel-restore-item', c.label);
+      item.appendChild(profilePanelNode('span', 'profile-panel-restore-hint', 'traer desde Chrome'));
+      item.addEventListener('click', () => {
+        // Se trae desde Chrome y se abre su sesión: igual que con una cuenta nueva.
+        leaveStripEditMode();
+        window.usualDesk
+          .looseNavAddProfile({ chromeDirectory: c.directory })
+          .catch((err) => console.error('add-profile', err));
+      });
+      group.appendChild(item);
+    }
+    nodes.push(group);
+  }
+
+  const actions = profilePanelNode('div', 'form-actions');
+  const cancel = profilePanelNode('button', 'btn-secondary', 'Cancelar');
+  cancel.addEventListener('click', closeModal);
+  actions.appendChild(cancel);
+  nodes.push(actions);
+
+  profilePanel.replaceChildren(...nodes);
+}
+
+/**
+ * El "+" abre Google de fondo, pero la barra tiene que quedar vacía para
+ * escribir el enlace. Sigue vacía mientras esa pestaña no salga del inicio.
+ */
+let looseNavBlankAddress = false;
+let looseNavBlankTabId = '';
+
+function isLooseNavStartPage(url) {
+  const value = String(url || '').trim();
+  if (!value || /^about:/i.test(value)) return true;
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (!/^google\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host)) return false;
+  const path = parsed.pathname.replace(/\/+$/, '');
+  if (path && path.toLowerCase() !== '/webhp') return false;
+  return !parsed.searchParams.has('q');
+}
+
+function forgetLooseNavBlankAddress() {
+  looseNavBlankAddress = false;
+  looseNavBlankTabId = '';
+}
+
+function noteLooseNavBlankTab(state, previousTabId) {
+  if (!looseNavBlankAddress) return;
+  const tabId = state && state.activeTabId ? String(state.activeTabId) : '';
+  const url = String((state && state.activeUrl) || '');
+  if (!tabId || tabId === previousTabId) {
+    if (looseNavBlankTabId && tabId === looseNavBlankTabId && url && !isLooseNavStartPage(url)) {
+      forgetLooseNavBlankAddress();
+    }
+    return;
+  }
+  if (!isLooseNavStartPage(url)) {
+    forgetLooseNavBlankAddress();
+    return;
+  }
+  looseNavBlankTabId = tabId;
 }
 
 function looseNavDisplayUrl(state) {
   const url = state && state.active && state.activeTabId ? String(state.activeUrl || '') : '';
-  return /^about:blank/i.test(url) ? '' : url;
+  if (!url || /^about:/i.test(url)) return '';
+  if (looseNavBlankAddress && isLooseNavStartPage(url)) return '';
+  return url;
 }
 
 function looseNavOmniboxPartition() {
@@ -5038,10 +5452,9 @@ function looseNavOmniboxPartition() {
     || '';
 }
 
-/** Navega en la pestaña activa; si no hay ninguna, abre una con el perfil seleccionado. */
+/** Enter en la dirección abre siempre una pestaña nueva, al final de la fila. */
 function looseNavOmniboxGo(value) {
-  if (looseNavState.tabs.some((t) => t.isActive)) return window.usualDesk.looseNavNavigate(value);
-  return window.usualDesk.looseNavNewTab(value, { partition: looseNavOmniboxPartition(), nextToActive: true });
+  return window.usualDesk.looseNavNewTab(value, { partition: looseNavOmniboxPartition() });
 }
 
 /** El acceso abre con la misma sesión que el perfil de la pestaña: `persist:<sessionId>`. */
@@ -5135,7 +5548,8 @@ async function addLooseNavPageShortcut() {
   });
 }
 
-/** Barra de dirección bajo las pestañas: muestra la URL de la pestaña activa y navega en ella. */
+/** Dirección en la misma fila que las pestañas: muestra la URL de la pestaña activa. */
+let looseNavShownTabId = '';
 function renderLooseNavOmnibox(state) {
   if (!looseNavOmniboxInput) return;
   const profile = state.activeProfile || state.defaultProfile || null;
@@ -5145,9 +5559,19 @@ function renderLooseNavOmnibox(state) {
     ? `Buscá o escribí un enlace para abrir en ${label}`
     : 'Buscá en Google o escribí un enlace';
   looseNavOmniboxInput.setAttribute('aria-label', hint);
-  if (document.activeElement !== looseNavOmniboxInput) {
+  const tabId = state && state.activeTabId ? String(state.activeTabId) : '';
+  const previousTabId = looseNavShownTabId;
+  const tabChanged = tabId !== previousTabId;
+  noteLooseNavBlankTab(state, previousTabId);
+  looseNavShownTabId = tabId;
+  const typingBlank = looseNavBlankAddress && document.activeElement === looseNavOmniboxInput;
+  if (!typingBlank && (document.activeElement !== looseNavOmniboxInput || tabChanged)) {
     looseNavOmniboxInput.value = looseNavDisplayUrl(state);
   }
+  window.UsualDeskTabStripFit?.paintAddressFace(
+    document.getElementById('loose-nav-omnibox-face'),
+    document.activeElement === looseNavOmniboxInput ? looseNavOmniboxInput.value : looseNavDisplayUrl(state)
+  );
   syncLooseNavAddShortcutBtn();
 }
 
@@ -5174,9 +5598,22 @@ function initLooseNavOmnibox() {
     ev.stopPropagation();
     addLooseNavPageShortcut().catch(() => {});
   });
+  const syncUrlEditing = () => {
+    looseNavOmnibox.classList.toggle('is-editing', document.activeElement === looseNavOmniboxInput);
+  };
+  looseNavOmniboxInput.addEventListener('focus', syncUrlEditing);
+  looseNavOmniboxInput.addEventListener('blur', syncUrlEditing);
   looseNavOmnibox.addEventListener('mousedown', (ev) => {
-    if (ev.target.closest('#loose-nav-add-shortcut-btn')) return;
-    if (ev.target !== looseNavOmnibox) return;
+    if (ev.target.closest('button')) return;
+    const under = elementBehindUrlEditor(looseNavOmnibox, ev.clientX, ev.clientY);
+    const tab = under?.closest('.loose-nav-tab, .loose-nav-new-tab, .loose-nav-tab-close, .loose-nav-tab-audio');
+    if (tab) {
+      ev.preventDefault();
+      looseNavOmniboxInput.blur();
+      tab.click();
+      return;
+    }
+    if (ev.target.closest('input')) return;
     ev.preventDefault();
     looseNavOmniboxInput.focus();
   });
@@ -5187,6 +5624,10 @@ function initLooseNavOmnibox() {
     looseNavOmniboxGo(value).catch(() => {});
   };
   looseNavOmniboxInput.addEventListener('focus', () => {
+    if (looseNavBlankAddress) {
+      looseNavOmniboxInput.value = '';
+      return;
+    }
     looseNavOmniboxInput.select();
   });
   looseNavOmniboxInput.addEventListener('input', () => {
@@ -5195,6 +5636,10 @@ function initLooseNavOmnibox() {
   looseNavOmniboxInput.addEventListener('blur', () => {
     setTimeout(() => closeLooseNavSuggest(), 150);
     looseNavOmniboxInput.value = looseNavDisplayUrl(looseNavState);
+    window.UsualDeskTabStripFit?.paintAddressFace(
+      document.getElementById('loose-nav-omnibox-face'),
+      looseNavOmniboxInput.value
+    );
   });
   looseNavOmniboxInput.addEventListener('keydown', (ev) => {
     if (looseNavSuggestKeydown(ev, looseNavOmniboxInput)) return;
@@ -5223,6 +5668,9 @@ function renderLooseNavBar(state) {
   looseNavBar.classList.toggle('hidden', !show);
   if (looseNavSurface) looseNavSurface.classList.toggle('hidden', !show);
   document.documentElement.setAttribute('data-loose-nav', show ? 'on' : 'off');
+  if (window.InplaizeDocumentModal && typeof window.InplaizeDocumentModal.syncWithBrowser === 'function') {
+    window.InplaizeDocumentModal.syncWithBrowser();
+  }
 
   // El violeta de “seleccionado” vive en el perfil activo, no en un acceso.
   const looseSc = findLooseShortcut();
@@ -5258,6 +5706,12 @@ function initLooseNavUiEvents() {
   looseNavNewTabBtn?.addEventListener('click', () => {
     openLooseNavBlankTab();
   });
+
+  window.UsualDeskTabStripFit?.bindUrlColumnSplit(
+    looseNavBar.querySelector('.loose-nav-tabs-row'),
+    document.getElementById('loose-nav-split'),
+    looseNavOmnibox,
+  );
 
   initLooseNavOmnibox();
 
@@ -5300,6 +5754,7 @@ function initLooseNavUiEvents() {
   const runLooseNavShortcut = (action) => {
     if (action === 'edit-address') focusLooseNavOmnibox();
     else if (action === 'new-tab') openLooseNavBlankTab();
+    else if (action === 'blank-address') focusFreshAddress();
     else if (action === 'exit-profiles-edit') setLooseNavProfilesEditMode(false);
   };
   window.usualDesk.onLooseNavShortcut?.(runLooseNavShortcut);
@@ -5346,7 +5801,7 @@ function initLooseNavUiEvents() {
     } else if (looseNavState.active) {
       looseNavResumePending = false;
       scheduleLooseNavViewportSync();
-    } else if (looseNavResumePending) {
+    } else if (looseNavResumePending && !blockLooseNavResume) {
       const resume = window.usualDesk.looseNavOpen?.() || Promise.reject();
       resume.catch(() => {
         looseNavResumePending = false;

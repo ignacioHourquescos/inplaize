@@ -3,11 +3,11 @@
 const path = require('path');
 const { BrowserWindow, BrowserView, WebContentsView, session, app, ipcMain } = require('electron');
 const { APP_NAME, appIconFile, brandWindow } = require('./app-identity');
-const { webMapKey } = require('./web-map-key');
+const { webMapKey, normalizeUrlKey } = require('./web-map-key');
 const { loadShortcuts } = require('./shortcuts-store');
 const { lockWindowZoom } = require('./lock-window-zoom');
 const { setEmbeddedPageBackground } = require('./embedded-page-background');
-const { loadWebContentsUrl } = require('./load-web-url');
+const { loadWebContentsUrl, withScheme } = require('./load-web-url');
 const {
   navSnapshot,
   goBack,
@@ -19,8 +19,10 @@ const {
 const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
 /** Debe coincidir con --ud-chrome-strip-h en chrome-strip.css. */
 const DETACHED_CHROME_H = 58;
-/** Debe coincidir con la altura de .subtab-strip en web-shell.css. */
-const DETACHED_TABSTRIP_H = 36;
+/** Pestañas y dirección en una fila. Debe coincidir con .shortcut-browser en web-shell.css. */
+const DETACHED_TABSTRIP_H = 40;
+/** La dirección se esconde al scrollear, pero la fila no cambia de alto. */
+const DETACHED_TABS_ONLY_H = 40;
 
 const WEB_NOTIFICATION_FOCUS_PRELOAD = path.join(__dirname, 'web-notification-focus-preload.js');
 
@@ -231,12 +233,45 @@ function bindHostPageNav(host, tab) {
   });
 }
 
-function chromeHeightFor(host) {
+/** Con una sola pestaña no hay barra de solapas ni dirección: la página sube. */
+function hostShowsTabChrome(host) {
+  if (!host || host.__usualDeskEmbeddedDesktop) return false;
   const state = tabStateOf(host);
-  const covered = !!(host && host.__usualDeskEmbeddedDesktop);
-  // Una sola página no es una pestaña: la fila solo aparece cuando hay otra.
-  const showTabStrip = !!state && state.tabs.size > 1 && !covered;
-  return DETACHED_CHROME_H + (showTabStrip ? DETACHED_TABSTRIP_H : 0);
+  if (!state) return false;
+  return state.order.length > 1;
+}
+
+function chromeHeightFor(host) {
+  if (!hostShowsTabChrome(host)) return DETACHED_CHROME_H;
+  if (host.__usualDeskUrlBarHidden) return DETACHED_CHROME_H + DETACHED_TABS_ONLY_H;
+  return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
+}
+
+/** Esconde o muestra la dirección y le deja ese lugar a la página. */
+function setUrlBarHidden(host, hidden) {
+  if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
+  const next = hidden === true && hostShowsTabChrome(host);
+  if (!!host.__usualDeskUrlBarHidden === next) return;
+  host.__usualDeskUrlBarHidden = next;
+  try {
+    host.webContents.send('detached-url-bar', next);
+  } catch {
+    /* la ventana se está cerrando */
+  }
+  layoutActiveTabView(host);
+}
+
+/** Lo que se escribe en la barra: dirección o búsqueda de Google. */
+function addressToUrl(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) return text;
+  if (/\s/.test(text)) return `https://www.google.com/search?q=${encodeURIComponent(text)}`;
+  const host = text.split(/[/?#]/)[0].replace(/:\d+$/, '').replace(/^[^@]*@/, '');
+  const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+  const isLocal = host === 'localhost' || host.endsWith('.localhost') || isIp;
+  if (isLocal || host.includes('.')) return withScheme(text);
+  return `https://www.google.com/search?q=${encodeURIComponent(text)}`;
 }
 
 function setHostUrlPromptOpen(host, open) {
@@ -355,20 +390,70 @@ function attachActiveTabViewOnly(host) {
   if (!active.isMain) kickTabViewResize(host, active);
 }
 
+function tabPartition(tab, state) {
+  try {
+    const wc = tab && tab.view && tab.view.webContents;
+    if (wc && !wc.isDestroyed() && wc.session && wc.session.partition) return wc.session.partition;
+  } catch {
+    /* la pestaña puede estar cerrándose */
+  }
+  return (state && state.partition) || '';
+}
+
+/** `persist:id` → id. La sesión por defecto no se guarda como perfil. */
+function sessionIdFromPartition(partition) {
+  const value = String(partition || '');
+  if (!value.startsWith('persist:')) return '';
+  const id = value.slice('persist:'.length);
+  if (!id || id === 'dock-default') return '';
+  return id;
+}
+
+function pageIsPinned(url, sessionId) {
+  const key = normalizeUrlKey(url);
+  if (!key) return false;
+  const session = String(sessionId || '');
+  return loadShortcuts().some(
+    (item) => item.type === 'web'
+      && normalizeUrlKey(item.url || '') === key
+      && String(item.sessionId || '') === session,
+  );
+}
+
+function pinTitleFor(tab) {
+  const title = String((tab && tab.title) || '').trim();
+  if (title && title !== 'Cargando…' && title !== 'Pestaña') return title.slice(0, 60);
+  try {
+    return new URL(tab.url).hostname.replace(/^www\./, '').slice(0, 60);
+  } catch {
+    return '';
+  }
+}
+
 function buildTabsPayload(host) {
   const state = tabStateOf(host);
   if (!state) return { tabs: [] };
   const tabs = state.order
     .map((id) => state.tabs.get(id))
     .filter(Boolean)
-    .map((tab) => ({
-      id: tab.id,
-      title: tab.title || tab.url || 'Pestaña',
-      favicon: tab.favicon || '',
-      loading: !!tab.loading,
-      isMain: !!tab.isMain,
-      isActive: tab.id === state.activeId,
-    }));
+    .map((tab) => {
+      const url = tab.url || '';
+      const sessionId = sessionIdFromPartition(tabPartition(tab, state));
+      const canPin = /^https?:\/\//i.test(url);
+      return {
+        id: tab.id,
+        title: tab.title || tab.url || 'Pestaña',
+        favicon: tab.favicon || '',
+        loading: !!tab.loading,
+        url,
+        isMain: !!tab.isMain,
+        isActive: tab.id === state.activeId,
+        canPin,
+        pinned: canPin && pageIsPinned(url, sessionId),
+        sessionId,
+        pinTitle: pinTitleFor(tab),
+      };
+    });
   return { tabs, embedded: !!(host && host.__usualDeskEmbeddedDesktop) };
 }
 
@@ -383,6 +468,14 @@ function broadcastTabsToHost(host) {
 
 /** Cambios en el nº de pestañas alteran la altura del chrome → recolocar y repintar. */
 function refreshHostTabsUi(host) {
+  if (host && !hostShowsTabChrome(host) && host.__usualDeskUrlBarHidden) {
+    host.__usualDeskUrlBarHidden = false;
+    try {
+      host.webContents.send('detached-url-bar', false);
+    } catch {
+      /* la ventana se está cerrando */
+    }
+  }
   attachActiveTabViewOnly(host);
   broadcastTabsToHost(host);
   sendHostNav(host);
@@ -414,13 +507,18 @@ function attachSubTabEvents(host, tab) {
     broadcastTabsToHost(host);
   });
 
-  wc.on('did-stop-loading', () => {
-    tab.loading = false;
+  const rememberSubPage = () => {
     try {
       tab.url = wc.getURL() || tab.url;
     } catch {
       /* noop */
     }
+  };
+  wc.on('did-navigate', rememberSubPage);
+  wc.on('did-navigate-in-page', rememberSubPage);
+  wc.on('did-stop-loading', () => {
+    tab.loading = false;
+    rememberSubPage();
     broadcastTabsToHost(host);
   });
 
@@ -729,6 +827,16 @@ function registerDetachedFrameIpc() {
   } catch {
     /* noop */
   }
+  ipcMain.removeAllListeners('detached-url-bar');
+  ipcMain.on('detached-url-bar', (event, hide) => {
+    const sender = event.sender;
+    const host = BrowserWindow.fromWebContents(sender);
+    if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
+    const state = tabStateOf(host);
+    const active = state && state.tabs.get(state.activeId);
+    if (!active || !active.view || active.view.webContents !== sender) return;
+    setUrlBarHidden(host, hide === true);
+  });
   ipcMain.handle('detached-frame-action', async (event, action, arg) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win || win.isDestroyed() || !win.__usualDeskDetachedChromeHost) return null;
@@ -765,6 +873,25 @@ function registerDetachedFrameIpc() {
         return navigateHost(win, 'forward');
       case 'reload-tab':
         return reloadHostTab(win, arg == null ? '' : String(arg));
+      case 'navigate': {
+        const wc = activeHostWebContents(win);
+        if (!wc) return false;
+        const target = addressToUrl(arg);
+        if (!target) return false;
+        wc.loadURL(target).catch(() => {});
+        try {
+          wc.focus();
+        } catch {
+          /* noop */
+        }
+        return true;
+      }
+      case 'new-subtab': {
+        const { LOOSE_NAV_NEW_TAB_URL } = require('./constants');
+        const typed = addressToUrl(arg);
+        await openSubTabInHost(win, typed || LOOSE_NAV_NEW_TAB_URL);
+        return true;
+      }
       case 'nav-state':
         return navSnapshot(activeHostWebContents(win));
       case 'page-menu':
@@ -859,6 +986,30 @@ function createMainPageView(host, shortcut, mapKey) {
   state.tabs.set(state.mainId, tab);
   bindHostPageNav(host, tab);
   attachPageShortcuts(wc, pageMenuContextFor(host));
+
+  const rememberMainPage = () => {
+    try {
+      tab.url = wc.getURL() || tab.url;
+      const title = wc.getTitle();
+      if (title) tab.title = title;
+    } catch {
+      /* la página puede estar cerrándose */
+    }
+    broadcastTabsToHost(host);
+  };
+  wc.on('page-title-updated', (_e, title) => {
+    tab.title = String(title || tab.title || '');
+    broadcastTabsToHost(host);
+  });
+  wc.on('page-favicon-updated', (_e, favicons) => {
+    if (Array.isArray(favicons) && favicons.length) {
+      tab.favicon = String(favicons[0] || '');
+      broadcastTabsToHost(host);
+    }
+  });
+  wc.on('did-navigate', rememberMainPage);
+  wc.on('did-navigate-in-page', rememberMainPage);
+  wc.on('did-stop-loading', rememberMainPage);
 
   attachWebShortcutEmbeddedWebContents(wc, shortcut, mapKey);
   try {

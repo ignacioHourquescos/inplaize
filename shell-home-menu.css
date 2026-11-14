@@ -5,7 +5,7 @@
   flex-shrink: 0;
   align-self: stretch;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   height: auto;
   min-height: 0;
   gap: 0;
@@ -21,7 +21,7 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
-  color: rgba(232, 232, 239, 0.5);
+  color: rgba(31, 31, 43, 0.45);
   white-space: nowrap;
   user-select: none;
   -webkit-app-region: no-drag;
@@ -43,14 +43,14 @@
   border: none;
   border-left: 1px solid var(--ud-chrome-strip-border);
   background: transparent;
-  color: #e8e8ef;
+  color: var(--key-menu);
   cursor: pointer;
   -webkit-app-region: no-drag;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .dock-home-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--ud-chrome-soft-hover);
 }
 
 .dock-home-menu-btn:focus-visible {
@@ -59,8 +59,8 @@
 }
 
 .dock-home-menu-btn.is-open {
-  background: rgba(167, 139, 250, 0.18);
-  color: #fff;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--ud-chrome-text);
 }
 
 .dock-home-menu-btn-icon {
@@ -143,7 +143,7 @@ html:not([data-dock-layout]) .dock-home-menu-drawer {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #e8e8ef;
+  color: var(--ud-chrome-text);
   cursor: pointer;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -170,7 +170,7 @@ html:not([data-dock-layout]) .dock-home-menu-drawer {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #e8e8ef;
+  color: var(--ud-chrome-text);
   cursor: pointer;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -275,7 +275,7 @@ html.shell-menu-host .dock-home-menu-drawer {
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: #e8e8ef;
+  color: var(--ud-chrome-text);
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -302,8 +302,8 @@ html.shell-menu-host .dock-home-menu-drawer {
 
 .dock-home-menu-item.is-on,
 .dock-home-menu-item[aria-checked='true'] {
-  border-color: rgba(167, 139, 250, 0.75);
-  background: rgba(167, 139, 250, 0.14);
+  border-color: color-mix(in srgb, var(--accent) 75%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: #fff;
 }
 
@@ -333,21 +333,14 @@ html[data-canvas-theme='light'] .dock-app-version {
   color: rgba(31, 31, 43, 0.45);
 }
 
-html[data-canvas-theme='light'] .dock-home-menu-btn,
 html[data-canvas-theme='light'] .dock-home-menu-close,
 html[data-canvas-theme='light'] .dock-home-menu-back {
   color: #2a2a35;
 }
 
-html[data-canvas-theme='light'] .dock-home-menu-btn:hover,
 html[data-canvas-theme='light'] .dock-home-menu-close:hover,
 html[data-canvas-theme='light'] .dock-home-menu-back:hover {
   background: rgba(20, 20, 40, 0.06);
-}
-
-html[data-canvas-theme='light'] .dock-home-menu-btn.is-open {
-  background: rgba(124, 108, 255, 0.14);
-  color: #4c3fd1;
 }
 
 html[data-canvas-theme='light'] .dock-home-menu-drawer {
@@ -377,9 +370,9 @@ html[data-canvas-theme='light'] .dock-home-menu-item:hover {
 
 html[data-canvas-theme='light'] .dock-home-menu-item.is-on,
 html[data-canvas-theme='light'] .dock-home-menu-item[aria-checked='true'] {
-  border-color: rgba(124, 108, 255, 0.65);
-  background: rgba(124, 108, 255, 0.1);
-  color: #3b2fc0;
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-hover);
 }
 
 html[data-canvas-theme='light'] .dock-home-menu-item-danger {

@@ -72,7 +72,9 @@ const SUPPRESS_CLICK_MS =
 /** ¿El drag en curso lleva archivos? (Explorador o home de descargas del dock). */
 function isFileDrag(e) {
   const types = Array.from((e.dataTransfer && e.dataTransfer.types) || []);
-  return types.includes('Files');
+  if (types.includes('Files') || types.includes('FileNameW') || types.includes('FileName')) return true;
+  const files = e.dataTransfer && e.dataTransfer.files;
+  return !!(files && files.length);
 }
 
 function getDroppedFilePaths(e) {
@@ -154,7 +156,6 @@ function renderChrome(payload) {
   }
   const items = payload && Array.isArray(payload.items) ? payload.items : [];
   if (!strip) return;
-  stripAddInlineEl?.remove();
   stripEndActionsEl?.remove();
   strip.innerHTML = '';
   stripHasShortcuts = items.length > 0;
@@ -245,25 +246,24 @@ function renderChrome(payload) {
   appendStripTrailing();
 }
 
-const stripAddInlineEl = document.getElementById('strip-add-shortcut');
 const stripEndActionsEl = document.getElementById('strip-end-actions');
 let stripHasShortcuts = false;
 let stripEditMode = false;
 
 function appendStripTrailing() {
-  if (stripAddInlineEl) strip.appendChild(stripAddInlineEl);
   if (stripEndActionsEl) strip.appendChild(stripEndActionsEl);
 }
 
 /**
- * Lápiz a la derecha en uso normal; mientras el dock está en modo edición,
- * "+" tras el último icono y "listo" a la derecha.
+ * A la derecha: solo el lápiz en uso normal; mientras el dock está en modo
+ * edición, "+" y a su derecha "listo". Sin accesos, solo el "+".
  */
 function syncStripEndActions() {
+  const addBtn = stripEndActionsEl?.querySelector('#strip-add-new');
   const editBtn = stripEndActionsEl?.querySelector('#strip-edit-toggle');
   const doneBtn = stripEndActionsEl?.querySelector('#strip-edit-done');
+  if (addBtn) addBtn.hidden = stripHasShortcuts && !stripEditMode;
   if (editBtn) editBtn.hidden = !stripHasShortcuts || stripEditMode;
-  if (stripAddInlineEl) stripAddInlineEl.hidden = stripHasShortcuts && !stripEditMode;
   if (doneBtn) doneBtn.hidden = !stripEditMode;
 }
 
@@ -284,89 +284,91 @@ async function refreshChromeFromMain() {
 /** Historial de la pestaña activa. Las flechas solo se dibujan en esa solapa. */
 let pageNav = { canGoBack: false, canGoForward: false };
 
-const SUBTAB_NAV_BACK_SVG =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-  '<path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '</svg>';
-const SUBTAB_NAV_FORWARD_SVG =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-  '<path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '</svg>';
-const SUBTAB_NAV_RELOAD_SVG =
-  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-  '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M21 3v5h-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '</svg>';
+/** El "+" deja la barra vacía: Google carga de fondo hasta que se escribe un enlace. */
+let shortcutBlankAddress = false;
+let shortcutBlankTabId = '';
+
+function isShortcutStartPage(url) {
+  const value = String(url || '').trim();
+  if (!value || /^about:/i.test(value)) return true;
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  if (!/^google\.[a-z]{2,}(?:\.[a-z]{2})?$/.test(host)) return false;
+  const path = parsed.pathname.replace(/\/+$/, '');
+  if (path && path.toLowerCase() !== '/webhp') return false;
+  return !parsed.searchParams.has('q');
+}
+
+function forgetShortcutBlankAddress() {
+  shortcutBlankAddress = false;
+  shortcutBlankTabId = '';
+}
+
+function noteShortcutBlankTab(activeId, url, previousId) {
+  if (!shortcutBlankAddress) return;
+  const tabId = String(activeId || '');
+  if (!tabId || tabId === previousId) {
+    if (shortcutBlankTabId && tabId === shortcutBlankTabId && url && !isShortcutStartPage(url)) {
+      forgetShortcutBlankAddress();
+    }
+    return;
+  }
+  if (!isShortcutStartPage(url)) {
+    forgetShortcutBlankAddress();
+    return;
+  }
+  shortcutBlankTabId = tabId;
+}
+
+function displayAddress(url) {
+  const value = String(url || '');
+  if (!value || /^about:/i.test(value)) return '';
+  if (shortcutBlankAddress && isShortcutStartPage(value)) return '';
+  return value;
+}
+
+function paintShortcutAddress(value) {
+  window.UsualDeskTabStripFit?.paintAddressFace(
+    document.getElementById('shortcut-omnibox-face'),
+    value
+  );
+}
 
 function applyPageNav(state) {
   pageNav = state && typeof state === 'object'
-    ? { canGoBack: !!state.canGoBack, canGoForward: !!state.canGoForward }
-    : { canGoBack: false, canGoForward: false };
-  if (!subtabStrip) return;
-  const back = subtabStrip.querySelector('.subtab-nav-back');
-  const forward = subtabStrip.querySelector('.subtab-nav-forward');
+    ? { canGoBack: !!state.canGoBack, canGoForward: !!state.canGoForward, url: state.url || '' }
+    : { canGoBack: false, canGoForward: false, url: '' };
+  const back = document.getElementById('shortcut-nav-back');
+  const forward = document.getElementById('shortcut-nav-forward');
   if (back) back.disabled = !pageNav.canGoBack;
   if (forward) forward.disabled = !pageNav.canGoForward;
-}
-
-function makeSubtabNavButton(className, label, svg, enabled, onClick) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = `subtab-nav-btn ${className}`;
-  btn.setAttribute('aria-label', label);
-  btn.dataset.tooltip = label;
-  btn.dataset.tooltipPlacement = 'bottom';
-  btn.disabled = !enabled;
-  btn.innerHTML = svg;
-  btn.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    onClick();
-  });
-  return btn;
-}
-
-/** Atrás y adelante solo en la solapa activa. Recargar, en cada una. */
-function appendTabControls(el, tab) {
-  const nav = document.createElement('span');
-  nav.className = 'subtab-nav';
-  nav.addEventListener('click', (ev) => ev.stopPropagation());
-  if (tab.isActive) {
-    nav.appendChild(makeSubtabNavButton(
-      'subtab-nav-back',
-      'Atrás',
-      SUBTAB_NAV_BACK_SVG,
-      pageNav.canGoBack,
-      () => api.goBack?.().catch(() => {})
-    ));
-    nav.appendChild(makeSubtabNavButton(
-      'subtab-nav-forward',
-      'Adelante',
-      SUBTAB_NAV_FORWARD_SVG,
-      pageNav.canGoForward,
-      () => api.goForward?.().catch(() => {})
-    ));
+  const input = document.getElementById('shortcut-omnibox-input');
+  if (input && document.activeElement !== input && state && typeof state.url === 'string') {
+    input.value = displayAddress(state.url);
   }
-  nav.appendChild(makeSubtabNavButton(
-    'subtab-nav-reload',
-    'Recargar',
-    SUBTAB_NAV_RELOAD_SVG,
-    true,
-    () => api.frameAction('reload-tab', tab.id)
-  ));
-  el.appendChild(nav);
+  if (input && document.activeElement !== input) paintShortcutAddress(input.value);
 }
 
 /**
- * Fila de pestañas de la ventana. Con una sola página no se muestra:
- * el sitio ocupa ese lugar. Aparece al abrir un link en otra pestaña.
- * También se oculta si una app de escritorio tapa la página.
+ * Fila de pestañas, como en el navegador de perfiles.
+ * Con una sola pestaña no se muestra ni la solapa ni la dirección.
+ * También se oculta cuando una app de escritorio tapa la página.
  */
 function renderSubTabs(payload) {
-  if (!subtabStrip) return;
+  const chrome = document.getElementById('shortcut-browser');
   const tabs = payload && Array.isArray(payload.tabs) ? payload.tabs : [];
-  if (tabs.length < 2 || (payload && payload.embedded)) {
-    subtabStrip.hidden = true;
+  const embedded = !!(payload && payload.embedded);
+  const showChrome = !embedded && tabs.length > 1;
+  if (chrome) chrome.hidden = !showChrome;
+  if (!subtabStrip) return;
+  if (!showChrome) {
     subtabStrip.innerHTML = '';
+    syncShortcutAddPage([]);
     return;
   }
   subtabStrip.hidden = false;
@@ -377,22 +379,38 @@ function renderSubTabs(payload) {
     if (tab.isActive) el.classList.add('is-active');
     el.setAttribute('role', 'tab');
     el.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
-    el.title = tab.title || '';
+    const tabTip = tab.title || tab.url || 'Pestaña';
+    el.setAttribute('data-tooltip', tabTip);
+    el.setAttribute('data-tooltip-placement', 'bottom');
 
-    appendTabControls(el, tab);
-
-    const icon = document.createElement('span');
-    icon.className = 'subtab-icon';
     if (tab.loading) {
-      icon.classList.add('is-loading');
-    } else if (tab.favicon) {
+      const spin = document.createElement('span');
+      spin.className = 'subtab-icon is-loading';
+      spin.setAttribute('aria-hidden', 'true');
+      el.appendChild(spin);
+    } else if (tab.favicon && /^(https?:|data:)/i.test(tab.favicon)) {
       const img = document.createElement('img');
+      img.className = 'subtab-icon';
       img.src = tab.favicon;
       img.alt = '';
       img.loading = 'lazy';
-      icon.appendChild(img);
+      img.addEventListener('error', () => {
+        const letter = (tab.title || tab.url || '?').trim().charAt(0).toUpperCase() || '?';
+        const fallback = document.createElement('span');
+        fallback.className = 'subtab-icon is-placeholder';
+        fallback.setAttribute('aria-hidden', 'true');
+        fallback.textContent = letter;
+        img.replaceWith(fallback);
+      });
+      el.appendChild(img);
+    } else {
+      const letter = (tab.title || tab.url || '?').trim().charAt(0).toUpperCase() || '?';
+      const fallback = document.createElement('span');
+      fallback.className = 'subtab-icon is-placeholder';
+      fallback.setAttribute('aria-hidden', 'true');
+      fallback.textContent = letter;
+      el.appendChild(fallback);
     }
-    el.appendChild(icon);
 
     const label = document.createElement('span');
     label.className = 'subtab-title';
@@ -425,6 +443,139 @@ function renderSubTabs(payload) {
 
     subtabStrip.appendChild(el);
   }
+
+  const active = tabs.find((tab) => tab.isActive);
+  const input = document.getElementById('shortcut-omnibox-input');
+  const activeId = active && active.id ? String(active.id) : '';
+  const previousId = shortcutShownTabId;
+  noteShortcutBlankTab(activeId, active ? active.url : '', previousId);
+  const typingBlank = shortcutBlankAddress && input && document.activeElement === input;
+  if (input && active && !typingBlank && (document.activeElement !== input || activeId !== shortcutShownTabId)) {
+    input.value = displayAddress(active.url);
+  }
+  if (input && document.activeElement !== input) paintShortcutAddress(input.value);
+  shortcutShownTabId = activeId;
+  const fit = window.UsualDeskTabStripFit;
+  if (fit) {
+    fit.watchTabStrip(subtabStrip, '.subtab');
+    fit.fitTabStrip(subtabStrip, '.subtab');
+  }
+  syncShortcutAddPage(tabs);
+}
+
+let shortcutShownTabId = '';
+
+/** Igual que en la navegación libre: fija la página activa en la barra de accesos. */
+function syncShortcutAddPage(tabs) {
+  const btn = document.getElementById('shortcut-add-page');
+  if (!btn) return;
+  const tab = (tabs || []).find((item) => item.isActive && item.canPin);
+  btn.hidden = !tab;
+  if (!tab) return;
+  const saved = !!tab.pinned;
+  btn.classList.toggle('is-saved', saved);
+  const label = btn.querySelector('.shortcut-add-page-label');
+  if (label) label.textContent = saved ? 'Acceso directo creado' : 'Generar acceso directo…';
+  const hint = saved
+    ? 'Esta página ya está en la barra de arriba'
+    : 'Generar acceso directo en la barra de arriba';
+  btn.setAttribute('aria-label', hint);
+  btn.dataset.tooltip = hint;
+  btn._pinPage = tab;
+}
+
+function bindShortcutBrowserChrome() {
+  document.getElementById('shortcut-nav-back')?.addEventListener('click', () => {
+    api.goBack?.().catch(() => {});
+  });
+  document.getElementById('shortcut-nav-forward')?.addEventListener('click', () => {
+    api.goForward?.().catch(() => {});
+  });
+  document.getElementById('shortcut-nav-reload')?.addEventListener('click', () => {
+    api.frameAction('reload-tab', '').catch(() => {});
+  });
+  document.getElementById('shortcut-new-tab')?.addEventListener('click', () => {
+    shortcutBlankAddress = true;
+    shortcutBlankTabId = '';
+    const field = document.getElementById('shortcut-omnibox-input');
+    if (field) {
+      field.value = '';
+      field.focus();
+    }
+    api.frameAction('new-subtab').catch(() => {
+      forgetShortcutBlankAddress();
+    });
+  });
+  document.getElementById('shortcut-add-page')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const tab = event.currentTarget._pinPage;
+    if (!tab || tab.pinned || !tab.canPin) return;
+    api.openAddShortcutForPage?.({
+      url: tab.url,
+      title: tab.pinTitle || tab.title || '',
+      sessionId: tab.sessionId || '',
+      favicon: tab.favicon || '',
+    }).catch(() => {});
+  });
+  function elementBehindUrlEditor(editor, x, y) {
+    if (!editor) return null;
+    const fields = editor.querySelectorAll('input, button');
+    const prev = editor.style.pointerEvents;
+    const prevFields = [];
+    editor.style.pointerEvents = 'none';
+    fields.forEach((el) => {
+      prevFields.push(el.style.pointerEvents);
+      el.style.pointerEvents = 'none';
+    });
+    const under = document.elementFromPoint(x, y);
+    editor.style.pointerEvents = prev;
+    fields.forEach((el, i) => {
+      el.style.pointerEvents = prevFields[i];
+    });
+    return under;
+  }
+
+  const form = document.getElementById('shortcut-omnibox');
+  const input = document.getElementById('shortcut-omnibox-input');
+  if (form && input) {
+    const syncUrlEditing = () => {
+      form.classList.toggle('is-editing', document.activeElement === input);
+    };
+    input.addEventListener('focus', () => {
+      syncUrlEditing();
+      if (shortcutBlankAddress) input.value = '';
+    });
+    input.addEventListener('blur', syncUrlEditing);
+  }
+  form?.addEventListener('mousedown', (event) => {
+    if (event.target.closest('button')) return;
+    const under = elementBehindUrlEditor(form, event.clientX, event.clientY);
+    const tab = under?.closest('.subtab, .shortcut-browser-new, .subtab-close');
+    if (tab) {
+      event.preventDefault();
+      input?.blur();
+      tab.click();
+      return;
+    }
+    if (event.target.closest('input')) return;
+    event.preventDefault();
+    input?.focus();
+  });
+  form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const value = input ? input.value : '';
+    api.frameAction('new-subtab', value).catch(() => {});
+    input?.blur();
+  });
+  input?.addEventListener('blur', () => {
+    paintShortcutAddress(input.value);
+  });
+  window.UsualDeskTabStripFit?.bindUrlColumnSplit(
+    document.getElementById('shortcut-browser'),
+    document.getElementById('shortcut-browser-split'),
+    form,
+  );
 }
 
 async function refreshSubTabsFromMain() {
@@ -436,8 +587,18 @@ async function refreshSubTabsFromMain() {
   }
 }
 
+bindShortcutBrowserChrome();
+
 if (api.onTabs) {
   api.onTabs(renderSubTabs);
+}
+if (api.onUrlBarHidden) {
+  api.onUrlBarHidden((hidden) => {
+    document.getElementById('shortcut-browser')?.classList.toggle('is-url-hidden', hidden === true);
+    if (window.UsualDeskTabStripFit && subtabStrip) {
+      window.UsualDeskTabStripFit.fitTabStrip(subtabStrip, '.subtab');
+    }
+  });
 }
 if (api.onNavState) api.onNavState(applyPageNav);
 if (api.getNavState) api.getNavState().then(applyPageNav).catch(() => {});
@@ -449,6 +610,7 @@ if (api.onChrome) {
 if (api.onShortcutsChanged) {
   api.onShortcutsChanged(() => {
     refreshChromeFromMain();
+    refreshSubTabsFromMain();
   });
 }
 
@@ -502,12 +664,9 @@ function bindHibernationCover() {
 
 bindHibernationCover();
 
-const stripAddShortcutBtn = document.getElementById('strip-add-shortcut');
-if (stripAddShortcutBtn) {
-  stripAddShortcutBtn.addEventListener('click', () => {
-    api.openAddShortcut?.().catch(() => {});
-  });
-}
+document.getElementById('strip-add-new')?.addEventListener('click', () => {
+  api.openAddShortcut?.().catch(() => {});
+});
 
 document.getElementById('strip-edit-toggle')?.addEventListener('click', () => {
   api.enterShortcutsEditMode?.().catch(() => {});
@@ -569,9 +728,13 @@ function mountPageMenuButton() {
     const r = btn.getBoundingClientRect();
     api.openPageMenu(r.left, r.bottom).catch(() => {});
   });
-  const anchor = document.getElementById('header-actions') || header.querySelector('.shell-win-btns');
-  if (anchor) header.insertBefore(btn, anchor);
-  else header.appendChild(btn);
+  const wrap = document.getElementById('header-actions');
+  if (wrap) wrap.insertBefore(btn, wrap.firstChild);
+  else {
+    const anchor = header.querySelector('.shell-win-btns');
+    if (anchor) header.insertBefore(btn, anchor);
+    else header.appendChild(btn);
+  }
 }
 
 function bindPageCommands() {

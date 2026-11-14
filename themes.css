@@ -1,0 +1,260 @@
+/**
+ * Temas de la aplicación.
+ *
+ * Cada tema define unas pocas semillas (--th-*) y el color de cada tipo de
+ * botón clave (--key-*). El primer bloque las reparte en las variables que
+ * usa el resto de los estilos (--ud-chrome-*, --dock-*, --accent…).
+ *
+ * Código de color de los botones clave:
+ *   --secondary  lápiz, "+", atrás/adelante/recargar, fijar y menú
+ *   --key-close  cerrar pestaña
+ *   --key-line   líneas que separan zonas y marca de la pestaña activa
+ *
+ * `.theme-preview` pinta la miniatura de un tema dentro de Configuración,
+ * sin importar cuál esté aplicado en la ventana.
+ */
+
+:is(html, .theme-preview)[data-ui-theme] {
+  --ud-chrome-canvas: var(--th-canvas);
+  --ud-chrome-strip-bg: var(--th-strip);
+  --ud-chrome-strip-border: var(--th-line);
+  --ud-chrome-field-bg: var(--th-field);
+  --ud-chrome-icon-bg: var(--th-raise);
+  --ud-chrome-icon-bg-hover: var(--th-hover);
+  --ud-chrome-icon-border: var(--th-line);
+  --ud-chrome-icon-border-hover: color-mix(in srgb, var(--th-line) 55%, var(--th-text));
+  --ud-chrome-icon-active-bg: var(--th-hover);
+  --ud-chrome-icon-active-border: color-mix(in srgb, var(--th-line) 40%, var(--th-text));
+  --ud-chrome-icon-muted: var(--th-muted);
+  --ud-chrome-text: var(--th-text);
+  --ud-chrome-action-hover: var(--th-hover);
+  --ud-chrome-action-color: var(--th-text);
+  /* Rayas del modo edición: blancas sobre la franja oscura (en los claros, más abajo). */
+  --ud-chrome-edit-border: #ffffff;
+  --ud-chrome-seg-bg: var(--th-field);
+  --ud-chrome-seg-muted: var(--th-muted);
+  --ud-chrome-soft-hover: color-mix(in srgb, var(--th-text) 9%, transparent);
+  --dock-surface: var(--th-canvas);
+  --dock-surface-2: var(--th-strip);
+  --dock-border: var(--th-line);
+  --dock-text: var(--th-text);
+  --dock-muted: var(--th-muted);
+  --dock-btn: var(--th-raise);
+  --dock-btn-hover: var(--th-hover);
+  --accent: var(--th-accent);
+  --accent-hover: var(--th-accent-2);
+  /* El acento como texto o trazo sobre las superficies del tema. */
+  --accent-ink: color-mix(in srgb, var(--th-accent) 52%, #ffffff);
+  --edge-gradient-top: var(--accent-ink);
+  --edge-gradient-bottom: var(--th-accent);
+  --shortcut-edit-tab: var(--accent-ink);
+  --shortcut-edit-glow: color-mix(in srgb, var(--th-accent) 55%, transparent);
+  --ud-chrome-edit-tab: var(--accent-ink);
+  --key-edit: var(--secondary);
+  --key-add: var(--secondary);
+  --key-nav: var(--secondary);
+  --key-pin: var(--secondary);
+  --key-menu: var(--secondary);
+}
+
+html[data-canvas-theme='light'][data-ui-theme] {
+  --accent-ink: var(--th-accent-2);
+  /* Sobre una franja clara el blanco no se vería: va el color del texto. */
+  --ud-chrome-edit-border: var(--th-text);
+}
+
+/* ---------------- Oscuros ---------------- */
+
+:is(html, .theme-preview)[data-ui-theme='dark'] {
+  --th-canvas: #000000;
+  --th-strip: #121216;
+  --th-field: #2c2c34;
+  --th-raise: #2a2a32;
+  --th-hover: #36363f;
+  --th-line: #33333d;
+  --th-text: #e8e8ef;
+  --th-muted: #c8c8d4;
+  --th-accent: #4f46e5;
+  --th-accent-2: #4338ca;
+  --secondary: #c8f542;
+  --key-close: #ff9a9a;
+  --key-line: #a78bfa;
+}
+
+:is(html, .theme-preview)[data-ui-theme='midnight'] {
+  --th-canvas: #0b1020;
+  --th-strip: #0f172a;
+  --th-field: #1e293b;
+  --th-raise: #172033;
+  --th-hover: #26334d;
+  --th-line: #2b3a55;
+  --th-text: #e2e8f0;
+  --th-muted: #a3b1c6;
+  --th-accent: #2563eb;
+  --th-accent-2: #1d4ed8;
+  --secondary: #facc15;
+  --key-close: #fca5a5;
+  --key-line: #38bdf8;
+}
+
+:is(html, .theme-preview)[data-ui-theme='neon'] {
+  --th-canvas: #120b1f;
+  --th-strip: #1a1030;
+  --th-field: #2a1b4a;
+  --th-raise: #23153f;
+  --th-hover: #37245e;
+  --th-line: #43307a;
+  --th-text: #f3e8ff;
+  --th-muted: #c9b8ee;
+  --th-accent: #a21caf;
+  --th-accent-2: #86198f;
+  --secondary: #fde047;
+  --key-close: #f87171;
+  --key-line: #f472b6;
+}
+
+:is(html, .theme-preview)[data-ui-theme='forest'] {
+  --th-canvas: #0b1410;
+  --th-strip: #0f1d17;
+  --th-field: #1a2e25;
+  --th-raise: #15261e;
+  --th-hover: #223b30;
+  --th-line: #2c4a3c;
+  --th-text: #e7f5ec;
+  --th-muted: #a8c7b5;
+  --th-accent: #15803d;
+  --th-accent-2: #166534;
+  --secondary: #fde047;
+  --key-close: #fca5a5;
+  --key-line: #4ade80;
+}
+
+:is(html, .theme-preview)[data-ui-theme='sunset'] {
+  --th-canvas: #1a0f14;
+  --th-strip: #24131a;
+  --th-field: #3a1f2a;
+  --th-raise: #2e1821;
+  --th-hover: #4a2836;
+  --th-line: #5c3344;
+  --th-text: #ffe9e0;
+  --th-muted: #e3b5a8;
+  --th-accent: #c2410c;
+  --th-accent-2: #9a3412;
+  --secondary: #fde047;
+  --key-close: #fca5a5;
+  --key-line: #fb923c;
+}
+
+/* ---------------- Claros ---------------- */
+
+:is(html, .theme-preview)[data-ui-theme='light'] {
+  --th-canvas: #ffffff;
+  --th-strip: #ffffff;
+  --th-field: #e6e6ec;
+  --th-raise: #f1f1f5;
+  --th-hover: #e8e8ee;
+  --th-line: #e3e3ea;
+  --th-text: #1f1f2b;
+  --th-muted: #5a5a68;
+  --th-accent: #4f46e5;
+  --th-accent-2: #4338ca;
+  --secondary: #854d0e;
+  --key-close: #b91c1c;
+  --key-line: #7c3aed;
+}
+
+:is(html, .theme-preview)[data-ui-theme='sand'] {
+  --th-canvas: #fbf6ea;
+  --th-strip: #f5edda;
+  --th-field: #e9dcc0;
+  --th-raise: #f0e6cf;
+  --th-hover: #e4d6b6;
+  --th-line: #d6c7a2;
+  --th-text: #3b3024;
+  --th-muted: #645741;
+  --th-accent: #b45309;
+  --th-accent-2: #92400e;
+  --secondary: #854d0e;
+  --key-close: #991b1b;
+  --key-line: #b45309;
+}
+
+:is(html, .theme-preview)[data-ui-theme='mint'] {
+  --th-canvas: #f2fbf6;
+  --th-strip: #e4f6ec;
+  --th-field: #cfeadb;
+  --th-raise: #dbf1e5;
+  --th-hover: #c3e3d2;
+  --th-line: #a6d5bd;
+  --th-text: #10291f;
+  --th-muted: #3d6452;
+  --th-accent: #047857;
+  --th-accent-2: #065f46;
+  --secondary: #854d0e;
+  --key-close: #991b1b;
+  --key-line: #047857;
+}
+
+:is(html, .theme-preview)[data-ui-theme='lavender'] {
+  --th-canvas: #f8f5ff;
+  --th-strip: #efe9ff;
+  --th-field: #ded4fb;
+  --th-raise: #e7dffd;
+  --th-hover: #d3c6f7;
+  --th-line: #bfaef0;
+  --th-text: #261a45;
+  --th-muted: #594a83;
+  --th-accent: #6d28d9;
+  --th-accent-2: #5b21b6;
+  --secondary: #854d0e;
+  --key-close: #991b1b;
+  --key-line: #7c3aed;
+}
+
+:is(html, .theme-preview)[data-ui-theme='sky'] {
+  --th-canvas: #f3f9ff;
+  --th-strip: #e3f1fd;
+  --th-field: #cbe2f8;
+  --th-raise: #d7e9fb;
+  --th-hover: #badaf5;
+  --th-line: #9fc8ee;
+  --th-text: #0f2540;
+  --th-muted: #3c5d7e;
+  --th-accent: #1d4ed8;
+  --th-accent-2: #1e40af;
+  --secondary: #854d0e;
+  --key-close: #991b1b;
+  --key-line: #0284c7;
+}
+
+/* ---------------- Acento elegido a mano ---------------- */
+
+html[data-ui-theme][data-color-theme='indigo'] {
+  --th-accent: #4f46e5;
+  --th-accent-2: #4338ca;
+}
+
+html[data-ui-theme][data-color-theme='violet'] {
+  --th-accent: #7c3aed;
+  --th-accent-2: #6d28d9;
+}
+
+html[data-ui-theme][data-color-theme='blue'] {
+  --th-accent: #2563eb;
+  --th-accent-2: #1d4ed8;
+}
+
+html[data-ui-theme][data-color-theme='teal'] {
+  --th-accent: #0f766e;
+  --th-accent-2: #115e59;
+}
+
+html[data-ui-theme][data-color-theme='amber'] {
+  --th-accent: #b45309;
+  --th-accent-2: #92400e;
+}
+
+html[data-ui-theme][data-color-theme='rose'] {
+  --th-accent: #be123c;
+  --th-accent-2: #9f1239;
+}

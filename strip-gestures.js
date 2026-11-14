@@ -44,7 +44,6 @@
     let startY = 0;
     let activePointerId = null;
     let committed = false;
-    let movedPastCancel = false;
 
     let closeLabelEl = null;
     let pressRaf = 0;
@@ -148,7 +147,6 @@
       startX = e.clientX;
       startY = e.clientY;
       committed = false;
-      movedPastCancel = false;
       fullCleanup();
       try {
         btn.setPointerCapture(e.pointerId);
@@ -165,7 +163,6 @@
       const dy = e.clientY - startY;
       const dist = Math.hypot(dx, dy);
       if (dist > HOLD_MOVE_CANCEL_PX) {
-        movedPastCancel = true;
         fullCleanup();
       } else if (closeLabelEl) {
         // La píldora sigue al icono si éste se reubica (scroll/resize tardío).
@@ -174,16 +171,9 @@
     }
 
     function onPointerEnd(e) {
-      // Sólo suprimimos el siguiente click si el usuario arrastró fuera del
-      // icono (gesto cancelado) o si el long-press llegó a comprometerse —el
-      // commit ya llamó a `suppressNextActivation` desde el tick, así que aquí
-      // no hace falta repetirlo. Un click corto NO debe suprimirse: tiene que
-      // llegar al `click` listener para activar/cerrar/apagar foco.
-      const wasMovedAbort = movedPastCancel && !committed;
+      // Un clic corto abre el acceso aunque el puntero se haya movido un poco.
+      // Solo el long-press de cerrar (ya comprometido) cancela esa activación.
       fullCleanup();
-      if (wasMovedAbort && suppressNextActivation) {
-        suppressNextActivation();
-      }
       releaseCapture(e);
     }
 

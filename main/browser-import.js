@@ -178,7 +178,52 @@ function historyUrlCount(userDataDir, directory) {
 }
 
 /**
- * Perfiles de un navegador leyendo `Local State` → `profile.info_cache`.
+ * Mail y nombre firmados en el perfil. En Chrome reciente `info_cache.user_name`
+ * a veces viene vacío en los perfiles que no son el último usado; el mail sigue
+ * estando en Preferences.
+ * @param {string} userDataDir
+ * @param {string} directory
+ * @returns {{ email: string, name: string }}
+ */
+function readProfileAccount(userDataDir, directory) {
+  const prefsPath = path.join(userDataDir, directory, 'Preferences');
+  try {
+    const data = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+    const list = Array.isArray(data.account_info) ? data.account_info : [];
+    const primary = list.find((item) => item && typeof item.email === 'string' && item.email.includes('@'));
+    const services = data.google && data.google.services;
+    const last = services && typeof services.last_username === 'string' ? services.last_username : '';
+    const email = (primary && primary.email) || (last.includes('@') ? last : '');
+    const full = primary && (primary.full_name || primary.given_name);
+    return {
+      email: String(email || ''),
+      name: typeof full === 'string' ? full : '',
+    };
+  } catch {
+    return { email: '', name: '' };
+  }
+}
+
+/** Carpetas de perfil que existen en disco aunque `Local State` no las liste. */
+function profileDirsOnDisk(userDataDir, known) {
+  let names = [];
+  try {
+    names = fs.readdirSync(userDataDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+  return names.filter((name) => {
+    if (known.has(name)) return false;
+    if (name !== 'Default' && !/^Profile \d+$/.test(name)) return false;
+    return fs.existsSync(path.join(userDataDir, name, 'Preferences'));
+  });
+}
+
+/**
+ * Perfiles de un navegador leyendo `Local State` → `profile.info_cache`,
+ * más las carpetas Profile N que el cache todavía no publicó.
  * @param {string} browserId
  * @param {{ withHistoryCount?: boolean }} [opts]
  * @returns {Array<{ browser: string, browserName: string, key: string, directory: string, name: string, userName: string, picturePath: string, historyCount: number }>}
@@ -201,23 +246,32 @@ function listProfiles(browserId, opts) {
   if (entries.length === 0 && fs.existsSync(path.join(userDataDir, 'Default'))) {
     entries = [['Default', { name: 'Default' }]];
   }
+  const known = new Set(entries.map(([directory]) => directory));
+  for (const directory of profileDirsOnDisk(userDataDir, known)) {
+    entries.push([directory, {}]);
+  }
   const withCount = !!(opts && opts.withHistoryCount);
   return entries
     .filter(([directory]) => fs.existsSync(path.join(userDataDir, directory)))
     .map(([directory, info]) => {
       const i = info && typeof info === 'object' ? info : {};
+      const account = readProfileAccount(userDataDir, directory);
       const pictureFile =
         typeof i.gaia_picture_file_name === 'string' && i.gaia_picture_file_name
           ? i.gaia_picture_file_name
           : 'Google Profile Picture.png';
       const picturePath = path.join(userDataDir, directory, pictureFile);
+      const cachedMail = typeof i.user_name === 'string' && i.user_name.includes('@') ? i.user_name : '';
+      const cachedName = typeof i.gaia_name === 'string' && i.gaia_name
+        ? i.gaia_name
+        : (typeof i.name === 'string' && i.name ? i.name : '');
       return {
         browser: browserId,
         browserName: def ? def.name : browserId,
         key: `${browserId}::${directory}`,
         directory,
-        name: typeof i.name === 'string' && i.name ? i.name : directory,
-        userName: typeof i.user_name === 'string' ? i.user_name : '',
+        name: cachedName || account.name || directory,
+        userName: cachedMail || account.email,
         picturePath: fs.existsSync(picturePath) ? picturePath : '',
         historyCount: withCount ? historyUrlCount(userDataDir, directory) : 0,
       };
@@ -251,6 +305,63 @@ function listAllProfiles(opts) {
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function copyIfExists(src, dest) {
+  if (!fs.existsSync(src)) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  return true;
+}
+
+/**
+ * Copia mínima de un solo perfil a una carpeta temporal.
+ * Chrome reciente no deja depurar el User Data real, y con varios perfiles
+ * `--profile-directory` abre el último usado (casi siempre Default). Acá el
+ * navegador solo ve el perfil pedido, así las cookies son las de esa cuenta.
+ * @param {string} userDataDir
+ * @param {string} directory
+ * @returns {string} carpeta temporal; hay que borrarla al terminar
+ */
+function stageProfileCopy(userDataDir, directory) {
+  const temp = fs.mkdtempSync(path.join(require('os').tmpdir(), 'inplaize-profile-'));
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(userDataDir, 'Local State'), 'utf8'));
+    if (!data.profile || typeof data.profile !== 'object') data.profile = {};
+    const info = data.profile.info_cache && data.profile.info_cache[directory];
+    data.profile.info_cache = info ? { [directory]: info } : {};
+    data.profile.last_used = directory;
+    data.profile.profiles_order = [directory];
+    if (Array.isArray(data.profile.last_active_profiles)) {
+      data.profile.last_active_profiles = [directory];
+    }
+    fs.writeFileSync(path.join(temp, 'Local State'), JSON.stringify(data));
+
+    const src = path.join(userDataDir, directory);
+    const dest = path.join(temp, directory);
+    const cookieFiles = ['Cookies', path.join('Network', 'Cookies')];
+    let copiedCookies = false;
+    // Solo las cookies. Si copiamos Preferences, Chrome abre el aviso de
+    // "otra aplicación agregó una extensión" (el menú de Drive) en esa ventana.
+    for (const rel of [...cookieFiles, path.join('Network', 'Cookies-journal')]) {
+      if (!copyIfExists(path.join(src, rel), path.join(dest, rel))) continue;
+      if (cookieFiles.includes(rel)) copiedCookies = true;
+    }
+    if (!copiedCookies) throw new Error('PROFILE_COOKIES_NOT_FOUND');
+    fs.mkdirSync(dest, { recursive: true });
+    fs.writeFileSync(
+      path.join(dest, 'Preferences'),
+      JSON.stringify({ extensions: { settings: {} } }),
+    );
+    return temp;
+  } catch (err) {
+    try {
+      fs.rmSync(temp, { recursive: true, force: true });
+    } catch {
+      /* noop */
+    }
+    throw err;
+  }
 }
 
 /** @param {string} processName @returns {Promise<boolean>} */
@@ -748,38 +859,52 @@ async function fetchAllCookies(browserId, directory, opts) {
   }
   if (opts) opts.closedBrowser = closedBrowser;
 
-  const portFile = path.join(userDataDir, 'DevToolsActivePort');
-  const portCutoff = devToolsPortCutoff(portFile);
-
-  const args = [
-    '--remote-debugging-port=0',
-    '--remote-allow-origins=*',
-    `--user-data-dir=${userDataDir}`,
-    `--profile-directory=${directory}`,
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--noerrdialogs',
-    '--disable-session-crashed-bubble',
-    'about:blank',
-  ];
-  const child = spawn(exe, args, { detached: false, stdio: 'ignore', windowsHide: true });
+  let staged = '';
   try {
-    const port = await waitForDevToolsPort(portFile, 15000, portCutoff);
-    return await fetchCookiesViaCdp(port, 12000);
-  } finally {
-    await killPidTree(child.pid);
+    staged = stageProfileCopy(userDataDir, directory);
+    const portFile = path.join(staged, 'DevToolsActivePort');
+    const portCutoff = devToolsPortCutoff(portFile);
+    const args = [
+      '--remote-debugging-port=0',
+      '--remote-allow-origins=*',
+      `--user-data-dir=${staged}`,
+      `--profile-directory=${directory}`,
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-default-apps',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-sync',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--noerrdialogs',
+      '--disable-session-crashed-bubble',
+      'about:blank',
+    ];
+    const child = spawn(exe, args, { detached: false, stdio: 'ignore', windowsHide: true });
     try {
-      if (!child.killed) child.kill();
-    } catch {
-      /* noop */
+      const port = await waitForDevToolsPort(portFile, 15000, portCutoff);
+      return await fetchCookiesViaCdp(port, 12000);
+    } finally {
+      await killPidTree(child.pid);
+      try {
+        if (!child.killed) child.kill();
+      } catch {
+        /* noop */
+      }
+      // La instancia headless también se llama chrome.exe / msedge.exe. Hay que
+      // esperar a que suelte el perfil antes del próximo perfil o de reabrir.
+      if (!(await waitImageExit(def.processName, 8000))) {
+        await closeImage(def.processName);
+      }
     }
-    // La instancia headless también se llama chrome.exe / msedge.exe. Hay que
-    // esperar a que suelte el perfil antes del próximo perfil o de reabrir.
-    if (!(await waitImageExit(def.processName, 8000))) {
-      await closeImage(def.processName);
+  } finally {
+    if (staged) {
+      try {
+        fs.rmSync(staged, { recursive: true, force: true });
+      } catch {
+        /* la copia temporal se limpia en el próximo arranque del sistema */
+      }
     }
     if (closedBrowser && mayRelaunch) relaunchBrowser(browserId);
   }
@@ -793,6 +918,7 @@ module.exports = {
   listInstalledBrowsers,
   listProfiles,
   listAllProfiles,
+  stageProfileCopy,
   isBrowserRunning,
   closeBrowserForImport,
   relaunchBrowser,

@@ -2,23 +2,6 @@
 
 const bridge = window.menuOverlay;
 const menuApi = window.UsualDeskShellHomeMenu;
-const CANVAS_THEME_KEY = 'inplaize.canvasTheme';
-
-function applyCanvasTheme() {
-  let light = false;
-  try {
-    light = localStorage.getItem(CANVAS_THEME_KEY) === 'light';
-  } catch {
-    /* sin almacenamiento: queda oscuro */
-  }
-  if (light) document.documentElement.setAttribute('data-canvas-theme', 'light');
-  else document.documentElement.removeAttribute('data-canvas-theme');
-}
-
-applyCanvasTheme();
-window.addEventListener('storage', (e) => {
-  if (e.key === CANVAS_THEME_KEY) applyCanvasTheme();
-});
 
 const hiddenBtn = document.createElement('button');
 hiddenBtn.type = 'button';

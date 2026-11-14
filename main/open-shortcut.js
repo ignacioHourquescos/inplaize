@@ -768,6 +768,7 @@ async function openWebShortcut(shortcut) {
   const mapKey = webMapKey(shortcut);
   const { notificationsMuted: desiredNotificationsMuted, audioMuted: desiredAudioMuted } =
     desiredWebMuteState(shortcut, mapKey);
+  const crmJustLoaded = await require('./whatsapp-crm-extension').ensureCrmExtension(shortcut, partition);
   let win = webWindowsByUrlKey.get(mapKey);
   if (win && !win.isDestroyed()) {
     try {
@@ -779,7 +780,7 @@ async function openWebShortcut(shortcut) {
     win.__usualDeskWebMapKey = mapKey;
     win.__usualDeskShortcutLabel = shortcut.name || 'Web';
     win.__usualDeskShortcut = shortcut;
-    require('./detached-web-frame').wakeHost(win);
+    const woke = require('./detached-web-frame').wakeHost(win);
     if (win.isMinimized()) win.restore();
     if (win.isFullScreen()) win.setFullScreen(false);
     if (!win.isMaximized()) win.maximize();
@@ -788,6 +789,7 @@ async function openWebShortcut(shortcut) {
     const hosted = getHostedWebContents(win);
     if (hosted) hosted.setAudioMuted(desiredAudioMuted);
     else win.webContents.setAudioMuted(desiredAudioMuted);
+    if (crmJustLoaded && !woke && hosted && !hosted.isDestroyed()) hosted.reload();
     pushTitleBadgeFromWindow(win, shortcut.id);
     wireWebWindowFocusTracking(win, mapKey);
     setLastFocusedWebMapKey(mapKey);

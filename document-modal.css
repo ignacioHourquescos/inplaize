@@ -372,6 +372,33 @@
   cursor: nesw-resize;
 }
 
+/* Resultado de un cálculo (renglón con "="): al final del párrafo, se copia con un clic. */
+.doc-editor .ProseMirror .doc-calc {
+  margin-left: 16px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: #8d8d9c;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.doc-editor .ProseMirror .doc-calc:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f2f2f6;
+}
+
+.doc-editor .ProseMirror .doc-calc.is-copied {
+  color: #a78bfa;
+}
+
+.doc-editor .ProseMirror .doc-calc.is-copied::after {
+  content: '✓';
+  margin-left: 6px;
+}
+
 .doc-editor .ProseMirror .ProseMirror-selectednode {
   outline: 2px solid #a78bfa;
   outline-offset: 2px;
@@ -642,6 +669,19 @@ html[data-canvas-theme='light'] .doc-editor .ProseMirror h1,
 html[data-canvas-theme='light'] .doc-editor .ProseMirror h2,
 html[data-canvas-theme='light'] .doc-editor .ProseMirror h3 {
   color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror .doc-calc {
+  color: #71717a;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror .doc-calc:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #18181b;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror .doc-calc.is-copied {
+  color: #7c3aed;
 }
 
 html[data-canvas-theme='light'] .doc-editor .ProseMirror blockquote {

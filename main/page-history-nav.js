@@ -7,11 +7,11 @@
  */
 
 function navSnapshot(wc) {
-  if (!wc || wc.isDestroyed()) return { canGoBack: false, canGoForward: false };
+  if (!wc || wc.isDestroyed()) return { canGoBack: false, canGoForward: false, url: '' };
   try {
-    return { canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward() };
+    return { canGoBack: wc.canGoBack(), canGoForward: wc.canGoForward(), url: wc.getURL() || '' };
   } catch {
-    return { canGoBack: false, canGoForward: false };
+    return { canGoBack: false, canGoForward: false, url: '' };
   }
 }
 

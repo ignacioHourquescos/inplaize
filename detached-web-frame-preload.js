@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   },
   setUrlPromptOpen: (open) => ipcRenderer.invoke('url-prompt-open', open === true),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
+  openAddShortcutForPage: (page) => ipcRenderer.invoke('chrome-open-add-shortcut-for-page', page || {}),
   openAppearance: () => ipcRenderer.invoke('chrome-open-appearance'),
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
@@ -54,6 +55,9 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   },
   onTabs: (cb) => {
     ipcRenderer.on('detached-tabs', (_e, payload) => cb(payload));
+  },
+  onUrlBarHidden: (cb) => {
+    ipcRenderer.on('detached-url-bar', (_e, hidden) => cb(hidden === true));
   },
   onTitleBadge: (cb) => {
     ipcRenderer.on('detached-title-badge', (_e, payload) => cb(payload));

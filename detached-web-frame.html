@@ -6,6 +6,7 @@
   <title>inplaize</title>
   <link rel="stylesheet" href="shell-home-menu.css" />
   <link rel="stylesheet" href="web-shell.css" />
+  <script src="canvas-theme.js"></script>
 </head>
 <body>
   <header class="shell-top" role="banner">
@@ -23,20 +24,22 @@
     <nav id="loose-nav-accounts" class="loose-nav-accounts" aria-label="Perfiles de navegación"></nav>
     <div class="strip-rail-divider" aria-hidden="true"></div>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos">
-    <button
-      type="button"
-      id="strip-add-shortcut"
-      class="shell-shortcut-item strip-add-shortcut strip-add-inline strip-add-secondary"
-      hidden
-    >
-      <span class="shell-shortcut-icon-wrap" aria-hidden="true">
-        <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
-          <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-        </svg>
-      </span>
-      <span>Agregar acceso directo</span>
-    </button>
     <div id="strip-end-actions" class="strip-end-actions">
+      <button
+        type="button"
+        id="strip-add-new"
+        class="shell-shortcut-item strip-add-shortcut"
+        data-tooltip="Agregar acceso directo o perfil"
+        data-tooltip-placement="bottom"
+        aria-label="Agregar acceso directo o perfil"
+        hidden
+      >
+        <span class="shell-shortcut-icon-wrap" aria-hidden="true">
+          <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </span>
+      </button>
       <button
         type="button"
         id="strip-edit-toggle"
@@ -75,12 +78,49 @@
       <button type="button" id="shell-win-close" class="shell-win-btn is-close" data-tooltip="Cerrar ventana" data-tooltip-placement="bottom" aria-label="Cerrar ventana">&#215;</button>
     </div>
   </header>
-  <div id="subtab-strip" class="subtab-strip" role="tablist" aria-label="Pestañas" hidden></div>
+  <div id="shortcut-browser" class="shortcut-browser" hidden>
+    <form id="shortcut-omnibox" class="shortcut-browser-toolbar" autocomplete="off">
+      <div class="shortcut-browser-omnibox">
+        <button type="button" id="shortcut-nav-back" class="shortcut-browser-nav" aria-label="Atrás" data-tooltip="Atrás" data-tooltip-placement="bottom" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="shortcut-nav-forward" class="shortcut-browser-nav" aria-label="Adelante" data-tooltip="Adelante" data-tooltip-placement="bottom" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="shortcut-nav-reload" class="shortcut-browser-nav" aria-label="Recargar" data-tooltip="Recargar" data-tooltip-placement="bottom">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 3v5h-5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="shortcut-add-page" class="shortcut-add-page" data-tooltip-placement="bottom" hidden>
+          <span class="shortcut-add-page-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 16.5V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M8.2 3.5h7.6L14.6 9l2.4 2.2H7L9.4 9 8.2 3.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="shortcut-add-page-label">Generar acceso directo…</span>
+        </button>
+        <div id="shortcut-omnibox-face" class="omnibox-face is-empty" aria-hidden="true"></div>
+        <input id="shortcut-omnibox-input" class="shortcut-browser-address" type="text" spellcheck="false" aria-label="Dirección" placeholder="Buscá en Google o escribí un enlace" />
+      </div>
+    </form>
+    <div id="shortcut-browser-split" class="shortcut-browser-split" role="separator" aria-orientation="vertical" aria-label="Ancho de la dirección"></div>
+    <div class="shortcut-browser-tabs">
+      <div class="shortcut-tabs-cluster">
+        <div id="subtab-strip" class="subtab-strip" role="tablist" aria-label="Pestañas"></div>
+        <button type="button" id="shortcut-new-tab" class="shortcut-browser-new" aria-label="Nueva pestaña" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
   <script src="ui-tooltip.js"></script>
   <script src="shell-nav-profiles.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="page-find-bar.js"></script>
+  <script src="tab-strip-fit.js"></script>
   <script src="detached-web-frame-renderer.js"></script>
 </body>
 </html>

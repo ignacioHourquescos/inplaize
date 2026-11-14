@@ -5,17 +5,14 @@
   <title>Menú</title>
   <link rel="stylesheet" href="chrome-strip.css" />
   <link rel="stylesheet" href="shell-home-menu.css" />
+  <script src="canvas-theme.js"></script>
   <style>
     html, body {
       margin: 0;
       height: 100%;
       overflow: hidden;
-      background: #000;
+      background: var(--ud-chrome-canvas, #000);
       user-select: none;
-    }
-    html[data-canvas-theme='light'],
-    html[data-canvas-theme='light'] body {
-      background: #fff;
     }
     /* El deslizamiento lo hace la vista nativa. Aquí el panel ya está abierto. */
     html.menu-overlay-host .dock-home-menu-drawer {

@@ -204,28 +204,22 @@ html[data-dock-layout='topbar'] .dock-home-strip-btn.file-drag-hover {
   box-shadow: 0 0 0 2px var(--accent, #7c5cff) !important;
 }
 
-/* Separador violeta entre perfiles de navegación y accesos directos. */
+/* Separador de alto completo entre perfiles de navegación y accesos directos. */
 .strip-rail-divider {
-  flex: 0 0 2px;
-  align-self: center;
-  width: 2px;
-  height: calc(var(--ud-chrome-icon) - 10px);
-  margin: 0 2px;
-  border-radius: 999px;
-  background: #a78bfa;
+  flex: 0 0 1px;
+  align-self: stretch;
+  width: 1px;
+  margin: 0 4px;
+  background: var(--ud-chrome-strip-border);
   -webkit-app-region: no-drag;
 }
 
-html[data-canvas-theme='light'] .strip-rail-divider {
-  background: #7c3aed;
-}
-
-/* El "+" va dentro de la tira, pegado al último icono. El fondo es el de la
-   barra para que, si queda fijo al hacer scroll, no se transparente el icono de abajo.
+/* El "+" va al final de la tira, a la izquierda de "listo". El fondo es el de la
+   barra para que, al quedar fijo con scroll, no se transparente el icono de abajo.
    El lápiz queda fuera: sin marco y con hover como el resto de iconos. */
-html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):not(#strip-edit-toggle),
-html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):not(#strip-edit-toggle):hover,
-html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:not(.strip-edit-done):not(.strip-add-secondary):not(#strip-edit-toggle):active {
+html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:not(.strip-edit-done):not(#strip-edit-toggle),
+html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:not(.strip-edit-done):not(#strip-edit-toggle):hover,
+html[data-dock-layout='topbar'] #shortcuts-container .strip-add-shortcut:not(.strip-edit-done):not(#strip-edit-toggle):active {
   background: var(--ud-chrome-strip-bg) !important;
 }
 
@@ -853,7 +847,9 @@ html[data-dock-layout='topbar'] #modal-overlay {
   border-radius: 16px;
   padding: 22px 24px 20px;
   width: 100%;
-  max-width: min(400px, calc(100vw - 28px));
+  max-width: min(620px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  overflow-y: auto;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
 }
 
@@ -940,103 +936,237 @@ html[data-dock-layout='topbar'] #modal-overlay {
   min-width: 100px;
 }
 
-.appearance-theme-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.appearance-theme-option {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  margin: 0;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #ffffff;
-  color: var(--text-primary);
-  font-family: inherit;
+.appearance-row-title {
   font-size: 13px;
   font-weight: 600;
-  text-align: left;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+/* Selector de tema: tarjetas con una miniatura de la franja y el lienzo. */
+.theme-group-title {
+  margin: 14px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 4px 5px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
-.appearance-theme-option:hover {
-  border-color: #c4c9d4;
+.theme-card:hover {
+  background: var(--bg-card);
 }
 
-.appearance-theme-option.is-selected {
+.theme-card:hover .theme-card-art {
+  transform: translateY(-1px);
+}
+
+.theme-card.is-selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-  background: #eef2ff;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.appearance-theme-option:focus {
+.theme-card:focus {
   outline: none;
 }
 
-.appearance-theme-option:focus-visible {
+.theme-card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.appearance-theme-swatch {
+.theme-card-art {
+  display: flex;
+  height: 54px;
+  border-radius: 7px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(20, 20, 40, 0.16);
+  transition: transform 0.15s ease;
+}
+
+.theme-card-name {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-card.is-selected .theme-card-name {
+  font-weight: 700;
+}
+
+.theme-preview {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  height: 72px;
-  padding: 10px;
-  border-radius: 8px;
-  box-sizing: border-box;
+  background: var(--th-canvas);
 }
 
-.appearance-theme-swatch.is-dark {
-  background: #12121a;
+.theme-preview-strip {
+  flex: 0 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  overflow: hidden;
+  background: var(--th-strip);
+  border-bottom: 2px solid var(--key-line);
 }
 
-.appearance-theme-swatch.is-light {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+.theme-preview-key {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 
-.appearance-theme-swatch-bar {
-  height: 8px;
+.theme-preview-key.is-edit {
+  background: var(--key-edit);
+}
+
+.theme-preview-key.is-add {
+  background: var(--key-add);
+}
+
+.theme-preview-key.is-nav {
+  background: var(--key-nav);
+}
+
+.theme-preview-key.is-pin {
+  background: var(--key-pin);
+}
+
+.theme-preview-key.is-close {
+  background: var(--key-close);
+}
+
+.theme-preview-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 7px;
+  overflow: hidden;
+}
+
+.theme-preview-text {
+  width: 70%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--th-text);
+}
+
+.theme-preview-text.is-muted {
   width: 46%;
-  border-radius: 4px;
+  background: var(--th-muted);
+  opacity: 0.7;
 }
 
-.appearance-theme-swatch.is-dark .appearance-theme-swatch-bar {
-  background: rgba(255, 255, 255, 0.88);
-}
-
-.appearance-theme-swatch.is-light .appearance-theme-swatch-bar {
-  background: #1a1a2e;
-}
-
-.appearance-theme-swatch-line {
+.theme-preview-accent {
+  width: 18px;
   height: 6px;
-  width: 100%;
-  border-radius: 4px;
+  border-radius: 3px;
+  background: var(--th-accent);
 }
 
-.appearance-theme-swatch-line.is-short {
-  width: 68%;
+.appearance-color-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
-.appearance-theme-swatch.is-dark .appearance-theme-swatch-line {
-  background: rgba(255, 255, 255, 0.16);
+.appearance-color-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.appearance-theme-swatch.is-light .appearance-theme-swatch-line {
+.appearance-color-auto {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #d4d4d8;
+  border-radius: 999px;
   background: #ffffff;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.appearance-theme-option-label {
-  padding: 0 2px 2px;
+.appearance-color-auto:hover {
+  border-color: #a1a1aa;
+}
+
+.appearance-color-auto.is-selected {
+  border-color: #18181b;
+  background: #18181b;
+  color: #ffffff;
+}
+
+.appearance-color-auto:focus {
+  outline: none;
+}
+
+.appearance-color-auto:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.appearance-color-option {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #d4d4d8;
+  background: var(--swatch, var(--accent));
+  cursor: pointer;
+}
+
+.appearance-color-option:hover {
+  transform: scale(1.06);
+}
+
+.appearance-color-option.is-selected {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #18181b;
+}
+
+.appearance-color-option:focus {
+  outline: none;
+}
+
+.appearance-color-option:focus-visible {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--accent);
 }
 
 .type-segmented-triple .type-segment {
@@ -1624,16 +1754,31 @@ html[data-dock-layout='topbar'] #sidebar-chrome {
   -webkit-app-region: drag;
 }
 
-/* Sin barra lateral de inicio: la franja superior ya no necesita la línea vertical. */
+/* La línea de la columna de inicio sigue hasta el borde de la ventana y
+   separa el icono de inplaize del resto de la franja. */
 html[data-dock-layout='topbar'] #sidebar-chrome::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: -1px;
+  left: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) - 1px);
+  width: 1px;
+  background: var(--ud-chrome-strip-border);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Sin perfiles, el icono ya queda separado por la línea de la columna. */
+html[data-dock-layout='topbar'] .loose-nav-accounts:empty + .strip-rail-divider {
   display: none;
 }
 
-/* Sin panel de inicio visible (editor inline o navegación suelta) la línea no
-   tiene nada que continuar debajo: se oculta. */
+/* Sin panel de inicio visible (editor inline, historial o navegación suelta)
+   la línea no tiene nada que continuar debajo: se oculta. */
 html[data-loose-nav='on'] #sidebar-chrome::after,
 #sidebar:has(#dock-inline-editor:not(.hidden)) #sidebar-chrome::after,
-#sidebar:has(#loose-nav-surface:not(.hidden)) #sidebar-chrome::after {
+#sidebar:has(#loose-nav-surface:not(.hidden)) #sidebar-chrome::after,
+#sidebar:has(#dock-home-panel[data-home-view='history']) #sidebar-chrome::after {
   display: none;
 }
 
@@ -1671,7 +1816,7 @@ html[data-dock-layout='topbar'] #header-actions.dock-chrome-menu-wrap {
   flex-shrink: 0;
   align-self: stretch;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   height: auto;
   min-height: 0;
   gap: 0;
@@ -1709,14 +1854,14 @@ html[data-dock-layout='topbar'] #header-actions.dock-chrome-menu-wrap {
   border: none;
   border-left: 1px solid var(--ud-chrome-strip-border);
   background: transparent;
-  color: var(--text-primary);
+  color: var(--key-menu);
   cursor: pointer;
   -webkit-app-region: no-drag;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
 .dock-home-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ud-chrome-soft-hover);
 }
 
 .dock-home-menu-btn:focus-visible {
@@ -1725,26 +1870,13 @@ html[data-dock-layout='topbar'] #header-actions.dock-chrome-menu-wrap {
 }
 
 .dock-home-menu-btn.is-open {
-  background: rgba(124, 108, 255, 0.14);
-  color: #fff;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--ud-chrome-text);
 }
 
 .dock-home-menu-btn-icon {
   width: 20px;
   height: 20px;
-}
-
-html[data-dock-layout='topbar'] .dock-home-menu-btn {
-  color: #e8e8ef;
-}
-
-html[data-dock-layout='topbar'] .dock-home-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-html[data-dock-layout='topbar'] .dock-home-menu-btn.is-open {
-  background: rgba(167, 139, 250, 0.18);
-  color: #fff;
 }
 
 .dock-home-menu-drawer {
@@ -1871,8 +2003,8 @@ html[data-dock-layout='topbar'] .dock-home-menu-drawer {
 
 .dock-home-menu-item.is-on,
 .dock-home-menu-item[aria-checked='true'] {
-  border-color: rgba(124, 108, 255, 0.65);
-  background: rgba(124, 108, 255, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--text-primary);
 }
 
@@ -1909,8 +2041,8 @@ html[data-dock-layout='topbar'] .dock-home-menu-item:hover {
 
 html[data-dock-layout='topbar'] .dock-home-menu-item.is-on,
 html[data-dock-layout='topbar'] .dock-home-menu-item[aria-checked='true'] {
-  border-color: rgba(167, 139, 250, 0.75);
-  background: rgba(167, 139, 250, 0.14);
+  border-color: color-mix(in srgb, var(--accent) 75%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: #fff;
 }
 
@@ -1927,8 +2059,8 @@ html[data-dock-layout='topbar'] .dock-viewport {
   position: relative;
   background-color: var(--ud-chrome-canvas);
   background-image:
-    radial-gradient(circle at 22% 18%, rgba(139, 92, 246, 0.08), transparent 52%),
-    radial-gradient(circle at 78% 88%, rgba(99, 102, 241, 0.06), transparent 48%);
+    radial-gradient(circle at 22% 18%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 52%),
+    radial-gradient(circle at 78% 88%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 48%);
 }
 
 html[data-loose-nav='on'][data-dock-layout='topbar'] .dock-viewport {
@@ -1974,27 +2106,17 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .dock-viewport {
   display: none;
 }
 
-/* Colores propios: las variables globales (--text-primary, --bg-card…) son
-   las del tema claro y en oscuro dejaban los títulos casi invisibles. */
+/* Colores propios, derivados del tema: las variables globales (--text-primary,
+   --bg-card…) son las de los modales claros. */
 #history-home {
-  --hist-text: #ececf2;
-  --hist-muted: #8e8ea0;
-  --hist-card: #16161b;
-  --hist-border: #2a2a33;
-  --hist-hover: rgba(255, 255, 255, 0.05);
-  --hist-fav-bg: #24242c;
-  --hist-accent: #8b7bff;
+  --hist-text: var(--ud-chrome-text);
+  --hist-muted: var(--ud-chrome-seg-muted);
+  --hist-card: var(--ud-chrome-strip-bg);
+  --hist-border: var(--ud-chrome-strip-border);
+  --hist-hover: var(--ud-chrome-soft-hover);
+  --hist-fav-bg: var(--ud-chrome-icon-bg);
+  --hist-accent: var(--accent-ink);
   --hist-time-w: 64px;
-}
-
-html[data-canvas-theme='light'] #history-home {
-  --hist-text: #1f1f2b;
-  --hist-muted: #6b6b7a;
-  --hist-card: #f7f7fa;
-  --hist-border: #e6e6ee;
-  --hist-hover: rgba(20, 20, 40, 0.05);
-  --hist-fav-bg: #ececf2;
-  --hist-accent: #5b4ce0;
 }
 
 #dock-home-panel[data-home-view='history'] > #history-home {
@@ -2341,7 +2463,7 @@ html[data-canvas-theme='light'] #history-home {
 }
 
 html[data-canvas-theme='light'] #dock-home-panel[data-home-view='history'] {
-  background: #ffffff;
+  background: var(--ud-chrome-canvas);
 }
 
 /* Barra vertical con acciones + cerrar, pegada a la izquierda.
@@ -2981,6 +3103,199 @@ html[data-dock-layout='topbar'] .dock-inline-editor:not(.hidden) {
   gap: 16px;
 }
 
+/* ==========================================================================
+   Modal del "+" y de la edición de perfiles
+   - Paso 1: elegir entre acceso directo y perfil (.create-kind-panel)
+   - Perfil: alta o edición (.profile-panel), en lugar del formulario de acceso
+   ========================================================================== */
+#modal .modal-header h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#modal .modal-back-btn {
+  margin: -4px 0 -4px -6px;
+}
+
+#modal .modal-back-btn[hidden],
+#modal.shortcut-modal-embed .shortcut-form[hidden],
+#modal .create-kind-panel[hidden],
+#modal .profile-panel[hidden] {
+  display: none;
+}
+
+#modal .create-kind-panel,
+#modal .profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#modal .profile-panel.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Opción grande: icono, título y una línea que explica qué se agrega. */
+#modal .create-kind-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: 12px;
+  background: var(--fm-surface);
+  color: var(--fm-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#modal .create-kind-option:hover,
+#modal .create-kind-option:focus-visible {
+  background: var(--fm-surface-hover);
+  border-color: var(--accent);
+  outline: none;
+}
+
+#modal .create-kind-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--fm-text);
+}
+
+#modal .create-kind-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+#modal .create-kind-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+#modal .create-kind-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#modal .create-kind-desc,
+#modal .profile-panel-detail,
+#modal .profile-panel-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--fm-text-muted);
+}
+
+#modal .profile-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#modal .profile-panel-avatar {
+  flex: 0 0 auto;
+  display: flex;
+  width: 44px;
+  height: 44px;
+}
+
+#modal .profile-panel-avatar > * {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+#modal .profile-panel-who {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+#modal .profile-panel-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#modal .profile-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--fm-border);
+  border-radius: 12px;
+  background: var(--fm-surface);
+}
+
+#modal .profile-panel-row .type-field-label {
+  margin-bottom: 4px;
+}
+
+#modal .profile-panel-row .btn-secondary {
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#modal .profile-panel-restore {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+#modal .profile-panel-restore-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--fm-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fm-text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#modal .profile-panel-restore-item:hover,
+#modal .profile-panel-restore-item:focus-visible {
+  background: var(--fm-surface-hover);
+  border-color: var(--fm-border-strong);
+  outline: none;
+}
+
+#modal .profile-panel-restore-hint {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fm-text-muted);
+}
+
 /*
  * En topbar, las tarjetas (.shortcut-card) además llevan .shell-shortcut-item,
  * así que toda su apariencia (tamaño, borde, icono, badge) la aporta
@@ -3063,15 +3378,14 @@ html[data-dock-layout='topbar'] .shortcut-icon-slot {
   background: transparent;
 }
 
-/* Modo edición: los iconos conservan su color y llevan borde violeta. */
-html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card.shell-shortcut-item {
-  border-color: var(--ud-chrome-edit-border) !important;
-  opacity: 1 !important;
-  filter: none !important;
-}
-
+/* Modo edición: cada acceso (y cada perfil, más abajo) lleva un borde fino de
+   rayas, quieto, para avisar que se puede tocar y mover. Los iconos conservan
+   su color. */
 html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card.shell-shortcut-item {
   position: relative;
+  border: 1px dashed var(--ud-chrome-edit-border) !important;
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 /* Tinte violeta suave sobre cada icono: se nota el modo sin tapar el dibujo. */
@@ -3088,9 +3402,16 @@ html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortc
   display: none;
 }
 
-html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card.shell-shortcut-item:hover,
-html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card-editing {
-  border-color: var(--ud-chrome-edit-border) !important;
+/* Bajo el puntero las rayas se cierran en una línea entera. */
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card.shell-shortcut-item:hover {
+  border-style: solid !important;
+}
+
+/* El acceso que se está editando: línea entera y doble, en el violeta de edición. */
+html[data-dock-layout='topbar'] #shortcuts-container.shortcuts-edit-mode .shortcut-card.shell-shortcut-item.shortcut-card-editing {
+  border-style: solid !important;
+  border-color: var(--ud-chrome-edit-tab) !important;
+  box-shadow: 0 0 0 1px var(--ud-chrome-edit-tab) !important;
 }
 
 #shortcuts-container.shortcuts-edit-mode .shortcut-card {
@@ -3168,10 +3489,9 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
 }
 
 /* ==========================================================================
-   Navegación suelta: fila de pestañas bajo la franja de iconos.
-   Misma pieza que las sub-pestañas del mail: atrás/adelante viven en la
-   pestaña activa. El “+” va pegado a la última pestaña. El enlace de una
-   pestaña nueva se tipea donde irían el favicon y el nombre.
+   Navegación suelta: dirección y pestañas en la misma fila.
+   La dirección ocupa toda la fila, en vidrio, para que las pestañas se
+   sigan viendo atrás. El “+” va pegado a la última.
    ========================================================================== */
 
 .loose-nav-bar {
@@ -3185,7 +3505,7 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
   min-height: 0;
   padding: 0;
   background: var(--ud-chrome-strip-bg);
-  border-bottom: 1px solid var(--ud-chrome-strip-border);
+  border-bottom: none;
   -webkit-app-region: no-drag;
   color: var(--ud-chrome-text);
   user-select: none;
@@ -3195,56 +3515,68 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
   display: none !important;
 }
 
-/* Barra de herramientas bajo las pestañas, como en Chrome: acceso rápido,
-   dirección (con atrás/adelante adentro) y ⋮. */
+/* Dirección (33%) y pestañas (el resto) en una sola fila, más el ⋮. */
 .loose-nav-tabs-row {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: var(--ud-chrome-strip-gap);
-  height: 36px;
-  padding: 0 0 0 var(--ud-chrome-strip-pad-x);
-  background: var(--ud-chrome-icon-active-bg);
+  align-items: stretch;
+  gap: 0;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
   overflow: hidden;
 }
 
 .loose-nav-omnibox > .loose-nav-controls {
-  margin-left: -4px;
+  margin-left: 0;
 }
 
+/* Misma columna que el burger de arriba: icono centrado y la línea que sigue. */
 .loose-nav-tabs-row > .loose-nav-page-menu {
-  margin: 0 calc((var(--ud-chrome-strip-h) - 28px) / 2);
+  align-self: stretch;
+  box-sizing: border-box;
+  flex: 0 0 var(--ud-chrome-strip-h, 58px);
+  width: var(--ud-chrome-strip-h, 58px);
+  height: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--ud-chrome-strip-border);
+  border-radius: 0;
 }
 
-/* Pestañas en fila propia, debajo de la franja de iconos. */
+/* Pestañas a la derecha de la dirección. Ocultas hasta entrar a navegar. */
 .loose-nav-top-tabs {
   display: none;
 }
 
-html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-top-tabs {
-  flex: 0 0 auto;
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-row > .loose-nav-top-tabs {
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   justify-content: flex-start;
+  flex: 1 1 auto;
   gap: 4px;
+  width: auto;
+  max-width: none;
   min-width: 0;
-  height: 34px;
-  padding: 0 var(--ud-chrome-strip-pad-x);
+  height: 100%;
+  padding: 0;
   box-sizing: border-box;
-  background: var(--ud-chrome-strip-bg);
-  /* Sin línea: la pestaña activa se funde con la barra de URL, como Chrome. */
+  background: transparent;
   border-bottom: none;
   -webkit-app-region: no-drag;
 }
 
-/* Pestañas + "+": un solo bloque a la izquierda; el "+" siempre pegado a la última. */
+/* Pestañas + "+": el "+" siempre pegado a la última. */
 .loose-nav-tabs-cluster {
   display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  flex: 0 1 auto;
-  width: max-content;
-  max-width: 100%;
+  align-items: center;
+  gap: 0;
+  flex: 1 1 auto;
+  width: auto;
+  max-width: none;
   min-width: 0;
   height: 100%;
 }
@@ -3254,19 +3586,36 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   width: max-content;
   max-width: calc(100% - 30px);
   min-width: 0;
-  height: 30px;
+  height: 100%;
+  align-self: stretch;
   justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  scrollbar-width: none;
 }
 
-/* Solo arriba redondeada: abajo pegada a la toolbar. */
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-strip::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
+
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-top-tabs .loose-nav-tab {
-  border-radius: 10px 10px 0 0;
+  height: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 10px;
+  gap: 6px;
+  border: none;
+  border-radius: 0;
+  align-self: stretch;
 }
 
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .loose-nav-new-tab {
-  margin: 0 0 2px;
+  margin: 0;
   flex: 0 0 auto;
-  align-self: flex-end;
+  align-self: center;
 }
 
 .loose-nav-new-tab {
@@ -3282,13 +3631,13 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--ud-chrome-text);
+  color: var(--key-add);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
 .loose-nav-new-tab:hover {
-  background: var(--ud-chrome-icon-bg-hover);
+  background: color-mix(in srgb, var(--key-add) 18%, transparent);
 }
 
 /* ⋮ de opciones de la página: al final de la fila, como en Chrome. */
@@ -3305,17 +3654,17 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--ud-chrome-text);
+  color: var(--key-menu);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
 .loose-nav-page-menu:hover {
-  background: var(--ud-chrome-icon-bg-hover);
+  background: var(--ud-chrome-soft-hover);
 }
 
 .loose-nav-tabs-row > .page-find-bar {
-  right: 44px;
+  right: calc(var(--ud-chrome-strip-h, 58px) + 8px);
   margin-top: 2px;
 }
 
@@ -3341,7 +3690,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 .loose-nav-tabs-strip::-webkit-scrollbar-thumb {
-  background: #44444e;
+  background: var(--ud-chrome-icon-border-hover);
   border-radius: 4px;
 }
 
@@ -3352,7 +3701,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   align-items: center;
   gap: 8px;
   width: 220px;
-  min-width: 72px;
+  min-width: 64px;
   flex: 0 1 220px;
   padding: 0 6px 0 12px;
   border: none;
@@ -3374,7 +3723,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   top: 8px;
   bottom: 8px;
   width: 1px;
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--key-line) 50%, transparent);
   pointer-events: none;
 }
 
@@ -3386,7 +3735,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 .loose-nav-tab:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ud-chrome-soft-hover);
 }
 
 .loose-nav-tab.is-active {
@@ -3395,6 +3744,28 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   /* Los hombros (::before/::after) salen del rectángulo. */
   overflow: visible;
   z-index: 2;
+}
+
+/* Misma fila que la dirección: sin hombros ni borde. */
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-active,
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing {
+  overflow: hidden;
+  margin: 0;
+  padding: 0 10px;
+  border: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ud-chrome-text) 13%, transparent);
+  color: var(--ud-chrome-text);
+  font-weight: 600;
+  box-shadow: inset 0 -3px 0 var(--key-line);
+}
+
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-active::before,
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-active::after,
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing::before,
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing::after {
+  content: none;
+  box-shadow: none;
 }
 
 /* Curvas exteriores tipo Chrome: cóncavas abajo a izquierda/derecha. */
@@ -3459,8 +3830,8 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 .loose-nav-tab-audio:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: var(--ud-chrome-soft-hover);
+  color: var(--ud-chrome-text);
 }
 
 /* Ancho fijo: si no, la tira se mide con el ancho mínimo del input y achica las demás aunque sobre lugar. */
@@ -3494,7 +3865,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--ud-chrome-text);
+  color: var(--key-nav);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -3504,11 +3875,11 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 .loose-nav-tab-nav-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
+  background: color-mix(in srgb, var(--key-nav) 18%, transparent);
 }
 
 .loose-nav-tab-nav-btn:disabled {
-  color: #6e6e7c;
+  color: color-mix(in srgb, var(--ud-chrome-text) 38%, transparent);
   cursor: default;
 }
 
@@ -3567,26 +3938,26 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 .loose-nav-tab-url::placeholder {
-  color: #8d8d9c;
+  color: var(--ud-chrome-seg-muted);
 }
 
 /* Campo de texto como la barra de direcciones de Chrome: pastilla redondeada. */
 .loose-nav-tab.is-composing .loose-nav-tab-url {
   height: 24px;
   padding: 0 12px;
-  border: 1px solid #5a5a68;
+  border: 1px solid var(--ud-chrome-icon-border-hover);
   border-radius: 999px;
-  background: #16161b;
+  background: var(--ud-chrome-canvas);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .loose-nav-tab.is-composing .loose-nav-tab-url:hover {
-  border-color: #70707e;
+  border-color: var(--ud-chrome-icon-active-border);
 }
 
 .loose-nav-tab.is-composing .loose-nav-tab-url:focus {
-  border-color: var(--ud-chrome-edit-tab, #7c6cff);
-  box-shadow: 0 0 0 2px rgba(124, 108, 255, 0.3);
+  border-color: var(--ud-chrome-edit-tab);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ud-chrome-edit-tab) 30%, transparent);
 }
 
 /* Dropdown de sugerencias del historial (position:fixed, en el hueco sobre la página). */
@@ -3596,8 +3967,8 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   padding: 6px;
   max-height: 420px;
   overflow-y: auto;
-  background: #1f1f26;
-  border: 1px solid #34343e;
+  background: var(--ud-chrome-strip-bg);
+  border: 1px solid var(--ud-chrome-strip-border);
   border-radius: 12px;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
 }
@@ -3612,7 +3983,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 .loose-nav-suggest-row.is-active {
-  background: rgba(124, 108, 255, 0.2);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .loose-nav-suggest-fav {
@@ -3624,8 +3995,8 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   height: 22px;
   border-radius: 6px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.06);
-  color: #c6c6d2;
+  background: var(--ud-chrome-soft-hover);
+  color: var(--ud-chrome-icon-muted);
   font-size: 11px;
   font-weight: 700;
 }
@@ -3659,7 +4030,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 
 .loose-nav-suggest-primary {
   font-size: 13.5px;
-  color: #e8e8ee;
+  color: var(--ud-chrome-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3669,12 +4040,12 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 
 .loose-nav-suggest-primary b {
   font-weight: 700;
-  color: #fff;
+  color: var(--ud-chrome-text);
 }
 
 .loose-nav-suggest-url {
   font-size: 12px;
-  color: #8f8fa0;
+  color: var(--ud-chrome-seg-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3683,30 +4054,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
 }
 
 html[data-canvas-theme='light'] .loose-nav-suggest {
-  background: #fff;
-  border-color: #e3e3ea;
   box-shadow: 0 18px 44px rgba(20, 20, 40, 0.18);
-}
-
-html[data-canvas-theme='light'] .loose-nav-suggest-row.is-active {
-  background: rgba(124, 108, 255, 0.12);
-}
-
-html[data-canvas-theme='light'] .loose-nav-suggest-fav {
-  background: rgba(20, 20, 40, 0.05);
-  color: #4a4a58;
-}
-
-html[data-canvas-theme='light'] .loose-nav-suggest-primary {
-  color: #1f1f2b;
-}
-
-html[data-canvas-theme='light'] .loose-nav-suggest-primary b {
-  color: #000;
-}
-
-html[data-canvas-theme='light'] .loose-nav-suggest-url {
-  color: #6a6a7a;
 }
 
 .loose-nav-tab.is-composing {
@@ -3756,7 +4104,7 @@ html[data-canvas-theme='light'] .loose-nav-suggest-url {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: inherit;
+  color: var(--key-close);
   font: inherit;
   font-size: 14px;
   line-height: 1;
@@ -3765,8 +4113,7 @@ html[data-canvas-theme='light'] .loose-nav-suggest-url {
 }
 
 .loose-nav-tab-close:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: color-mix(in srgb, var(--key-close) 22%, transparent);
 }
 
 @keyframes loose-nav-spin {
@@ -3805,12 +4152,16 @@ html[data-canvas-theme='light'] .loose-nav-suggest-url {
 
 html[data-dock-layout='topbar'] .loose-nav-accounts {
   flex: 0 1 auto;
-  min-width: 0;
+  /* Reserva hasta el borde derecho de la dirección; con más perfiles crece. */
+  min-width: var(--ud-chrome-profiles-min-w);
   align-self: stretch;
   display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--ud-chrome-strip-gap);
+  /* Mismo hueco que a la derecha (gap de la franja + margen del separador). */
+  padding-left: calc(var(--ud-chrome-strip-gap) + 4px);
   padding-right: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -3902,11 +4253,10 @@ html[data-profiles-edit='on'] #loose-nav-bar {
   display: none !important;
 }
 
-/* Modo edición: mismo borde y tinte violeta que los accesos. */
+/* Modo edición: mismo borde fino de rayas y mismo tinte violeta que los accesos. */
 .loose-nav-accounts.is-editing .loose-nav-account {
   opacity: 1;
-  border-color: var(--ud-chrome-edit-border);
-  cursor: default;
+  border: 1px dashed var(--ud-chrome-edit-border);
 }
 
 .loose-nav-accounts.is-editing .loose-nav-account[data-partition] {
@@ -3924,132 +4274,164 @@ html[data-profiles-edit='on'] #loose-nav-bar {
 }
 
 .loose-nav-accounts.is-editing .loose-nav-account:hover {
-  border-color: var(--ud-chrome-edit-border);
+  border-style: solid;
 }
 
+/* El perfil que se arrastra: rayas violetas y fondo, igual que el hueco de un acceso. */
 .loose-nav-accounts.is-editing .loose-nav-account.is-dragging {
-  opacity: 0.6;
+  opacity: 0.45;
   border-style: dashed;
-}
-
-.loose-nav-account-remove,
-.shortcut-card-remove {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #3f3f46;
-  color: #fff;
-  box-shadow: 0 0 0 2px var(--ud-chrome-strip-bg, #121216);
-  cursor: pointer;
-}
-
-.loose-nav-account-remove:hover,
-.shortcut-card-remove:hover {
-  background: #dc2626;
-}
-
-#shortcuts-container.shortcuts-edit-mode .shortcut-card-remove {
-  z-index: 4;
+  border-color: rgba(167, 139, 250, 0.95);
+  background: rgba(124, 108, 255, 0.14);
 }
 
 #shortcuts-container.shortcuts-edit-mode .shell-strip-badge {
   display: none;
 }
 
-.loose-nav-account-remove svg,
-.shortcut-card-remove svg {
-  width: 10px;
-  height: 10px;
-}
-
 .loose-nav-omnibox {
   display: none;
 }
 
-/* Dirección integrada en la fila: sin marco, baja, poco protagonista. */
+/* Sin foco, la dirección queda en su columna. Al hacer clic cubre la fila. */
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox {
-  flex: 1 1 auto;
-  min-width: 160px;
-  align-self: center;
+  position: relative;
+  flex: 0 0 33%;
+  width: 33%;
+  max-width: 33%;
+  min-width: 0;
+  align-self: stretch;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   box-sizing: border-box;
-  height: 28px;
+  height: auto;
   margin: 0;
-  padding: 0 4px 0 8px;
+  padding: 0;
   border: none;
-  border-radius: 8px;
-  background: transparent;
+  border-radius: 0;
+  background: var(--ud-chrome-field-bg);
+  box-shadow: none;
   cursor: text;
   -webkit-app-region: no-drag;
-  transition: background 0.15s ease;
+  overflow: hidden;
+}
+
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  flex: none !important;
+  width: auto !important;
+  max-width: none !important;
+  pointer-events: none;
+}
+
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing .loose-nav-omnibox-input,
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing .loose-nav-controls,
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing .loose-nav-add-shortcut {
+  pointer-events: auto;
+}
+
+.loose-nav-split {
+  position: relative;
+  flex: 0 0 12px;
+  width: 12px;
+  align-self: stretch;
+  cursor: col-resize;
+  -webkit-app-region: no-drag;
+}
+
+.loose-nav-split::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--key-line);
+  pointer-events: none;
+}
+
+.loose-nav-split:hover::before,
+html.is-url-col-drag .loose-nav-split::before {
+  width: 3px;
+}
+
+html.is-url-col-drag,
+html.is-url-col-drag * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--ud-chrome-field-bg);
 }
 
-html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox:focus-within {
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: none;
+/* Al editar la URL, deja ver un poco las pestañas de atrás, con blur. */
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
+  background: color-mix(in srgb, var(--ud-chrome-field-bg) 58%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox .loose-nav-add-shortcut {
+  flex: 0 0 auto;
 }
 
 .loose-nav-omnibox-input {
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
-  padding: 0;
+  margin: 0;
+  padding: 0 8px 0 2px;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--ud-chrome-text);
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
   outline: none;
   user-select: text;
   -webkit-user-select: text;
   -webkit-app-region: no-drag;
 }
 
-.loose-nav-omnibox-input::placeholder {
-  color: #8d8d9c;
+.loose-nav-omnibox:not(.is-editing) .omnibox-face:not(.is-empty) + .loose-nav-omnibox-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* Fijar: dentro de la barra de dirección, a la derecha; lima suave (no neón). */
+.loose-nav-omnibox-input::placeholder {
+  color: var(--ud-chrome-seg-muted);
+}
+
+/* Pin chico, justo después de recargar. */
 .loose-nav-add-shortcut {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  width: 26px;
   height: 26px;
-  max-width: min(220px, 42vw);
   margin: 0;
-  padding: 0 10px 0 8px;
-  border: 1px solid rgba(200, 245, 66, 0.28);
-  border-radius: 999px;
-  background: rgba(200, 245, 66, 0.12);
-  color: #c8f542;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--key-pin);
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
 
 .loose-nav-add-shortcut-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: none;
 }
 
 .loose-nav-add-shortcut[hidden] {
@@ -4057,19 +4439,15 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox:focus-wi
 }
 
 .loose-nav-add-shortcut:hover {
-  background: rgba(200, 245, 66, 0.2);
-  border-color: rgba(200, 245, 66, 0.42);
-  color: #d7ff6a;
+  background: color-mix(in srgb, var(--key-pin) 18%, transparent);
 }
 
 .loose-nav-add-shortcut:active {
-  background: rgba(200, 245, 66, 0.28);
-  border-color: rgba(200, 245, 66, 0.5);
-  transform: scale(0.94);
+  background: color-mix(in srgb, var(--key-pin) 28%, transparent);
 }
 
 .loose-nav-add-shortcut:focus-visible {
-  outline: 2px solid rgba(200, 245, 66, 0.55);
+  outline: 2px solid var(--key-pin);
   outline-offset: 2px;
 }
 
@@ -4121,9 +4499,8 @@ img.loose-nav-fly-ghost {
 .loose-nav-add-shortcut.is-saved,
 .loose-nav-add-shortcut.is-saved:hover,
 .loose-nav-add-shortcut.is-saved:active {
-  background: rgba(200, 245, 66, 0.08);
-  border-color: rgba(200, 245, 66, 0.18);
-  color: rgba(200, 245, 66, 0.75);
+  background: transparent;
+  color: var(--key-add);
   cursor: default;
   transform: none;
 }
@@ -4481,7 +4858,7 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
    Dos iconos a la izquierda: Notas (la página) y Descargas (la vista ampliada).
    El nombre de la sección va como título arriba a la izquierda dentro de cada vista. */
 .home-nav {
-  /* Alineado con el bloque home + perfiles de la franja unificada. */
+  /* Misma columna que el icono de inplaize en la franja: mismo ancho y mismo margen. */
   --home-nav-w: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap));
   flex: 0 0 var(--home-nav-w);
   width: var(--home-nav-w);
@@ -4489,11 +4866,12 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   align-self: stretch;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
-  padding: 8px 4px 8px 6px;
+  padding: 8px 0 8px var(--ud-chrome-strip-pad-x);
   box-sizing: border-box;
-  border-right: 1px solid var(--dock-border, #252530);
-  background: rgba(255, 255, 255, 0.025);
+  border-right: 1px solid var(--ud-chrome-strip-border);
+  background: var(--ud-chrome-strip-bg);
   -webkit-app-region: no-drag;
 }
 
@@ -4505,14 +4883,15 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  aspect-ratio: 1;
+  width: var(--ud-chrome-icon);
+  height: var(--ud-chrome-icon);
+  flex: 0 0 auto;
   margin: 0;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
-  color: rgba(236, 236, 241, 0.62);
+  color: var(--ud-chrome-seg-muted);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -4525,8 +4904,8 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
 }
 
 .home-nav-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: var(--ud-chrome-soft-hover);
+  color: var(--ud-chrome-text);
 }
 
 .home-nav-item:focus-visible {
@@ -4535,8 +4914,8 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
 }
 
 .home-nav-item[aria-pressed='true'] {
-  background: rgba(167, 139, 250, 0.18);
-  color: #fff;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--ud-chrome-text);
 }
 
 /* Título de sección (Notas / Descargas): arriba a la izquierda. */
@@ -4545,11 +4924,11 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   margin: 0;
   padding: 14px 16px 6px;
   font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 650;
   letter-spacing: -0.015em;
   line-height: 1.2;
-  color: #ececf1;
+  color: var(--ud-chrome-text);
   text-align: left;
   user-select: none;
 }
@@ -4558,47 +4937,12 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 0 0 10px;
-  background: linear-gradient(
-    to bottom,
-    #000 60%,
-    rgba(0, 0, 0, 0)
-  );
+  padding: 4px 0 10px;
+  background: transparent;
 }
 
 #downloads-home > .home-section-title {
   padding: 14px 16px 4px;
-}
-
-html[data-canvas-theme='light'] .home-section-title {
-  color: #18181b;
-}
-
-html[data-canvas-theme='light'] #todo-home > .home-section-title {
-  background: linear-gradient(
-    to bottom,
-    #fff 60%,
-    rgba(255, 255, 255, 0)
-  );
-}
-
-html[data-canvas-theme='light'] .home-nav {
-  border-right-color: rgba(0, 0, 0, 0.08);
-  background: #f6f6f8;
-}
-
-html[data-canvas-theme='light'] .home-nav-item {
-  color: #52525b;
-}
-
-html[data-canvas-theme='light'] .home-nav-item:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #18181b;
-}
-
-html[data-canvas-theme='light'] .home-nav-item[aria-pressed='true'] {
-  background: rgba(91, 76, 224, 0.12);
-  color: #3b2fb5;
 }
 
 .downloads-expand-btn,
@@ -4878,14 +5222,14 @@ html[data-canvas-theme='light'] .home-nav-item[aria-pressed='true'] {
 
 /* Modo claro: la zona de archivos (grilla y visor) deja el negro de fondo. */
 html[data-canvas-theme='light'] .dock-viewport:has(#dock-home-panel[data-home-view='downloads']) {
-  background-color: #ffffff;
+  background-color: var(--ud-chrome-canvas);
   background-image: none;
 }
 
 html[data-canvas-theme='light'] #dock-home-panel[data-home-view='downloads'],
 html[data-canvas-theme='light'] .downloads-home {
-  background: #ffffff;
-  color: #18181b;
+  background: var(--ud-chrome-canvas);
+  color: var(--ud-chrome-text);
 }
 
 html[data-canvas-theme='light'] .downloads-home-empty {
@@ -4901,9 +5245,9 @@ html[data-canvas-theme='light'] .download-tile:not(:has(.download-tile-thumb:not
 }
 
 html[data-canvas-theme='light'] .image-drawer {
-  background: #ffffff;
-  border-left-color: rgba(0, 0, 0, 0.08);
-  color: #18181b;
+  background: var(--ud-chrome-canvas);
+  border-left-color: var(--ud-chrome-strip-border);
+  color: var(--ud-chrome-text);
 }
 
 html[data-canvas-theme='light'] .image-drawer-head {
@@ -5001,13 +5345,14 @@ html[data-canvas-theme='light'] .magic-loader-bar {
   padding: 4px 8px;
   box-sizing: border-box;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(20, 20, 26, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  color: #18181b;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
+    0 8px 28px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
   -webkit-app-region: no-drag;
 }
 
@@ -5032,13 +5377,13 @@ html[data-canvas-theme='light'] .magic-loader-bar {
   border: none;
   border-radius: 0;
   background: transparent;
-  color: var(--text-secondary);
+  color: #18181b;
   text-align: center;
   transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
 .magic-zone:not(:last-child) {
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .magic-zone-label {
@@ -5051,8 +5396,8 @@ html[data-canvas-theme='light'] .magic-loader-bar {
 }
 
 .magic-zone.is-drag-over {
-  background: rgba(79, 70, 229, 0.16);
-  color: #a5b4fc;
+  background: rgba(79, 70, 229, 0.1);
+  color: #3730a3;
   transform: scale(1.03);
   box-shadow: 0 0 14px rgba(79, 70, 229, 0.25);
 }
@@ -5321,36 +5666,12 @@ html.is-internal-file-drag * {
    Los colores base de la franja salen de las variables de chrome-strip.css.
    ========================================================================== */
 
-html[data-canvas-theme='light'][data-dock-layout='topbar'] {
-  --dock-surface: #ffffff;
-  --dock-surface-2: #f7f7fa;
-  --dock-border: #e3e3ea;
-  --dock-text: #1f1f2b;
-  --dock-muted: #6b6b7a;
-  --dock-btn: #f1f1f5;
-  --dock-btn-hover: #e8e8ee;
-}
-
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-viewport {
   background-image: none;
 }
 
-html[data-canvas-theme='light'][data-dock-layout='topbar'] #shortcuts-container::-webkit-scrollbar-thumb,
-html[data-canvas-theme='light'] .loose-nav-tabs-strip::-webkit-scrollbar-thumb {
-  background: #cfcfda;
-}
-
-html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-btn {
-  color: #2a2a35;
-}
-
-html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-btn:hover {
-  background: rgba(20, 20, 40, 0.06);
-}
-
-html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-btn.is-open {
-  background: rgba(124, 108, 255, 0.14);
-  color: #4c3fd1;
+html[data-canvas-theme='light'][data-dock-layout='topbar'] #shortcuts-container::-webkit-scrollbar-thumb {
+  background: var(--ud-chrome-icon-border-hover);
 }
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-backdrop {
@@ -5368,9 +5689,9 @@ html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-item:
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-item.is-on,
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-menu-item[aria-checked='true'] {
-  border-color: rgba(124, 108, 255, 0.65);
-  background: rgba(124, 108, 255, 0.1);
-  color: #3b2fc0;
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-hover);
 }
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-action-label {
@@ -5379,25 +5700,25 @@ html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-action-lab
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-action-cell:has(.dock-home-icon-tile.is-on) .dock-home-action-label,
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-action-cell:has(.dock-home-icon-tile[aria-checked='true']) .dock-home-action-label {
-  color: #4c3fd1;
+  color: var(--accent-hover);
 }
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-icon-tile {
-  background: #f1f1f5;
+  background: var(--dock-btn);
   border-color: rgba(20, 20, 40, 0.1);
   color: #1f1f2b;
 }
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-icon-tile:hover {
-  background: #e8e8ee;
+  background: var(--dock-btn-hover);
   border-color: rgba(20, 20, 40, 0.16);
 }
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-icon-tile.is-on,
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-icon-tile[aria-checked='true'] {
-  border-color: rgba(124, 108, 255, 0.65);
-  background: rgba(124, 108, 255, 0.1);
-  color: #3b2fc0;
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-hover);
 }
 
 html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-quit-link {
@@ -5409,37 +5730,9 @@ html[data-canvas-theme='light'][data-dock-layout='topbar'] .dock-home-quit-link:
 }
 
 /* Pestañas de la navegación suelta */
-html[data-canvas-theme='light'] .loose-nav-tab + .loose-nav-tab::before {
-  background: rgba(20, 20, 40, 0.14);
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab:hover {
-  background: rgba(20, 20, 40, 0.05);
-}
-
 html[data-canvas-theme='light'] .loose-nav-tab.is-active,
 html[data-canvas-theme='light'] .loose-nav-tab.is-composing {
   box-shadow: 0 0 0 1px var(--ud-chrome-strip-border);
-}
-
-/* En topbar el borde inferior cortaría la unión con la barra de URL. */
-html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-active,
-html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing {
-  box-shadow: none;
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab-audio:hover,
-html[data-canvas-theme='light'] .loose-nav-tab-close:hover {
-  background: rgba(20, 20, 40, 0.1);
-  color: #1f1f2b;
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab-nav-btn:hover:not(:disabled) {
-  background: rgba(20, 20, 40, 0.08);
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab-nav-btn:disabled {
-  color: #b4b4c0;
 }
 
 html[data-canvas-theme='light'] .loose-nav-tab-fav.is-placeholder {
@@ -5452,60 +5745,25 @@ html[data-canvas-theme='light'] .loose-nav-tab-fav.is-loading {
   border-top-color: var(--ud-chrome-text);
 }
 
-html[data-canvas-theme='light'] .loose-nav-tab-url::placeholder,
-html[data-canvas-theme='light'] .loose-nav-omnibox-input::placeholder {
-  color: #8a8a98;
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab.is-composing .loose-nav-tab-url {
-  border-color: #d4d4de;
-  background: #ffffff;
-}
-
-html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox {
-  border: none;
-  background: transparent;
-}
-
+html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox,
 html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox:hover {
-  background: rgba(20, 20, 40, 0.04);
-}
-
-html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox:focus-within {
-  background: rgba(20, 20, 40, 0.06);
+  border: none;
+  border-radius: 0;
+  background: var(--ud-chrome-field-bg);
   box-shadow: none;
 }
 
-html[data-canvas-theme='light'] .loose-nav-add-shortcut {
-  background: rgba(110, 150, 20, 0.1);
-  border-color: rgba(90, 122, 0, 0.28);
-  color: #5a7a00;
-}
-
-html[data-canvas-theme='light'] .loose-nav-add-shortcut:hover {
-  background: rgba(110, 150, 20, 0.16);
-  border-color: rgba(90, 122, 0, 0.4);
-  color: #4a6600;
-}
-
-html[data-canvas-theme='light'] .loose-nav-add-shortcut.is-saved,
-html[data-canvas-theme='light'] .loose-nav-add-shortcut.is-saved:hover,
-html[data-canvas-theme='light'] .loose-nav-add-shortcut.is-saved:active {
-  background: rgba(110, 150, 20, 0.06);
-  border-color: rgba(90, 122, 0, 0.18);
-  color: #6b8a20;
+html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
+  border: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--ud-chrome-field-bg) 58%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 @media (max-width: 720px) {
   .loose-nav-add-shortcut-label {
     max-width: 9.5em;
   }
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab.is-composing .loose-nav-tab-url:hover {
-  border-color: #b9b9c8;
-}
-
-html[data-canvas-theme='light'] .loose-nav-tab.is-composing .loose-nav-tab-url:focus {
-  border-color: var(--ud-chrome-edit-tab);
 }

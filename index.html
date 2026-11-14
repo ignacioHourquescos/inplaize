@@ -9,6 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shell-home-menu.css">
   <link rel="stylesheet" href="styles.css">
+  <script src="canvas-theme.js"></script>
   <link rel="stylesheet" href="onboarding.css">
   <link rel="stylesheet" href="page-find-bar.css">
 </head>
@@ -48,21 +49,23 @@
         <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de navegación"></nav>
         <div class="strip-rail-divider" aria-hidden="true"></div>
         <div id="shortcuts-container">
-        <button
-          type="button"
-          id="strip-add-shortcut"
-          class="shell-shortcut-item strip-add-shortcut strip-add-inline strip-add-secondary"
-          data-mouse-hit
-          hidden
-        >
-          <span class="shell-shortcut-icon-wrap" aria-hidden="true">
-            <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
-              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-          </span>
-          <span>Agregar acceso directo</span>
-        </button>
         <div id="strip-end-actions" class="strip-end-actions">
+          <button
+            type="button"
+            id="strip-add-new"
+            class="shell-shortcut-item strip-add-shortcut"
+            data-mouse-hit
+            data-tooltip="Agregar acceso directo o perfil"
+            data-tooltip-placement="bottom"
+            aria-label="Agregar acceso directo o perfil"
+            hidden
+          >
+            <span class="shell-shortcut-icon-wrap" aria-hidden="true">
+              <svg class="strip-add-plus" viewBox="0 0 24 24" fill="none">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </span>
+          </button>
           <button
             type="button"
             id="strip-edit-toggle"
@@ -118,21 +121,20 @@
         </div>
       </div>
 
-      <div id="loose-nav-top-tabs" class="loose-nav-top-tabs" data-mouse-hit>
-        <div class="loose-nav-tabs-cluster">
-          <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
-          <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-new-tab" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom" aria-label="Nueva pestaña">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-
       <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegador">
         <div class="loose-nav-tabs-row">
           <form id="loose-nav-omnibox" class="loose-nav-omnibox" autocomplete="off" data-mouse-hit>
             <div id="loose-nav-controls" class="loose-nav-controls"></div>
+            <button type="button" id="loose-nav-add-shortcut-btn" class="loose-nav-add-shortcut" data-mouse-hit data-tooltip-placement="bottom" hidden>
+              <span class="loose-nav-add-shortcut-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 16.5V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <path d="M8.2 3.5h7.6L14.6 9l2.4 2.2H7L9.4 9 8.2 3.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="loose-nav-add-shortcut-label">Generar acceso directo…</span>
+            </button>
+            <div id="loose-nav-omnibox-face" class="omnibox-face is-empty" aria-hidden="true"></div>
             <input
               id="loose-nav-omnibox-input"
               class="loose-nav-omnibox-input"
@@ -142,18 +144,18 @@
               enterkeyhint="go"
               aria-label="Abrir en el perfil seleccionado"
             />
-            <button type="button" id="loose-nav-add-shortcut-btn" class="loose-nav-add-shortcut" data-mouse-hit data-tooltip-placement="bottom" hidden>
-              <span class="loose-nav-add-shortcut-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path class="loose-nav-add-shortcut-plus" d="M21 18h-9a5 5 0 0 1-5-5V4M3 8l4-4 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path class="loose-nav-add-shortcut-check" d="m5 12.5 4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="loose-nav-add-shortcut-label">Generar acceso directo…</span>
-            </button>
           </form>
+          <div id="loose-nav-split" class="loose-nav-split" role="separator" aria-orientation="vertical" aria-label="Ancho de la dirección"></div>
+          <div id="loose-nav-top-tabs" class="loose-nav-top-tabs loose-nav-tabs-cluster" data-mouse-hit>
+            <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
+            <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-new-tab" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom" aria-label="Nueva pestaña">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           <button type="button" id="loose-nav-page-menu-btn" class="loose-nav-page-menu" data-tooltip="Opciones de la página" data-tooltip-placement="bottom" aria-label="Opciones de la página" aria-haspopup="menu">
-            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="5" r="1.8" fill="currentColor"/>
               <circle cx="12" cy="12" r="1.8" fill="currentColor"/>
               <circle cx="12" cy="19" r="1.8" fill="currentColor"/>
@@ -511,29 +513,21 @@
       <div id="appearance-modal" class="settings-modal-card" role="dialog" aria-modal="true" aria-labelledby="appearance-modal-title">
         <h3 class="settings-modal-title" id="appearance-modal-title">Configuración</h3>
         <div class="settings-modal-section">
-          <div class="type-field-label" id="appearance-theme-label">Tema</div>
-          <div
-            class="appearance-theme-options"
-            id="appearance-theme-options"
-            role="radiogroup"
-            aria-labelledby="appearance-theme-label"
-          >
-            <button type="button" class="appearance-theme-option" role="radio" data-value="dark" aria-checked="false">
-              <span class="appearance-theme-swatch is-dark" aria-hidden="true">
-                <span class="appearance-theme-swatch-bar"></span>
-                <span class="appearance-theme-swatch-line"></span>
-                <span class="appearance-theme-swatch-line is-short"></span>
-              </span>
-              <span class="appearance-theme-option-label">Modo oscuro</span>
-            </button>
-            <button type="button" class="appearance-theme-option" role="radio" data-value="light" aria-checked="false">
-              <span class="appearance-theme-swatch is-light" aria-hidden="true">
-                <span class="appearance-theme-swatch-bar"></span>
-                <span class="appearance-theme-swatch-line"></span>
-                <span class="appearance-theme-swatch-line is-short"></span>
-              </span>
-              <span class="appearance-theme-option-label">Modo claro</span>
-            </button>
+          <div class="appearance-row-title" id="appearance-theme-label">Tema</div>
+          <p class="settings-modal-help">Cada tema trae sus colores para la franja, los botones clave y las líneas.</p>
+          <div class="theme-picker" id="appearance-theme-grid" role="radiogroup" aria-labelledby="appearance-theme-label"></div>
+          <div class="appearance-color-block">
+            <div class="appearance-row-title" id="appearance-color-label">Color de acento</div>
+            <p class="settings-modal-help">Botones principales, selección y foco. Al elegir un tema vuelve el acento de ese tema.</p>
+            <div class="appearance-color-options" id="appearance-color-options" role="radiogroup" aria-labelledby="appearance-color-label">
+              <button type="button" class="appearance-color-auto" role="radio" data-value="auto" aria-checked="true">Del tema</button>
+              <button type="button" class="appearance-color-option" role="radio" data-value="indigo" aria-label="Índigo" aria-checked="false" data-tooltip="Índigo" style="--swatch:#4f46e5"></button>
+              <button type="button" class="appearance-color-option" role="radio" data-value="violet" aria-label="Violeta" aria-checked="false" data-tooltip="Violeta" style="--swatch:#7c3aed"></button>
+              <button type="button" class="appearance-color-option" role="radio" data-value="blue" aria-label="Azul" aria-checked="false" data-tooltip="Azul" style="--swatch:#2563eb"></button>
+              <button type="button" class="appearance-color-option" role="radio" data-value="teal" aria-label="Verde azulado" aria-checked="false" data-tooltip="Verde azulado" style="--swatch:#0f766e"></button>
+              <button type="button" class="appearance-color-option" role="radio" data-value="amber" aria-label="Ámbar" aria-checked="false" data-tooltip="Ámbar" style="--swatch:#b45309"></button>
+              <button type="button" class="appearance-color-option" role="radio" data-value="rose" aria-label="Rosa" aria-checked="false" data-tooltip="Rosa" style="--swatch:#be123c"></button>
+            </div>
           </div>
         </div>
         <div class="settings-modal-section">
@@ -562,6 +556,11 @@
     <div id="modal-overlay" class="hidden" data-mouse-hit>
       <div id="modal">
         <div class="modal-header">
+          <button type="button" id="modal-back" class="modal-close-btn modal-back-btn" aria-label="Volver a elegir qué agregar" data-tooltip="Volver" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
           <h3 id="modal-title">Añadir acceso directo</h3>
           <button type="button" id="modal-close" class="modal-close-btn" aria-label="Cerrar" data-tooltip="Cerrar">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -569,6 +568,35 @@
             </svg>
           </button>
         </div>
+        <!-- Paso 1 del "+": qué se agrega. Después sigue el formulario de acceso o el panel de perfil. -->
+        <div id="create-kind-panel" class="create-kind-panel" hidden>
+          <button type="button" class="create-kind-option" data-kind="shortcut">
+            <span class="create-kind-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <rect x="3.5" y="5" width="17" height="14" rx="3" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M3.5 9.5h17" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </span>
+            <span class="create-kind-text">
+              <span class="create-kind-title">Acceso directo</span>
+              <span class="create-kind-desc">Una página web o un programa, siempre a mano en la franja.</span>
+            </span>
+          </button>
+          <button type="button" class="create-kind-option" data-kind="profile">
+            <span class="create-kind-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="8.5" r="3.5" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M5 19.5c1.2-3.2 3.8-4.8 7-4.8s5.8 1.6 7 4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="create-kind-text">
+              <span class="create-kind-title">Perfil</span>
+              <span class="create-kind-desc">Una cuenta de Google para navegar con su propia sesión.</span>
+            </span>
+          </button>
+        </div>
+        <!-- Alta o edición de un perfil de navegación: lo arma renderer.js. -->
+        <div id="profile-panel" class="profile-panel" hidden></div>
         <form id="shortcut-form" class="shortcut-form">
           <div class="form-row form-row-type hidden">
             <div class="form-group form-group-type">
@@ -683,10 +711,12 @@
   <script src="shell-home-menu.js"></script>
   <script src="onboarding.js"></script>
   <script src="page-find-bar.js"></script>
+  <script src="tab-strip-fit.js"></script>
   <script src="renderer.js"></script>
   <script src="document-editor.bundle.js"></script>
   <script src="document-markdown.js"></script>
   <script src="document-modal.js"></script>
+  <script src="notes-calc.js"></script>
   <script src="todos.js"></script>
   <script src="magic-drawer-ui.js"></script>
 </body>

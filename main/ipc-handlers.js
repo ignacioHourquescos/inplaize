@@ -784,12 +784,18 @@ function registerIpcHandlers(state) {
   });
 
   ipcMain.handle('dock-open-welcome-home', (_event, view) => {
-    expandDockSidebar();
+    try {
+      require('./loose-nav-window').exitLooseNavMode({ collapseDock: false });
+    } catch {
+      /* el inicio igual se abre */
+    }
     const dock = state.mainWindow;
     const next = view === 'downloads' ? 'downloads' : 'todos';
+    // Antes de expandir: si no, el dock retoma el último perfil al volver a abrirse.
     if (dock && !dock.isDestroyed()) {
       dock.webContents.send('dock-open-welcome-home', next);
     }
+    expandDockSidebar();
     return true;
   });
 
@@ -866,6 +872,22 @@ function registerIpcHandlers(state) {
     const dock = state.mainWindow;
     if (dock && !dock.isDestroyed()) {
       dock.webContents.send('open-add-shortcut-modal');
+    }
+    return true;
+  });
+
+  ipcMain.handle('chrome-open-add-shortcut-for-page', (_e, page) => {
+    const url = page && typeof page.url === 'string' ? page.url.trim() : '';
+    if (!/^https?:\/\//i.test(url)) return false;
+    expandDockSidebar();
+    const dock = state.mainWindow;
+    if (dock && !dock.isDestroyed()) {
+      dock.webContents.send('open-add-shortcut-for-page', {
+        url,
+        title: page && typeof page.title === 'string' ? page.title.slice(0, 60) : '',
+        sessionId: page && typeof page.sessionId === 'string' ? page.sessionId : '',
+        favicon: page && typeof page.favicon === 'string' ? page.favicon : '',
+      });
     }
     return true;
   });

@@ -185,35 +185,20 @@ function relaunchChrome() {
   }
 }
 
-/** Lee `Local State` y devuelve [{ directory, name, userName, picturePath }]. */
+/**
+ * Perfiles de Chrome, también los que no son el principal.
+ * El mail se completa desde Preferences cuando Local State no lo trae.
+ * @returns {Array<{ directory: string, name: string, userName: string, picturePath: string }>}
+ */
 function listChromeProfiles() {
-  const userDataDir = defaultChromeUserDataDir();
-  if (!userDataDir) return [];
-  const localStatePath = path.join(userDataDir, 'Local State');
+  if (process.platform !== 'win32') return [];
   try {
-    const raw = fs.readFileSync(localStatePath, 'utf8');
-    const data = JSON.parse(raw);
-    const cache = (data && data.profile && data.profile.info_cache) || {};
-    return Object.entries(cache)
-      .map(([directory, info]) => {
-        const i = info && typeof info === 'object' ? info : {};
-        const pictureFile =
-          typeof i.gaia_picture_file_name === 'string' && i.gaia_picture_file_name
-            ? i.gaia_picture_file_name
-            : 'Google Profile Picture.png';
-        const picturePath = path.join(userDataDir, directory, pictureFile);
-        return {
-          directory,
-          name: typeof i.name === 'string' && i.name ? i.name : directory,
-          userName: typeof i.user_name === 'string' ? i.user_name : '',
-          picturePath: fs.existsSync(picturePath) ? picturePath : '',
-        };
-      })
-      .sort((a, b) => {
-        if (a.directory === 'Default') return -1;
-        if (b.directory === 'Default') return 1;
-        return a.directory.localeCompare(b.directory);
-      });
+    return require('./browser-import').listProfiles('chrome').map((profile) => ({
+      directory: profile.directory,
+      name: profile.name,
+      userName: profile.userName,
+      picturePath: profile.picturePath,
+    }));
   } catch {
     return [];
   }
@@ -481,50 +466,66 @@ async function fetchAllCookiesFromChromeProfile(profileDirectory, opts) {
     reopenChrome = true;
   }
 
-  const portFile = path.join(userDataDir, 'DevToolsActivePort');
-  const portCutoff = devToolsPortCutoff(portFile);
-
-  const args = [
-    '--remote-debugging-port=0',
-    // Imprescindible desde Chrome 111+: sin esto Chrome rechaza la conexión WS de Node
-    // por origen no autorizado y `Network.getAllCookies` nunca llega a ejecutarse.
-    '--remote-allow-origins=*',
-    `--user-data-dir=${userDataDir}`,
-    `--profile-directory=${profileDirectory}`,
-    '--headless=new',
-    '--disable-gpu',
-    '--disable-extensions',
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--noerrdialogs',
-    '--disable-session-crashed-bubble',
-    '--disable-features=ChromeWhatsNewUI,InterestFeedContentSuggestions',
-    'about:blank',
-  ];
-  logLine('Lanzando Chrome:', chromeExe, args.join(' '));
-
-  const child = spawn(chromeExe, args, {
-    detached: false,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-
+  let staged = '';
+  /** @type {import('child_process').ChildProcess | null} */
+  let child = null;
   try {
+    // Copia de un solo perfil: sobre el User Data real, Chrome abre el último
+    // usado y los demás perfiles vuelven sin sesión.
+    staged = require('./browser-import').stageProfileCopy(userDataDir, profileDirectory);
+    logLine('Copia del perfil', profileDirectory, 'en', staged);
+    const portFile = path.join(staged, 'DevToolsActivePort');
+    const portCutoff = devToolsPortCutoff(portFile);
+    const args = [
+      '--remote-debugging-port=0',
+      // Imprescindible desde Chrome 111+: sin esto Chrome rechaza la conexión WS de Node
+      // por origen no autorizado y `Network.getAllCookies` nunca llega a ejecutarse.
+      '--remote-allow-origins=*',
+      `--user-data-dir=${staged}`,
+      `--profile-directory=${profileDirectory}`,
+      '--headless=new',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-default-apps',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-sync',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--noerrdialogs',
+      '--disable-session-crashed-bubble',
+      '--disable-features=ChromeWhatsNewUI,InterestFeedContentSuggestions',
+      'about:blank',
+    ];
+    logLine('Lanzando Chrome:', chromeExe, args.join(' '));
+    child = spawn(chromeExe, args, {
+      detached: false,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
     const port = await waitForDevToolsPort(portFile, 15000, portCutoff);
     logLine('Puerto CDP =', String(port));
     return await fetchCookiesFromChrome(port, 12000);
   } finally {
-    await killPidTree(child.pid);
-    try {
-      if (!child.killed) child.kill();
-    } catch {
-      /* noop */
+    if (child) {
+      await killPidTree(child.pid);
+      try {
+        if (!child.killed) child.kill();
+      } catch {
+        /* noop */
+      }
     }
     // La instancia headless también es chrome.exe. Si se superpone con el
     // Chrome del usuario, el nuevo se cierra solo.
     if (!(await waitImageExit('chrome.exe', 8000))) {
       logLine('La instancia headless sigue viva: cierre forzado');
       await closeImage('chrome.exe');
+    }
+    if (staged) {
+      try {
+        fs.rmSync(staged, { recursive: true, force: true });
+      } catch {
+        /* la copia temporal se limpia en el próximo arranque del sistema */
+      }
     }
     if (reopenChrome) relaunchChrome();
   }

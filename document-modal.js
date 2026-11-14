@@ -550,8 +550,12 @@
     if (api && typeof api.setDocModalOpen === 'function') api.setDocModalOpen(open === true);
   }
 
+  function browserIsOpen() {
+    return document.documentElement.getAttribute('data-loose-nav') === 'on';
+  }
+
   function setModalAway(away) {
-    const on = away === true && overlay.classList.contains('is-open');
+    const on = (away === true || browserIsOpen()) && overlay.classList.contains('is-open');
     overlay.classList.toggle('is-away', on);
     document.documentElement.classList.toggle('doc-modal-away', on);
     if (typeof window.__dockSchedulePointerPassthrough === 'function') {
@@ -812,10 +816,16 @@
     });
   }
 
+  function syncWithBrowser() {
+    if (!overlay.classList.contains('is-open')) return;
+    setModalAway(browserIsOpen());
+  }
+
   window.InplaizeDocumentModal = {
     bind(api) { hooks = api; },
     open,
     isOpen() { return overlay.classList.contains('is-open'); },
+    syncWithBrowser,
     flush,
     compressImage,
   };
