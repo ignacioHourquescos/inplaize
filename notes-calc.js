@@ -10,6 +10,9 @@
  * total anterior. "1200 + 21%" suma el porcentaje.
  * Coma y punto valen como decimal; "1.234,56" y "1.234.567" llevan miles.
  * Lo que no se puede calcular queda como texto común, sin resultado.
+ * El resultado se escribe con el formato de setFormat: separador de miles,
+ * separador decimal y cantidad de decimales. Por defecto, miles con punto,
+ * decimales con coma y hasta seis decimales, sin ceros de más.
  */
 
 (function (root, factory) {
@@ -25,6 +28,47 @@
   const TOTAL_NAMES = new Set(['total', 'suma']);
   const MAX_ABS = 1e15;
   const FAIL = new Error('calc');
+  const FORMAT_KEY = '__inplaizeCalcFormat';
+  const DEFAULT_FORMAT = { thousands: '.', decimal: ',', decimals: 'auto' };
+
+  function formatHost() {
+    if (typeof globalThis !== 'undefined') return globalThis;
+    if (typeof window !== 'undefined') return window;
+    return null;
+  }
+
+  function normalizeFormat(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const thousands = src.thousands === ',' || src.thousands === ' ' || src.thousands === '' || src.thousands === '.'
+      ? src.thousands
+      : DEFAULT_FORMAT.thousands;
+    let decimal = src.decimal === '.' ? '.' : ',';
+    if (thousands && decimal === thousands) decimal = thousands === '.' ? ',' : '.';
+    let decimals = 'auto';
+    if (src.decimals != null && src.decimals !== '' && src.decimals !== 'auto') {
+      const n = Number(src.decimals);
+      if (Number.isInteger(n) && n >= 0 && n <= 6) decimals = String(n);
+    }
+    return { thousands, decimal, decimals };
+  }
+
+  function getFormat() {
+    const host = formatHost();
+    return normalizeFormat(host && host[FORMAT_KEY]);
+  }
+
+  function setFormat(partial) {
+    const patch = {};
+    if (partial && typeof partial === 'object') {
+      if (partial.thousands != null) patch.thousands = partial.thousands;
+      if (partial.decimal != null) patch.decimal = partial.decimal;
+      if (partial.decimals != null && partial.decimals !== '') patch.decimals = partial.decimals;
+    }
+    const next = normalizeFormat({ ...getFormat(), ...patch });
+    const host = formatHost();
+    if (host) host[FORMAT_KEY] = next;
+    return { ...next };
+  }
 
   function fail() {
     throw FAIL;
@@ -173,15 +217,23 @@
     return def ? { name: def[1], expr: def[2].trim(), body } : { name: '', expr: body, body };
   }
 
-  /** Miles con punto y decimales con coma; hasta seis decimales. */
-  function formatNumber(value, grouped) {
+  /**
+   * Escribe un número con el formato activo. grouped en false omite los miles
+   * (lo que se copia). override cambia solo esa llamada, sin guardar.
+   */
+  function formatNumber(value, grouped, override) {
+    const fmt = override ? normalizeFormat({ ...getFormat(), ...override }) : getFormat();
     const rounded = clean(value);
     if (!Number.isFinite(rounded) || Math.abs(rounded) >= MAX_ABS) return '';
-    const parts = Math.abs(rounded).toFixed(6).split('.');
-    const frac = parts[1].replace(/0+$/, '');
-    const whole = grouped ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') : parts[0];
-    const negative = rounded < 0 && (frac || whole !== '0');
-    return (negative ? '-' : '') + whole + (frac ? `,${frac}` : '');
+    const places = fmt.decimals === 'auto' ? 6 : Number(fmt.decimals);
+    const parts = Math.abs(rounded).toFixed(places).split('.');
+    let frac = parts[1] || '';
+    if (fmt.decimals === 'auto') frac = frac.replace(/0+$/, '');
+    const thousands = grouped === false ? '' : fmt.thousands;
+    const whole = thousands ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousands) : parts[0];
+    const magnitude = Number(`${parts[0]}.${frac || '0'}`);
+    const negative = rounded < 0 && magnitude !== 0;
+    return (negative ? '-' : '') + whole + (frac ? `${fmt.decimal}${frac}` : '');
   }
 
   function isLiteral(tokens) {
@@ -236,5 +288,5 @@
     });
   }
 
-  return { evaluateLines, formatNumber };
+  return { evaluateLines, formatNumber, getFormat, setFormat };
 });

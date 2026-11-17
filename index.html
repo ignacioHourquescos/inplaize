@@ -46,7 +46,24 @@
         >
           <span class="dock-home-logo-mark" aria-hidden="true"></span>
         </button>
+        <div class="strip-leading" data-mouse-hit>
+        <button
+          type="button"
+          id="strip-search"
+          class="strip-search"
+          data-mouse-hit
+          data-tooltip="Buscar"
+          data-tooltip-placement="bottom"
+          aria-label="Buscar"
+        >
+          <svg class="strip-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2.2"/>
+            <path d="M15.2 15.2 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <div class="strip-rail-divider strip-search-divider" aria-hidden="true"></div>
         <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de navegación"></nav>
+        </div>
         <div class="strip-rail-divider" aria-hidden="true"></div>
         <div id="shortcuts-container">
         <div id="strip-end-actions" class="strip-end-actions">
@@ -145,7 +162,6 @@
               aria-label="Abrir en el perfil seleccionado"
             />
           </form>
-          <div id="loose-nav-split" class="loose-nav-split" role="separator" aria-orientation="vertical" aria-label="Ancho de la dirección"></div>
           <div id="loose-nav-top-tabs" class="loose-nav-top-tabs loose-nav-tabs-cluster" data-mouse-hit>
             <div id="loose-nav-tabs-strip" class="loose-nav-tabs-strip" role="tablist"></div>
             <button type="button" id="loose-nav-new-tab-btn" class="loose-nav-new-tab" data-tooltip="Nueva pestaña" data-tooltip-placement="bottom" aria-label="Nueva pestaña">
@@ -508,46 +524,113 @@
       </aside>
     </div>
 
-    <!-- Configuración: tema del lienzo -->
+    <!-- Configuración: menú lateral (Diseño, Cálculos). -->
     <div id="appearance-modal-overlay" class="hidden" data-mouse-hit>
       <div id="appearance-modal" class="settings-modal-card" role="dialog" aria-modal="true" aria-labelledby="appearance-modal-title">
-        <h3 class="settings-modal-title" id="appearance-modal-title">Configuración</h3>
-        <div class="settings-modal-section">
-          <div class="appearance-row-title" id="appearance-theme-label">Tema</div>
-          <p class="settings-modal-help">Cada tema trae sus colores para la franja, los botones clave y las líneas.</p>
-          <div class="theme-picker" id="appearance-theme-grid" role="radiogroup" aria-labelledby="appearance-theme-label"></div>
-          <div class="appearance-color-block">
-            <div class="appearance-row-title" id="appearance-color-label">Color de acento</div>
-            <p class="settings-modal-help">Botones principales, selección y foco. Al elegir un tema vuelve el acento de ese tema.</p>
-            <div class="appearance-color-options" id="appearance-color-options" role="radiogroup" aria-labelledby="appearance-color-label">
-              <button type="button" class="appearance-color-auto" role="radio" data-value="auto" aria-checked="true">Del tema</button>
-              <button type="button" class="appearance-color-option" role="radio" data-value="indigo" aria-label="Índigo" aria-checked="false" data-tooltip="Índigo" style="--swatch:#4f46e5"></button>
-              <button type="button" class="appearance-color-option" role="radio" data-value="violet" aria-label="Violeta" aria-checked="false" data-tooltip="Violeta" style="--swatch:#7c3aed"></button>
-              <button type="button" class="appearance-color-option" role="radio" data-value="blue" aria-label="Azul" aria-checked="false" data-tooltip="Azul" style="--swatch:#2563eb"></button>
-              <button type="button" class="appearance-color-option" role="radio" data-value="teal" aria-label="Verde azulado" aria-checked="false" data-tooltip="Verde azulado" style="--swatch:#0f766e"></button>
-              <button type="button" class="appearance-color-option" role="radio" data-value="amber" aria-label="Ámbar" aria-checked="false" data-tooltip="Ámbar" style="--swatch:#b45309"></button>
-              <button type="button" class="appearance-color-option" role="radio" data-value="rose" aria-label="Rosa" aria-checked="false" data-tooltip="Rosa" style="--swatch:#be123c"></button>
+        <div class="settings-modal-frame">
+          <aside class="settings-nav">
+            <h3 class="settings-nav-title" id="appearance-modal-title">Configuración</h3>
+            <nav class="settings-nav-list" role="tablist" aria-orientation="vertical" aria-label="Secciones">
+              <button type="button" class="settings-nav-item is-selected" id="settings-tab-design" role="tab" aria-selected="true" aria-controls="settings-panel-design" data-settings-section="design" tabindex="0">
+                <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 3.2a8.8 8.8 0 1 0 8.6 10.4c-.2-.8-.9-1.2-1.7-1.2h-1.4a1.6 1.6 0 0 1-1.5-2.1c.2-.5.1-1.1-.2-1.5a1.7 1.7 0 0 0-1.4-2.6H12.8A8.8 8.8 0 0 0 12 3.2Z" stroke="currentColor" stroke-width="1.7"/>
+                  <circle cx="7.6" cy="10.2" r="1.05" fill="currentColor"/>
+                  <circle cx="10.2" cy="7.4" r="1.05" fill="currentColor"/>
+                  <circle cx="14" cy="7.2" r="1.05" fill="currentColor"/>
+                  <circle cx="16.3" cy="10.4" r="1.05" fill="currentColor"/>
+                </svg>
+                <span>Diseño</span>
+              </button>
+              <button type="button" class="settings-nav-item" id="settings-tab-calc" role="tab" aria-selected="false" aria-controls="settings-panel-calc" data-settings-section="calc" tabindex="-1">
+                <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="4" y="4" width="16" height="16" rx="3.5" stroke="currentColor" stroke-width="1.7"/>
+                  <path d="M8 10h8M8 14h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
+                <span>Cálculos</span>
+              </button>
+            </nav>
+          </aside>
+          <div class="settings-modal-body">
+            <div class="settings-modal-scroll">
+              <section class="settings-panel" id="settings-panel-design" role="tabpanel" aria-labelledby="settings-tab-design" data-settings-panel="design">
+                <h4 class="settings-panel-title">Diseño</h4>
+                <div class="settings-modal-section">
+                  <div class="appearance-row-title" id="appearance-theme-label">Tema</div>
+                  <p class="settings-modal-help">Cada tema trae sus colores para la franja, los botones clave y las líneas.</p>
+                  <div class="theme-picker" id="appearance-theme-grid" role="radiogroup" aria-labelledby="appearance-theme-label"></div>
+                </div>
+                <div class="settings-modal-section">
+                  <label class="settings-checkbox-label" for="settings-analytics-enabled">
+                    <input type="checkbox" id="settings-analytics-enabled" />
+                    <span class="settings-checkbox-text">Enviar <strong>estadísticas de uso anónimas</strong> para ayudar a mejorar inplaize. Solo se cuentan acciones (por ejemplo, "abrió un acceso"); nunca páginas, textos ni cuentas.</span>
+                  </label>
+                </div>
+                <div class="settings-modal-section">
+                  <div class="type-field-label">Tutorial</div>
+                  <p class="settings-modal-help" id="settings-onboarding-help">
+                    Volvé a ver el recorrido guiado: el atajo Ctrl+Alt+D y cómo agregar tu
+                    primera ventana.
+                  </p>
+                  <button type="button" id="onboarding-replay-btn" class="btn-secondary settings-onboarding-replay">
+                    Ver tutorial otra vez
+                  </button>
+                </div>
+              </section>
+              <section class="settings-panel" id="settings-panel-calc" role="tabpanel" aria-labelledby="settings-tab-calc" data-settings-panel="calc" hidden>
+                <h4 class="settings-panel-title">Cálculos</h4>
+                <p class="settings-modal-help settings-panel-lead">Así se escribe el resultado cuando un renglón empieza con =. Las notas y los documentos lo usan al instante.</p>
+                <div class="settings-modal-section">
+                  <div class="type-field-label" id="calc-preview-label">Vista previa</div>
+                  <div class="calc-preview" id="calc-format-preview" aria-live="polite" aria-atomic="true" aria-labelledby="calc-preview-label">
+                    <div class="calc-preview-row">
+                      <span class="calc-preview-expr">1.234.567,891 × 2</span>
+                      <span class="calc-preview-result"><span class="calc-preview-eq">=</span> 2.469.135,782</span>
+                    </div>
+                    <div class="calc-preview-row">
+                      <span class="calc-preview-expr">1 ÷ 3</span>
+                      <span class="calc-preview-result"><span class="calc-preview-eq">=</span> 0,333333</span>
+                    </div>
+                    <div class="calc-preview-row">
+                      <span class="calc-preview-expr">850.000</span>
+                      <span class="calc-preview-result"><span class="calc-preview-eq">=</span> 850.000</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-modal-section">
+                  <div class="type-field-label" id="calc-thousands-label">Separador de miles</div>
+                  <div class="type-segmented" id="calc-thousands" role="radiogroup" aria-labelledby="calc-thousands-label">
+                    <button type="button" class="type-segment is-selected" role="radio" data-value="dot" aria-checked="true" tabindex="0">Punto</button>
+                    <button type="button" class="type-segment" role="radio" data-value="comma" aria-checked="false" tabindex="-1">Coma</button>
+                    <button type="button" class="type-segment" role="radio" data-value="space" aria-checked="false" tabindex="-1">Espacio</button>
+                    <button type="button" class="type-segment" role="radio" data-value="none" aria-checked="false" tabindex="-1">Ninguno</button>
+                  </div>
+                </div>
+                <div class="settings-modal-section">
+                  <div class="type-field-label" id="calc-decimal-label">Separador decimal</div>
+                  <div class="type-segmented" id="calc-decimal" role="radiogroup" aria-labelledby="calc-decimal-label">
+                    <button type="button" class="type-segment is-selected" role="radio" data-value="comma" aria-checked="true" tabindex="0">Coma</button>
+                    <button type="button" class="type-segment" role="radio" data-value="dot" aria-checked="false" tabindex="-1">Punto</button>
+                  </div>
+                </div>
+                <div class="settings-modal-section">
+                  <div class="type-field-label" id="calc-decimals-label">Cantidad de decimales</div>
+                  <p class="settings-modal-help">Automático recorta los ceros y deja hasta seis. Con una cantidad fija, el resultado siempre muestra esos decimales.</p>
+                  <div class="calc-decimals-row">
+                    <button type="button" id="calc-decimals-auto" class="calc-auto-toggle is-selected" aria-pressed="true">Automático</button>
+                    <div class="calc-decimals-slider is-auto">
+                      <span class="calc-decimals-end" aria-hidden="true">0</span>
+                      <input type="range" id="calc-decimals-range" class="calc-decimals-range" min="0" max="6" step="1" value="2" aria-labelledby="calc-decimals-label" aria-valuetext="Automático">
+                      <span class="calc-decimals-end" aria-hidden="true">6</span>
+                      <span class="calc-decimals-badge" id="calc-decimals-value">Auto</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div class="settings-modal-actions">
+              <button type="button" id="appearance-modal-close" class="btn-primary settings-modal-done">Listo</button>
             </div>
           </div>
-        </div>
-        <div class="settings-modal-section">
-          <label class="settings-checkbox-label" for="settings-analytics-enabled">
-            <input type="checkbox" id="settings-analytics-enabled" />
-            <span class="settings-checkbox-text">Enviar <strong>estadísticas de uso anónimas</strong> para ayudar a mejorar inplaize. Solo se cuentan acciones (por ejemplo, "abrió un acceso"); nunca páginas, textos ni cuentas.</span>
-          </label>
-        </div>
-        <div class="settings-modal-section">
-          <div class="type-field-label">Tutorial</div>
-          <p class="settings-modal-help" id="settings-onboarding-help">
-            Volvé a ver el recorrido guiado: el atajo Ctrl+Alt+D y cómo agregar tu
-            primera ventana.
-          </p>
-          <button type="button" id="onboarding-replay-btn" class="btn-secondary settings-onboarding-replay">
-            Ver tutorial otra vez
-          </button>
-        </div>
-        <div class="settings-modal-actions">
-          <button type="button" id="appearance-modal-close" class="btn-primary settings-modal-done">Listo</button>
         </div>
       </div>
     </div>
@@ -709,9 +792,12 @@
   <script src="ui-tooltip.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
+  <script src="strip-search.js"></script>
+  <script src="profile-rail-menu.js"></script>
   <script src="onboarding.js"></script>
   <script src="page-find-bar.js"></script>
   <script src="tab-strip-fit.js"></script>
+  <script src="theme-art.js"></script>
   <script src="renderer.js"></script>
   <script src="document-editor.bundle.js"></script>
   <script src="document-markdown.js"></script>

@@ -364,6 +364,21 @@ function hideFromTaskbar(hwnd) {
 }
 
 /**
+ * Inversa de hideFromTaskbar: la ventana vuelve a la barra de tareas y a Alt+Tab.
+ * @param {bigint} hwnd
+ * @returns {boolean} true si cambió el estilo
+ */
+function showInTaskbar(hwnd) {
+  if (!hwnd) return false;
+  const ex = asUint32(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+  const next = (ex & ~WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW;
+  if (next === ex) return false;
+  SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next);
+  SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+  return true;
+}
+
+/**
  * Devuelve la ventana al escritorio con el marco que tenía.
  * @param {bigint} guest
  * @param {{ style: bigint, exStyle: bigint, zoomed: boolean, rect: { left: number, top: number, right: number, bottom: number } | null }} saved
@@ -521,6 +536,7 @@ module.exports = {
   attachOwned,
   moveChild,
   hideFromTaskbar,
+  showInTaskbar,
   getOwner,
   windowClass,
   clientOrigin,

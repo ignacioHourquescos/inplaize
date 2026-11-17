@@ -83,6 +83,7 @@
   background: var(--ud-chrome-canvas, #12121a);
   border-left: 1px solid var(--ud-chrome-strip-border, rgba(255, 255, 255, 0.1));
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.28);
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
   transform: translateX(100%);
   visibility: hidden;
   pointer-events: none;
@@ -121,9 +122,9 @@ html:not([data-dock-layout]) .dock-home-menu-drawer {
 .dock-home-menu-drawer-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   color: rgba(232, 232, 239, 0.72);
 }
 
@@ -277,7 +278,7 @@ html.shell-menu-host .dock-home-menu-drawer {
   background: transparent;
   color: var(--ud-chrome-text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;

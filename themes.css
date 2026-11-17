@@ -61,6 +61,8 @@ html[data-canvas-theme='light'][data-ui-theme] {
   --accent-ink: var(--th-accent-2);
   /* Sobre una franja clara el blanco no se vería: va el color del texto. */
   --ud-chrome-edit-border: var(--th-text);
+  /* Divisores verticales: gris claro neutro (no el acento del tema). */
+  --ud-chrome-divider: #cfd0d8;
 }
 
 /* ---------------- Oscuros ---------------- */

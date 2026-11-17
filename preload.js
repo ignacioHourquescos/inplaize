@@ -103,7 +103,9 @@ contextBridge.exposeInMainWorld('usualDesk', {
         ? { partition: String(profile.partition) }
         : {}),
       ...(profile && profile.nextToActive ? { nextToActive: true } : {}),
+      ...(profile && profile.slideIn ? { slideIn: true } : {}),
     }),
+  popupStripSearch: (payload) => ipcRenderer.invoke('strip-search-popup', payload || {}),
   looseNavPickProfile: () => ipcRenderer.invoke('loose-nav-pick-profile'),
   looseNavUseAccount: (target) =>
     ipcRenderer.invoke('loose-nav-use-account', {
@@ -140,6 +142,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   looseNavOpenExternal: (url) => ipcRenderer.invoke('loose-nav-open-external', { url }),
   looseNavGetState: () => ipcRenderer.invoke('loose-nav-get-state'),
   looseNavOpenPageMenu: (x, y) => ipcRenderer.invoke('loose-nav-page-menu', { x, y }),
+  popupProfileRail: (payload) => ipcRenderer.invoke('profile-rail-popup', payload || {}),
   looseNavOpenTabMenu: (tabId, x, y) =>
     ipcRenderer.invoke('loose-nav-tab-menu', { tabId: String(tabId || ''), x, y }),
   looseNavToggleMute: (tabId) => ipcRenderer.invoke('loose-nav-toggle-mute', String(tabId || '')),

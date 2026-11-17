@@ -14,7 +14,16 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   showUrlPrompt: () => ipcRenderer.invoke('url-prompt-show'),
   openAppBrowser: () => ipcRenderer.invoke('app-browser-open'),
   looseNavGetState: () => ipcRenderer.invoke('loose-nav-get-state'),
+  looseNavNewTab: (url, profile) =>
+    ipcRenderer.invoke('loose-nav-new-tab', {
+      ...(url ? { url } : {}),
+      ...(profile && profile.partition ? { partition: String(profile.partition) } : {}),
+      ...(profile && profile.nextToActive ? { nextToActive: true } : {}),
+      ...(profile && profile.slideIn ? { slideIn: true } : {}),
+    }),
   looseNavUseAccount: (payload) => ipcRenderer.invoke('loose-nav-use-account', payload || {}),
+  popupProfileRail: (payload) => ipcRenderer.invoke('profile-rail-popup', payload || {}),
+  popupStripSearch: (payload) => ipcRenderer.invoke('strip-search-popup', payload || {}),
   onLooseNavState: (callback) => {
     ipcRenderer.on('loose-nav-state', (_event, payload) => callback(payload));
   },

@@ -816,6 +816,10 @@
     });
   }
 
+  document.addEventListener('inplaize-calc-format', () => {
+    if (editorApi && typeof editorApi.refreshCalcs === 'function') editorApi.refreshCalcs();
+  });
+
   function syncWithBrowser() {
     if (!overlay.classList.contains('is-open')) return;
     setModalAway(browserIsOpen());

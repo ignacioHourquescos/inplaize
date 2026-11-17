@@ -20,6 +20,43 @@ function appRoot() {
   }
 }
 
+/** @type {WeakMap<Electron.BrowserWindow, boolean>} */
+const switcherPresence = new WeakMap();
+
+/**
+ * La home figura en Alt+Tab y en la barra de tareas solo mientras está abierta.
+ * Cerrada es una ventana transparente del tamaño de la pantalla: listada, se ve
+ * como una entrada vacía y elegirla no muestra nada.
+ * @param {Electron.BrowserWindow | null | undefined} win
+ * @param {boolean} listed
+ */
+function syncDockSwitcherPresence(win, listed) {
+  if (!win || win.isDestroyed()) return;
+  const on = listed === true;
+  if (switcherPresence.get(win) === on) return;
+  switcherPresence.set(win, on);
+  // setSkipTaskbar saca el botón de la barra, pero Alt+Tab se guía por el estilo de la ventana.
+  const applyStyle = () => {
+    if (process.platform !== 'win32') return;
+    try {
+      const win32 = require('./win32-window');
+      const hwnd = win32.hwndFromBrowserWindow(win);
+      if (on) win32.showInTaskbar(hwnd);
+      else win32.hideFromTaskbar(hwnd);
+    } catch {
+      /* sin user32 queda solo skipTaskbar */
+    }
+  };
+  // Al listar, el estilo va primero: la barra lo lee al agregar el botón.
+  if (on) applyStyle();
+  try {
+    win.setSkipTaskbar(!on);
+  } catch {
+    /* noop */
+  }
+  if (!on) applyStyle();
+}
+
 /**
  * @param {Electron.Display} display
  * @param {{ mainWindow: BrowserWindow | null, isExpanded: boolean }} state
@@ -45,7 +82,7 @@ function createDockWindow(display, state) {
     alwaysOnTop: true,
     resizable: false,
     hasShadow: false,
-    skipTaskbar: false,
+    skipTaskbar: true,
     webPreferences: {
       preload: path.join(root, 'preload.js'),
       contextIsolation: true,
@@ -60,9 +97,8 @@ function createDockWindow(display, state) {
   });
 
   brandWindow(win);
-  // La home entra en la barra y en Alt+Tab. Si no, al volver Windows
-  // activa otra ventana de inplaize.
-  win.setSkipTaskbar(false);
+  // Arranca cerrada: entra en la barra y en Alt+Tab recién cuando se abre la home.
+  syncDockSwitcherPresence(win, false);
 
   if (process.platform === 'win32') {
     try {
@@ -241,6 +277,7 @@ function createDockWindow(display, state) {
         state.reopenHomeAfter = Date.now() + 280;
       }
       state.isExpanded = false;
+      syncDockSwitcherPresence(win, false);
       applyDockWindowBounds(win, false);
       try {
         win.setIgnoreMouseEvents(true, { forward: true });
@@ -261,4 +298,4 @@ function createDockWindow(display, state) {
   return win;
 }
 
-module.exports = { createDockWindow };
+module.exports = { createDockWindow, syncDockSwitcherPresence };

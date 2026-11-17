@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { evaluateLines, formatNumber } = require('../notes-calc');
+const { evaluateLines, formatNumber, getFormat, setFormat } = require('../notes-calc');
 
 function shown(lines) {
   return evaluateLines(lines).map((item) => (item ? item.display : null));
@@ -99,5 +99,36 @@ assert.strictEqual(formatNumber(-1234567.891, true), '-1.234.567,891');
 assert.strictEqual(formatNumber(-0.0000001, true), '0');
 assert.strictEqual(formatNumber(1e15, true), '');
 assert.strictEqual(formatNumber(NaN, true), '');
+
+// Formato elegido en Configuración: miles, decimal y cantidad de decimales.
+setFormat({ thousands: ',', decimal: '.', decimals: '2' });
+assert.strictEqual(formatNumber(1234567.891, true, { decimals: 'auto' }), '1,234,567.891');
+assert.strictEqual(formatNumber(1234567.891, true), '1,234,567.89');
+assert.strictEqual(getFormat().decimals, '2');
+assert.strictEqual(one('=1234567.891 * 2'), '2,469,135.78');
+assert.strictEqual(evaluateLines(['=1 / 3'])[0].copy, '0.33');
+assert.strictEqual(one('=850000'), '850,000.00');
+assert.strictEqual(formatNumber(-1234.5, true), '-1,234.50');
+assert.strictEqual(formatNumber(-1234.5, false), '-1234.50');
+assert.strictEqual(formatNumber(-0.001, true), '0.00');
+
+setFormat({ thousands: ' ', decimal: ',', decimals: 'auto' });
+assert.strictEqual(one('=850000'), '850 000');
+assert.strictEqual(one('=1 / 3'), '0,333333');
+
+setFormat({ thousands: '', decimal: '.', decimals: '0' });
+assert.strictEqual(one('=1234.8'), '1235');
+assert.strictEqual(one('=1234.2'), '1234');
+assert.strictEqual(one('=850000'), '850000');
+
+assert.deepStrictEqual(setFormat({ thousands: '.', decimal: '.', decimals: '9' }), {
+  thousands: '.',
+  decimal: ',',
+  decimals: 'auto',
+});
+
+setFormat({ thousands: '.', decimal: ',', decimals: 'auto' });
+assert.strictEqual(one('=23414*2'), '46.828');
+assert.strictEqual(formatNumber(-1234567.891, true), '-1.234.567,891');
 
 console.log('notes-calc: ok');

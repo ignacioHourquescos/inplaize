@@ -242,9 +242,33 @@ function hostShowsTabChrome(host) {
 }
 
 function chromeHeightFor(host) {
-  if (!hostShowsTabChrome(host)) return DETACHED_CHROME_H;
+  if (!hostShowsTabChrome(host)) {
+    if (host && host.__usualDeskAddressPeek && !host.__usualDeskEmbeddedDesktop) {
+      return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
+    }
+    return DETACHED_CHROME_H;
+  }
+  /* Peek de dirección (una pestaña): misma fila, solo omnibox. */
+  if (host.__usualDeskAddressPeek) return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
+  /* URL oculta al scrollear: la fila sigue midiendo lo mismo. */
   if (host.__usualDeskUrlBarHidden) return DETACHED_CHROME_H + DETACHED_TABS_ONLY_H;
   return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
+}
+
+/** Compose desde Buscar: foco en la omnibox (misma fila que las pestañas). */
+function setUrlCompose(host, on) {
+  if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
+  const next = on === true;
+  if (!!host.__usualDeskUrlCompose === next) return;
+  host.__usualDeskUrlCompose = next;
+  if (next) host.__usualDeskUrlBarHidden = false;
+  try {
+    host.webContents.send('detached-url-compose', next);
+  } catch {
+    /* cerrando */
+  }
+  /* El alto del chrome ya no cambia: dirección y pestañas comparten fila. */
+  if (next) layoutActiveTabView(host);
 }
 
 /** Esconde o muestra la dirección y le deja ese lugar a la página. */
@@ -454,7 +478,11 @@ function buildTabsPayload(host) {
         pinTitle: pinTitleFor(tab),
       };
     });
-  return { tabs, embedded: !!(host && host.__usualDeskEmbeddedDesktop) };
+  return {
+    tabs,
+    embedded: !!(host && host.__usualDeskEmbeddedDesktop),
+    addressPeek: !!(host && host.__usualDeskAddressPeek) && !hostShowsTabChrome(host),
+  };
 }
 
 function broadcastTabsToHost(host) {
@@ -468,6 +496,9 @@ function broadcastTabsToHost(host) {
 
 /** Cambios en el nº de pestañas alteran la altura del chrome → recolocar y repintar. */
 function refreshHostTabsUi(host) {
+  if (host && host.__usualDeskAddressPeek && hostShowsTabChrome(host)) {
+    host.__usualDeskAddressPeek = false;
+  }
   if (host && !hostShowsTabChrome(host) && host.__usualDeskUrlBarHidden) {
     host.__usualDeskUrlBarHidden = false;
     try {
@@ -780,6 +811,7 @@ function findForegroundChromeHost() {
 function setEmbeddedDesktopCover(host, covered) {
   if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
   host.__usualDeskEmbeddedDesktop = covered === true;
+  if (covered) host.__usualDeskAddressPeek = false;
   attachActiveTabViewOnly(host);
   broadcastTabsToHost(host);
 }
@@ -844,6 +876,22 @@ function registerDetachedFrameIpc() {
     switch (action) {
       case 'get-chrome':
         return buildDetachedChromePayload(win.__usualDeskDetachedOwnMapKey);
+      case 'reveal-address': {
+        if (hostShowsTabChrome(win) || win.__usualDeskEmbeddedDesktop) return false;
+        win.__usualDeskAddressPeek = true;
+        refreshHostTabsUi(win);
+        return true;
+      }
+      case 'hide-address': {
+        if (!win.__usualDeskAddressPeek) return false;
+        win.__usualDeskAddressPeek = false;
+        refreshHostTabsUi(win);
+        return true;
+      }
+      case 'set-url-compose': {
+        setUrlCompose(win, arg === true);
+        return true;
+      }
       case 'activate': {
         const id = arg == null ? '' : String(arg);
         if (!id) return false;

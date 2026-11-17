@@ -201,6 +201,17 @@ function renderChrome(payload) {
     let ignoreClickUntil = 0;
     btn.addEventListener('click', () => {
       if (Date.now() < ignoreClickUntil) return;
+      const addressBar = document.getElementById('shortcut-browser');
+      if (it.isActive && addressBar && addressBar.classList.contains('is-address-peek')) {
+        const field = document.getElementById('shortcut-omnibox-input');
+        field?.focus();
+        field?.select();
+        return;
+      }
+      if (it.isActive && (!addressBar || addressBar.hidden)) {
+        api.frameAction('reveal-address').catch(() => {});
+        return;
+      }
       // Left-click sobre un icono que NO es miembro del Modo Foco lo cancela.
       // Si SÍ es miembro, solo navegamos hacia esa ventana sin romper el foco,
       // para poder moverse entre las pestañas que forman parte del foco.
@@ -339,6 +350,17 @@ function paintShortcutAddress(value) {
   );
 }
 
+function focusPeekAddress(url) {
+  const input = document.getElementById('shortcut-omnibox-input');
+  if (!input) return;
+  const shown = displayAddress(url);
+  if (shown) input.value = shown;
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+}
+
 function applyPageNav(state) {
   pageNav = state && typeof state === 'object'
     ? { canGoBack: !!state.canGoBack, canGoForward: !!state.canGoForward, url: state.url || '' }
@@ -359,16 +381,30 @@ function applyPageNav(state) {
  * Con una sola pestaña no se muestra ni la solapa ni la dirección.
  * También se oculta cuando una app de escritorio tapa la página.
  */
+let addressPeekWasOn = false;
+
 function renderSubTabs(payload) {
   const chrome = document.getElementById('shortcut-browser');
   const tabs = payload && Array.isArray(payload.tabs) ? payload.tabs : [];
   const embedded = !!(payload && payload.embedded);
-  const showChrome = !embedded && tabs.length > 1;
-  if (chrome) chrome.hidden = !showChrome;
+  const addressPeek = !!(payload && payload.addressPeek);
+  const peekOnly = addressPeek && tabs.length <= 1;
+  const showChrome = !embedded && (tabs.length > 1 || addressPeek);
+  const openingPeek = peekOnly && !addressPeekWasOn;
+  addressPeekWasOn = peekOnly;
+  if (chrome) {
+    chrome.hidden = !showChrome;
+    chrome.classList.toggle('is-address-peek', peekOnly);
+    if (peekOnly) chrome.classList.remove('is-url-hidden');
+  }
+  if (openingPeek) {
+    const activeTab = tabs.find((tab) => tab.isActive) || tabs[0];
+    focusPeekAddress(activeTab ? activeTab.url : '');
+  }
   if (!subtabStrip) return;
-  if (!showChrome) {
+  if (!showChrome || peekOnly) {
     subtabStrip.innerHTML = '';
-    syncShortcutAddPage([]);
+    syncShortcutAddPage(peekOnly ? tabs : []);
     return;
   }
   subtabStrip.hidden = false;
@@ -418,7 +454,20 @@ function renderSubTabs(payload) {
     el.appendChild(label);
 
     el.addEventListener('click', () => {
-      if (!tab.isActive) api.frameAction('select-subtab', tab.id);
+      if (tab.isActive) {
+        setDetachedStripCompose(true, { origin: 'tab' });
+        shortcutBlankAddress = false;
+        const field = document.getElementById('shortcut-omnibox-input');
+        if (field) {
+          const shown = displayAddress(tab.url || pageNav.url || '');
+          field.value = shown;
+          field.focus();
+          try { field.select(); } catch { /* ignore */ }
+          paintShortcutAddress(shown);
+        }
+        return;
+      }
+      api.frameAction('select-subtab', tab.id);
     });
 
     if (!tab.isMain) {
@@ -497,12 +546,14 @@ function bindShortcutBrowserChrome() {
   document.getElementById('shortcut-new-tab')?.addEventListener('click', () => {
     shortcutBlankAddress = true;
     shortcutBlankTabId = '';
+    setDetachedStripCompose(true, { origin: 'strip' });
     const field = document.getElementById('shortcut-omnibox-input');
     if (field) {
       field.value = '';
       field.focus();
     }
     api.frameAction('new-subtab').catch(() => {
+      setDetachedStripCompose(false);
       forgetShortcutBlankAddress();
     });
   });
@@ -546,7 +597,16 @@ function bindShortcutBrowserChrome() {
       syncUrlEditing();
       if (shortcutBlankAddress) input.value = '';
     });
-    input.addEventListener('blur', syncUrlEditing);
+    input.addEventListener('blur', () => {
+      syncUrlEditing();
+      const bar = document.getElementById('shortcut-browser');
+      if (!bar || !bar.classList.contains('is-address-peek')) return;
+      requestAnimationFrame(() => {
+        if (!bar.classList.contains('is-address-peek')) return;
+        if (bar.contains(document.activeElement)) return;
+        api.frameAction('hide-address').catch(() => {});
+      });
+    });
   }
   form?.addEventListener('mousedown', (event) => {
     if (event.target.closest('button')) return;
@@ -564,19 +624,100 @@ function bindShortcutBrowserChrome() {
   });
   form?.addEventListener('submit', (event) => {
     event.preventDefault();
-    const value = input ? input.value : '';
+    const value = input ? String(input.value || '').trim() : '';
+    const composing = document.documentElement.classList.contains('is-strip-compose');
+    const peek = document.getElementById('shortcut-browser')?.classList.contains('is-address-peek');
+    /* Lupa / compose: Enter siempre genera la pestaña y recién ahí muestra el strip. */
+    if (composing) {
+      setDetachedStripCompose(false);
+      if (value) api.frameAction('new-subtab', value).catch(() => {});
+      input?.blur();
+      return;
+    }
+    if (peek) {
+      const current = displayAddress(pageNav.url || '').trim();
+      if (value && value !== current) api.frameAction('navigate', value).catch(() => {});
+      input?.blur();
+      return;
+    }
+    setDetachedStripCompose(false);
     api.frameAction('new-subtab', value).catch(() => {});
     input?.blur();
   });
   input?.addEventListener('blur', () => {
     paintShortcutAddress(input.value);
+    window.setTimeout(() => {
+      if (document.activeElement === input) return;
+      if (document.documentElement.classList.contains('is-strip-compose')) {
+        setDetachedStripCompose(false);
+      }
+    }, 180);
   });
-  window.UsualDeskTabStripFit?.bindUrlColumnSplit(
-    document.getElementById('shortcut-browser'),
-    document.getElementById('shortcut-browser-split'),
-    form,
-  );
 }
+
+/**
+ * Buscador de la franja → omnibox (mismo handoff Arc que el dock).
+ * `commit` navega al llegar; si no, deja el texto listo para editar.
+ */
+function setDetachedStripCompose(on, { origin = 'strip' } = {}) {
+  const next = on === true;
+  const root = document.documentElement;
+  if (origin === 'tab') root.dataset.urlSlide = 'up';
+  else if (origin === 'strip') root.dataset.urlSlide = 'down';
+
+  if (next) {
+    root.classList.add('is-strip-compose');
+    api.frameAction('set-url-compose', true).catch(() => {});
+    return;
+  }
+
+  root.classList.remove('is-strip-compose');
+  delete root.dataset.urlSlide;
+  api.frameAction('set-url-compose', false).catch(() => {});
+}
+
+/**
+ * Lupa desde un acceso directo: salimos de esa sesión y abrimos el buscador
+ * en el primer perfil de la franja (dock), no como pestaña del acceso.
+ */
+async function firstProfilePartition() {
+  const rail = document.getElementById('loose-nav-accounts');
+  const btn = rail && rail.querySelector('.loose-nav-account[data-partition]');
+  if (btn && btn.dataset.partition) return String(btn.dataset.partition);
+  try {
+    const state = await api.looseNavGetState?.();
+    const accounts = (state && state.accounts && state.accounts.accounts) || [];
+    if (accounts[0] && accounts[0].partition) return String(accounts[0].partition);
+    const def = state && state.defaultProfile && state.defaultProfile.partition;
+    if (def) return String(def);
+  } catch {
+    /* noop */
+  }
+  return '';
+}
+
+window.__dockHandoffStripSearch = async (seed = '', { commit = false } = {}) => {
+  const text = String(seed || '').trim();
+  const stripBtn = document.getElementById('strip-search');
+  if (stripBtn && document.activeElement === stripBtn) stripBtn.blur();
+
+  setDetachedStripCompose(false);
+
+  if (typeof api.looseNavNewTab !== 'function') return;
+
+  const partition = await firstProfilePartition();
+  const profile = {
+    ...(partition ? { partition } : {}),
+    slideIn: true,
+  };
+
+  try {
+    /* Una sola pestaña en el primer perfil del dock (sale del acceso directo). */
+    await api.looseNavNewTab(commit && text ? text : '', profile);
+  } catch {
+    /* noop */
+  }
+};
 
 async function refreshSubTabsFromMain() {
   try {

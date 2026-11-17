@@ -70,6 +70,8 @@ const CLOSED_TABS_MAX = 10;
 const closedTabs = [];
 /** @type {string | null} */
 let activeTabId = null;
+/** La próxima pestaña nueva (Enter en buscador) pide slide L→R en el renderer. */
+let pendingTabSlide = false;
 /** Última pestaña usada en cada sesión, para volver a ella desde el riel. */
 /** @type {Map<string, string>} */
 const lastTabBySession = new Map();
@@ -226,6 +228,8 @@ function buildStatePayload() {
     const defaultIdx = railAccounts.findIndex((a) => a.partition === fallback);
     if (defaultIdx > 0) railAccounts.unshift(...railAccounts.splice(defaultIdx, 1));
   }
+  const slide = pendingTabSlide;
+  pendingTabSlide = false;
   return {
     active: modeActive,
     tabs: items,
@@ -235,6 +239,7 @@ function buildStatePayload() {
     activeCanGoBack: !!(active && active.canGoBack),
     activeCanGoForward: !!(active && active.canGoForward),
     activeLoading: !!(active && active.loading),
+    pendingTabSlide: slide,
     accounts: { accounts: railAccounts, chrome: cache.rail.chrome },
     activePartition,
     activeProfile: {
@@ -1544,6 +1549,23 @@ async function useAccount(payload) {
   return switchToSession(partition);
 }
 
+/**
+ * Menú de perfiles sobre la página (apps / WhatsApp / dock) sin empujar el
+ * BrowserView: popup hijo con slide-in. Coordenadas relativas al content.
+ * @param {Electron.IpcMainInvokeEvent} event
+ * @param {{ x?: number, y?: number, width?: number, items?: Array<object> }} payload
+ */
+function popupProfileRail(event, payload) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win || win.isDestroyed()) return Promise.resolve(null);
+  try {
+    return require('./profile-rail-popup').showProfileRailPopup(win, payload || {});
+  } catch (err) {
+    console.error('profile-rail-popup', err);
+    return Promise.resolve(null);
+  }
+}
+
 function registerLooseNavIpc() {
   installTabPersistence();
   const channels = [
@@ -1573,6 +1595,8 @@ function registerLooseNavIpc() {
     'loose-nav-add-profile-options',
     'loose-nav-add-profile',
     'loose-nav-cover-page',
+    'profile-rail-popup',
+    'strip-search-popup',
   ];
   for (const ch of channels) {
     try {
@@ -1606,12 +1630,24 @@ function registerLooseNavIpc() {
     if (!target) return false;
     const picked = typeof p.partition === 'string' && p.partition ? p.partition : '';
     const current = activeTabId && tabs.get(activeTabId);
+    if (p.slideIn === true) pendingTabSlide = true;
     await openTabFromUrl(target, {
       partition: picked || (current && current.partition) || defaultPartition(),
       afterId: p.nextToActive && current ? current.id : undefined,
       promptAddress: !raw,
     });
     return true;
+  });
+
+  ipcMain.handle('strip-search-popup', (event, payload) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) return Promise.resolve({ value: '', commit: false });
+    try {
+      return require('./strip-search-popup').showStripSearchPopup(win, payload || {});
+    } catch (err) {
+      console.error('strip-search-popup', err);
+      return Promise.resolve({ value: '', commit: false });
+    }
   });
 
   ipcMain.handle('loose-nav-use-account', (_e, payload) => useAccount(payload));
@@ -1663,6 +1699,8 @@ function registerLooseNavIpc() {
     popupPageMenu(pageMenuContext, at && typeof at === 'object' ? at : {});
     return true;
   });
+
+  ipcMain.handle('profile-rail-popup', (event, payload) => popupProfileRail(event, payload));
   ipcMain.handle('loose-nav-tab-menu', (_e, payload) => {
     const p = payload && typeof payload === 'object' ? payload : {};
     return popupTabMenu(String(p.tabId || ''), p);

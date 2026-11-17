@@ -372,8 +372,38 @@
   cursor: nesw-resize;
 }
 
-/* Resultado de un cálculo (renglón con "="): al final del párrafo, se copia con un clic. */
+/* Renglones con resultado: un bloque, el número alineado a la derecha.
+   float (no flex) para no partir las marcas inline del párrafo. */
+.doc-editor .ProseMirror p.is-calc-line {
+  margin: 0.55em 0;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+.doc-editor .ProseMirror p.is-calc-line + p.is-calc-line {
+  margin-top: 0;
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.doc-editor .ProseMirror p.is-calc-line:has(+ p.is-calc-line) {
+  margin-bottom: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.doc-editor .ProseMirror p.is-calc-line::after {
+  content: '';
+  display: block;
+  clear: both;
+}
+
+/* Resultado de un cálculo (renglón con "="): a la derecha del bloque, se copia con un clic. */
 .doc-editor .ProseMirror .doc-calc {
+  float: right;
   margin-left: 16px;
   padding: 1px 6px;
   border-radius: 6px;
@@ -669,6 +699,11 @@ html[data-canvas-theme='light'] .doc-editor .ProseMirror h1,
 html[data-canvas-theme='light'] .doc-editor .ProseMirror h2,
 html[data-canvas-theme='light'] .doc-editor .ProseMirror h3 {
   color: #111111;
+}
+
+html[data-canvas-theme='light'] .doc-editor .ProseMirror p.is-calc-line {
+  background: rgba(0, 0, 0, 0.035);
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 html[data-canvas-theme='light'] .doc-editor .ProseMirror .doc-calc {

@@ -125,74 +125,16 @@
     }
   }
 
-  const URL_COL_KEY = 'inplaize-url-col';
-
-  const clamp = (ratio) => Math.min(0.72, Math.max(0.16, ratio));
-
-  function readUrlColumn() {
-    try {
-      // Sin valor guardado getItem da null, y Number(null) es 0: no cuenta como ancho.
-      const raw = localStorage.getItem(URL_COL_KEY);
-      const n = raw === null || raw === '' ? NaN : Number(raw);
-      return Number.isFinite(n) ? clamp(n) : 0.33;
-    } catch {
-      return 0.33;
-    }
-  }
-
-  const urlColumnPct = (ratio) => `${Math.round(clamp(ratio) * 1000) / 10}%`;
-
-  /** La franja de arriba reserva este mismo ancho para los perfiles (chrome-strip.css). */
-  function publishUrlColumn(ratio) {
+  /** URL ya no es columna lateral: leading = contenido; no sincronizar anchos. */
+  function alignStripLeading() {
     if (typeof document === 'undefined') return;
-    document.documentElement.style.setProperty('--ud-url-col', urlColumnPct(ratio));
+    document.documentElement.style.removeProperty('--ud-strip-lead-w');
   }
 
-  // También en las ventanas sin barra de dirección, para que la franja quede igual en todas.
-  publishUrlColumn(readUrlColumn());
-
-  /**
-   * Arrastrar el separador cambia el ancho de la dirección frente a las pestañas.
-   * @param {HTMLElement | null} row
-   * @param {HTMLElement | null} handle
-   * @param {HTMLElement | null} urlEl
-   */
-  function bindUrlColumnSplit(row, handle, urlEl) {
-    if (!row || !handle || !urlEl || handle.__urlSplit) return;
-    handle.__urlSplit = true;
-    const apply = (ratio) => {
-      const pct = urlColumnPct(ratio);
-      urlEl.style.flex = `0 0 ${pct}`;
-      urlEl.style.width = pct;
-      urlEl.style.maxWidth = pct;
-      publishUrlColumn(ratio);
-    };
-    apply(readUrlColumn());
-    handle.addEventListener('pointerdown', (ev) => {
-      if (ev.button !== 0) return;
-      ev.preventDefault();
-      const move = (e) => {
-        const rect = row.getBoundingClientRect();
-        if (rect.width < 40) return;
-        const handleW = handle.offsetWidth || 12;
-        // La dirección no arranca en el borde de la fila: tiene su margen.
-        const urlLeft = urlEl.getBoundingClientRect().left;
-        const ratio = clamp((e.clientX - urlLeft - handleW / 2) / rect.width);
-        apply(ratio);
-        try { localStorage.setItem(URL_COL_KEY, String(ratio)); } catch { /* sin almacenamiento */ }
-      };
-      const end = () => {
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', end);
-        window.removeEventListener('pointercancel', end);
-        document.documentElement.classList.remove('is-url-col-drag');
-      };
-      document.documentElement.classList.add('is-url-col-drag');
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', end);
-      window.addEventListener('pointercancel', end);
-    });
+  /** @deprecated La dirección es fila completa; no hay split. */
+  function bindUrlColumnSplit() {
+    /* no-op */
   }
 
-  return { fitTabStrip, tabStripWidths, watchTabStrip, bindUrlColumnSplit, paintAddressFace, PREFERRED, MIN };
+  return { fitTabStrip, tabStripWidths, watchTabStrip, bindUrlColumnSplit, alignStripLeading, paintAddressFace, PREFERRED, MIN };
 });

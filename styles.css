@@ -209,9 +209,15 @@ html[data-dock-layout='topbar'] .dock-home-strip-btn.file-drag-hover {
   flex: 0 0 1px;
   align-self: stretch;
   width: 1px;
-  margin: 0 4px;
-  background: var(--ud-chrome-strip-border);
+  /* El hueco de la franja empuja esta línea: se anula para alinear el trazo. */
+  margin: 0 4px 0 calc(-1 * var(--ud-chrome-strip-gap));
+  background: var(--ud-chrome-divider, #3f3f48);
   -webkit-app-region: no-drag;
+}
+
+/* En home la columna ::after ya separa lupa|perfiles: evitamos doble trazo. */
+html[data-dock-layout='topbar']:not([data-loose-nav='on']) .strip-leading > .strip-search-divider {
+  opacity: 0;
 }
 
 /* El "+" va al final de la tira, a la izquierda de "listo". El fondo es el de la
@@ -845,19 +851,130 @@ html[data-dock-layout='topbar'] #modal-overlay {
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 22px 24px 20px;
+  padding: 0;
   width: 100%;
-  max-width: min(620px, calc(100vw - 28px));
+  max-width: min(820px, calc(100vw - 28px));
+  height: min(640px, calc(100vh - 28px));
   max-height: calc(100vh - 28px);
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
 }
 
-.settings-modal-title {
-  font-size: 17px;
+.settings-modal-frame {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+}
+
+.settings-nav {
+  flex: 0 0 196px;
+  width: 196px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 10px 16px;
+  background: #f7f6f3;
+  border-right: 1px solid var(--border);
+}
+
+.settings-nav-title {
+  margin: 2px 8px 12px;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 18px;
+  letter-spacing: -0.01em;
+  color: var(--text-secondary);
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-nav-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.settings-nav-item.is-selected {
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+.settings-nav-item:focus {
+  outline: none;
+}
+
+.settings-nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings-nav-icon {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+}
+
+.settings-nav-item.is-selected .settings-nav-icon {
+  color: var(--text-primary);
+}
+
+.settings-modal-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.settings-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px 16px;
+}
+
+.settings-panel[hidden] {
+  display: none !important;
+}
+
+.settings-panel-title {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+.settings-panel-lead {
+  margin: -8px 0 14px;
+}
+
+#settings-panel-calc .settings-modal-section {
+  margin-bottom: 14px;
 }
 
 .settings-modal-section {
@@ -927,13 +1044,178 @@ html[data-dock-layout='topbar'] #modal-overlay {
 
 .settings-modal-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 4px;
+  flex: 0 0 auto;
+  position: static;
+  z-index: 1;
+  margin: 0;
+  padding: 14px 24px 18px;
+  border-top: 1px solid var(--border);
+  background: #ffffff;
 }
 
 .settings-modal-done {
-  min-width: 100px;
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+
+.settings-modal-done:active {
+  transform: translateY(1px);
+}
+
+.calc-decimals-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.calc-auto-toggle {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calc-auto-toggle:hover:not(.is-selected) {
+  background: #f9fafb;
+}
+
+.calc-auto-toggle.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, #ffffff);
+  font-weight: 700;
+}
+
+.calc-auto-toggle:focus {
+  outline: none;
+}
+
+.calc-auto-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.calc-decimals-slider {
+  flex: 1 1 180px;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calc-decimals-slider.is-auto {
+  opacity: 0.5;
+}
+
+.calc-decimals-end {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-decimals-range {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.calc-decimals-badge {
+  flex: 0 0 auto;
+  min-width: 2.8em;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.calc-preview {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fafafa;
+  overflow: hidden;
+}
+
+.calc-preview-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-preview-row:first-child {
+  border-top: none;
+}
+
+.calc-preview-expr {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calc-preview-result {
+  flex: 0 0 auto;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.calc-preview-eq {
+  margin-right: 4px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .settings-modal-frame {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    width: auto;
+    flex: 0 0 auto;
+    padding: 14px 12px 10px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .settings-nav-item {
+    width: auto;
+  }
 }
 
 .appearance-row-title {
@@ -943,7 +1225,7 @@ html[data-dock-layout='topbar'] #modal-overlay {
   margin-bottom: 2px;
 }
 
-/* Selector de tema: tarjetas con una miniatura de la franja y el lienzo. */
+/* Selector de tema: tarjetas con el dibujo de cada tema. */
 .theme-group-title {
   margin: 14px 0 6px;
   font-size: 11px;
@@ -1021,152 +1303,18 @@ html[data-dock-layout='topbar'] #modal-overlay {
 }
 
 .theme-preview {
+  position: relative;
   flex: 1 1 0;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
   background: var(--th-canvas);
 }
 
-.theme-preview-strip {
-  flex: 0 0 18px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  overflow: hidden;
-  background: var(--th-strip);
-  border-bottom: 2px solid var(--key-line);
-}
-
-.theme-preview-key {
-  flex: 0 0 7px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-}
-
-.theme-preview-key.is-edit {
-  background: var(--key-edit);
-}
-
-.theme-preview-key.is-add {
-  background: var(--key-add);
-}
-
-.theme-preview-key.is-nav {
-  background: var(--key-nav);
-}
-
-.theme-preview-key.is-pin {
-  background: var(--key-pin);
-}
-
-.theme-preview-key.is-close {
-  background: var(--key-close);
-}
-
-.theme-preview-body {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 7px;
-  overflow: hidden;
-}
-
-.theme-preview-text {
-  width: 70%;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--th-text);
-}
-
-.theme-preview-text.is-muted {
-  width: 46%;
-  background: var(--th-muted);
-  opacity: 0.7;
-}
-
-.theme-preview-accent {
-  width: 18px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--th-accent);
-}
-
-.appearance-color-block {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-}
-
-.appearance-color-options {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.appearance-color-auto {
-  height: 28px;
-  padding: 0 12px;
-  border: 1px solid #d4d4d8;
-  border-radius: 999px;
-  background: #ffffff;
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.appearance-color-auto:hover {
-  border-color: #a1a1aa;
-}
-
-.appearance-color-auto.is-selected {
-  border-color: #18181b;
-  background: #18181b;
-  color: #ffffff;
-}
-
-.appearance-color-auto:focus {
-  outline: none;
-}
-
-.appearance-color-auto:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.appearance-color-option {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 999px;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 1px #d4d4d8;
-  background: var(--swatch, var(--accent));
-  cursor: pointer;
-}
-
-.appearance-color-option:hover {
-  transform: scale(1.06);
-}
-
-.appearance-color-option.is-selected {
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #18181b;
-}
-
-.appearance-color-option:focus {
-  outline: none;
-}
-
-.appearance-color-option:focus-visible {
-  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--accent);
+/* Dibujo del tema (theme-art.js): llena la tarjeta y recorta lo que sobra. */
+.theme-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .type-segmented-triple .type-segment {
@@ -1751,25 +1899,100 @@ html[data-dock-layout='topbar'] #sidebar-chrome {
   box-sizing: border-box;
   background: var(--ud-chrome-strip-bg);
   border-bottom: 1px solid var(--ud-chrome-strip-border);
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-width: 0;
   -webkit-app-region: drag;
 }
 
-/* La línea de la columna de inicio sigue hasta el borde de la ventana y
-   separa el icono de inplaize del resto de la franja. */
+/* El puente del acceso/perfil activo baja hacia la barra de pestañas. */
+html[data-dock-layout='topbar'][data-loose-nav='on'] #sidebar-chrome {
+  overflow: visible;
+  border-bottom-color: transparent;
+  z-index: 6;
+}
+
+/* Icono de lupa en la franja: enfoca la omnibox de la fila de pestañas. */
+html[data-dock-layout='topbar'] .strip-leading > .strip-search {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  width: var(--ud-chrome-icon, 40px) !important;
+  min-width: var(--ud-chrome-icon, 40px) !important;
+  max-width: var(--ud-chrome-icon, 40px) !important;
+  height: var(--ud-chrome-icon, 40px) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* FLIP handoff: crece desde el pill hasta la columna de dirección. */
+html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-strip-flipping {
+  position: relative !important;
+  z-index: 30 !important;
+  flex: 0 0 var(--ud-url-col) !important;
+  width: var(--ud-url-col) !important;
+  max-width: var(--ud-url-col) !important;
+  overflow: hidden !important;
+  will-change: transform, border-radius, box-shadow;
+  background: var(--ud-chrome-field-bg) !important;
+}
+
+html.is-strip-compose .loose-nav-omnibox {
+  z-index: 6;
+}
+
+/* Lupa / perfil vacío: omnibox a todo el ancho; pestañas ocultas hasta Enter. */
+html.is-strip-compose[data-url-slide='down'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox,
+html.is-strip-compose[data-url-slide='down'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing,
+html[data-address-only='on'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox,
+html[data-address-only='on'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+html.is-strip-compose[data-url-slide='down'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-row > .loose-nav-top-tabs,
+html.is-strip-compose[data-url-slide='down'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-row > .loose-nav-page-menu,
+html[data-address-only='on'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-row > .loose-nav-top-tabs,
+html[data-address-only='on'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-row > .loose-nav-page-menu {
+  display: none !important;
+}
+
+/* Durante el FLIP el pill no compite con la omnibox. */
+html:has(.loose-nav-omnibox.is-strip-flipping) .strip-search,
+html:has(.loose-nav-omnibox.is-strip-flipping) .strip-leading > .strip-search {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Columna home+lupa: la línea va DESPUÉS de la lupa (no entre home y buscar).
+   Gris neutro; sigue hacia el panel de inicio. */
 html[data-dock-layout='topbar'] #sidebar-chrome::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: -1px;
-  left: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) - 1px);
+  left: calc(
+    var(--ud-chrome-strip-pad-x)
+    + var(--ud-chrome-icon)
+    + var(--ud-chrome-strip-gap)
+    + var(--ud-chrome-icon)
+    + var(--ud-chrome-strip-gap)
+    - 1px
+  );
   width: 1px;
-  background: var(--ud-chrome-strip-border);
+  background: var(--ud-chrome-divider, #3f3f48);
   pointer-events: none;
   z-index: 2;
 }
 
+/* Sin lupa visible, la línea vuelve a quedar solo después del home. */
+html[data-dock-layout='topbar']:not(:has(#strip-search)) #sidebar-chrome::after,
+html[data-dock-layout='topbar']:has(#strip-search[hidden]) #sidebar-chrome::after {
+  left: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) - 1px);
+}
+
 /* Sin perfiles, el icono ya queda separado por la línea de la columna. */
-html[data-dock-layout='topbar'] .loose-nav-accounts:empty + .strip-rail-divider {
+html[data-dock-layout='topbar'] .strip-leading:has(.loose-nav-accounts:empty) + .strip-rail-divider {
   display: none;
 }
 
@@ -1783,7 +2006,7 @@ html[data-loose-nav='on'] #sidebar-chrome::after,
 }
 
 html[data-dock-layout='topbar'] #shortcuts-container {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   min-width: 0;
   align-self: stretch;
   display: flex;
@@ -1800,6 +2023,14 @@ html[data-dock-layout='topbar'] #shortcuts-container {
   overflow-y: hidden;
   background: transparent;
   -webkit-app-region: drag;
+}
+
+html[data-dock-layout='topbar'][data-loose-nav='on'] #shortcuts-container {
+  overflow: visible;
+}
+
+html[data-dock-layout='topbar'][data-loose-nav='on'] .strip-leading {
+  overflow: visible;
 }
 
 html[data-dock-layout='topbar'] #shortcuts-container::-webkit-scrollbar {
@@ -3341,7 +3572,7 @@ html[data-dock-layout='topbar'] .shortcut-card.shell-shortcut-item.is-open:hover
   filter: none !important;
 }
 
-/* Seleccionado: borde violeta inplaize. */
+/* Seleccionado (home): borde violeta. En sesión el encuadre usa --key-line (chrome-strip). */
 html[data-dock-layout='topbar'] .shortcut-card.shell-shortcut-item.is-active,
 html[data-dock-layout='topbar'] .shortcut-card.shell-shortcut-item.is-active:hover {
   background: var(--ud-chrome-icon-active-bg) !important;
@@ -3350,6 +3581,8 @@ html[data-dock-layout='topbar'] .shortcut-card.shell-shortcut-item.is-active:hov
   opacity: 1 !important;
   filter: none !important;
 }
+
+/* En sesión el encuadre vive en chrome-strip.css (icono estirado hasta la barra). */
 
 /* Foco (click derecho): borde lima secondary (pisa al seleccionado). */
 html[data-dock-layout='topbar'] .shortcut-card.shell-shortcut-item.shell-focus-member,
@@ -3490,8 +3723,7 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
 
 /* ==========================================================================
    Navegación suelta: dirección y pestañas en la misma fila.
-   La dirección ocupa toda la fila, en vidrio, para que las pestañas se
-   sigan viendo atrás. El “+” va pegado a la última.
+   Controles + URL a la izquierda; el “+” pegado a la última pestaña.
    ========================================================================== */
 
 .loose-nav-bar {
@@ -3505,31 +3737,35 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
   min-height: 0;
   padding: 0;
   background: var(--ud-chrome-strip-bg);
+  border-top: 2px solid var(--key-line);
   border-bottom: none;
   -webkit-app-region: no-drag;
   color: var(--ud-chrome-text);
   user-select: none;
+  position: relative;
+  z-index: 5;
 }
 
 .loose-nav-bar.hidden {
   display: none !important;
 }
 
-/* Dirección (33%) y pestañas (el resto) en una sola fila, más el ⋮. */
+.loose-nav-omnibox > .loose-nav-controls {
+  margin-left: 0;
+}
+
+/* Misma fila: omnibox + pestañas + menú. */
 .loose-nav-tabs-row {
   position: relative;
   display: flex;
   align-items: stretch;
   gap: 0;
+  width: 100%;
   height: 40px;
   padding: 0;
   margin: 0;
   background: transparent;
   overflow: hidden;
-}
-
-.loose-nav-omnibox > .loose-nav-controls {
-  margin-left: 0;
 }
 
 /* Misma columna que el burger de arriba: icono centrado y la línea que sigue. */
@@ -3547,7 +3783,7 @@ html[data-dock-layout='topbar']:has(#sidebar.open) .sidebar-backdrop:not(.hidden
   border-radius: 0;
 }
 
-/* Pestañas a la derecha de la dirección. Ocultas hasta entrar a navegar. */
+/* Pestañas en su propia fila. Ocultas hasta entrar a navegar. */
 .loose-nav-top-tabs {
   display: none;
 }
@@ -3714,6 +3950,28 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   cursor: pointer;
   overflow: hidden;
   -webkit-app-region: no-drag;
+}
+
+/* Enter en la dirección: la pestaña nueva entra de izquierda a derecha. */
+.loose-nav-tab.is-sliding-in {
+  animation: loose-nav-tab-slide-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes loose-nav-tab-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-40%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loose-nav-tab.is-sliding-in {
+    animation: none;
+  }
 }
 
 .loose-nav-tab + .loose-nav-tab::before {
@@ -4053,7 +4311,8 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing
   min-width: 0;
 }
 
-html[data-canvas-theme='light'] .loose-nav-suggest {
+html[data-canvas-theme='light'] .loose-nav-suggest,
+html[data-canvas-theme='light'] .profile-rail-menu {
   box-shadow: 0 18px 44px rgba(20, 20, 40, 0.18);
 }
 
@@ -4145,29 +4404,30 @@ html[data-canvas-theme='light'] .loose-nav-suggest {
   background-size: 100% 100%;
 }
 
-/* Perfiles: siempre a la izquierda del divider, junto al home. */
+/* Perfiles: después de la lupa, antes del divider de accesos. */
 .loose-nav-accounts {
   display: none;
 }
 
 html[data-dock-layout='topbar'] .loose-nav-accounts {
-  flex: 0 1 auto;
-  /* Reserva hasta el borde derecho de la dirección; con más perfiles crece. */
-  min-width: var(--ud-chrome-profiles-min-w);
+  flex: 0 0 auto;
+  /* Tres perfiles y, si hay más, el botón de puntos. */
+  min-width: 0;
+  width: max-content;
+  max-width: none;
   align-self: stretch;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   gap: var(--ud-chrome-strip-gap);
-  /* Mismo hueco que a la derecha (gap de la franja + margen del separador). */
-  padding-left: calc(var(--ud-chrome-strip-gap) + 4px);
+  padding-left: 0;
   padding-right: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   scrollbar-width: none;
   -webkit-app-region: no-drag;
 }
+
 
 html[data-dock-layout='topbar'] .loose-nav-accounts:empty {
   display: none;
@@ -4220,6 +4480,8 @@ html[data-dock-layout='topbar'] .loose-nav-accounts:empty {
   border: 2px solid var(--ud-chrome-edit-tab);
 }
 
+/* En sesión el perfil activo se encuadra hacia la barra (ver chrome-strip). */
+
 .loose-nav-account.is-busy {
   opacity: 0.45;
   cursor: progress;
@@ -4247,10 +4509,32 @@ html[data-dock-layout='topbar'] .loose-nav-accounts:empty {
   display: none;
 }
 
-/* Editando perfiles (lápiz unificado): sin pestañas ni barra de dirección. */
+/* Editando perfiles (lápiz unificado): sin pestañas ni barra de dirección.
+   El riel muestra todos, así que deja de medir contra la columna de la URL. */
 html[data-profiles-edit='on'] .loose-nav-top-tabs,
 html[data-profiles-edit='on'] #loose-nav-bar {
   display: none !important;
+}
+
+html[data-profiles-edit='on'] .strip-leading {
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+}
+
+html[data-profiles-edit='on'] .strip-leading > .strip-search {
+  flex: 0 0 auto !important;
+  width: var(--ud-chrome-icon, 40px) !important;
+  min-width: var(--ud-chrome-icon, 40px) !important;
+  max-width: var(--ud-chrome-icon, 40px) !important;
+}
+
+html[data-profiles-edit='on'] .loose-nav-accounts {
+  max-width: min(480px, 48vw);
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 /* Modo edición: mismo borde fino de rayas y mismo tinte violeta que los accesos. */
@@ -4293,21 +4577,21 @@ html[data-profiles-edit='on'] #loose-nav-bar {
   display: none;
 }
 
-/* Sin foco, la dirección queda en su columna. Al hacer clic cubre la fila. */
+/* Dirección fija a la izquierda de las pestañas (misma fila). */
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox {
   position: relative;
-  flex: 0 0 33%;
-  width: 33%;
-  max-width: 33%;
+  flex: 0 0 var(--ud-url-col);
+  width: var(--ud-url-col);
+  max-width: var(--ud-url-col);
   min-width: 0;
   align-self: stretch;
   display: flex;
   align-items: center;
   gap: 0;
   box-sizing: border-box;
-  height: auto;
+  height: 100%;
   margin: 0;
-  padding: 0;
+  padding: 0 8px;
   border: none;
   border-radius: 0;
   background: var(--ud-chrome-field-bg);
@@ -4318,61 +4602,16 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox {
 }
 
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  flex: none !important;
-  width: auto !important;
-  max-width: none !important;
-  pointer-events: none;
-}
-
-html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing .loose-nav-omnibox-input,
-html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing .loose-nav-controls,
-html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing .loose-nav-add-shortcut {
-  pointer-events: auto;
-}
-
-.loose-nav-split {
   position: relative;
-  flex: 0 0 12px;
-  width: 12px;
-  align-self: stretch;
-  cursor: col-resize;
-  -webkit-app-region: no-drag;
-}
-
-.loose-nav-split::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--key-line);
-  pointer-events: none;
-}
-
-.loose-nav-split:hover::before,
-html.is-url-col-drag .loose-nav-split::before {
-  width: 3px;
-}
-
-html.is-url-col-drag,
-html.is-url-col-drag * {
-  cursor: col-resize !important;
-  user-select: none !important;
+  z-index: 5;
+  flex: 0 0 var(--ud-url-col) !important;
+  width: var(--ud-url-col) !important;
+  max-width: var(--ud-url-col) !important;
+  background: var(--ud-chrome-field-bg);
 }
 
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox:hover {
   background: var(--ud-chrome-field-bg);
-}
-
-/* Al editar la URL, deja ver un poco las pestañas de atrás, con blur. */
-html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
-  background: color-mix(in srgb, var(--ud-chrome-field-bg) 58%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 
 html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox .loose-nav-add-shortcut {
@@ -4474,8 +4713,8 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox .loose-n
   width: 20px;
   height: 20px;
   border-radius: 6px;
-  background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%);
-  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.55);
+  background: linear-gradient(145deg, var(--key-line, #a78bfa), var(--accent, #6d28d9));
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent, #6d28d9) 55%, transparent);
   object-fit: contain;
   pointer-events: none;
 }
@@ -4936,9 +5175,10 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
 #todo-home > .home-section-title {
   position: sticky;
   top: 0;
-  z-index: 2;
-  padding: 4px 0 10px;
-  background: transparent;
+  z-index: 6;
+  padding: 4px 0 16px;
+  /* Opaco en claro y oscuro: --ud-chrome-canvas sigue el tema. */
+  background: var(--ud-chrome-canvas);
 }
 
 #downloads-home > .home-section-title {
@@ -5756,10 +5996,8 @@ html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] 
 html[data-canvas-theme='light'][data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-omnibox.is-editing {
   border: none;
   border-radius: 0;
-  background: color-mix(in srgb, var(--ud-chrome-field-bg) 58%, transparent);
+  background: var(--ud-chrome-field-bg);
   box-shadow: none;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 
 @media (max-width: 720px) {

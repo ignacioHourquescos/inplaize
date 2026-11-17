@@ -2887,6 +2887,10 @@
     noteChange(null);
   });
 
+  document.addEventListener('inplaize-calc-format', () => {
+    state.columns.forEach(paintCalc);
+  });
+
   loadFromDisk();
 
   const api = getApi();

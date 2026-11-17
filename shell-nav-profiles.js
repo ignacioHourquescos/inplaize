@@ -26,6 +26,26 @@
     return 20 + (h % 300);
   }
 
+  function profileAvatar(opts) {
+    if (opts.incognito) {
+      const glyph = document.createElement('span');
+      glyph.className = 'loose-nav-account-incognito';
+      glyph.innerHTML = INCOGNITO_SVG;
+      return glyph;
+    }
+    if (opts.avatar && String(opts.avatar).startsWith('data:image/')) {
+      const img = document.createElement('img');
+      img.src = opts.avatar;
+      img.alt = '';
+      return img;
+    }
+    const letter = document.createElement('span');
+    letter.className = 'loose-nav-account-letter';
+    letter.textContent = (opts.label || '?').trim().charAt(0).toUpperCase() || '?';
+    letter.style.setProperty('--loose-nav-profile-hue', String(profileHue(opts.seed)));
+    return letter;
+  }
+
   function accountButton(opts) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -36,24 +56,7 @@
     btn.setAttribute('aria-pressed', opts.active ? 'true' : 'false');
     if (opts.active) btn.classList.add('is-active');
     if (opts.isDefault) btn.classList.add('is-default');
-
-    if (opts.incognito) {
-      const glyph = document.createElement('span');
-      glyph.className = 'loose-nav-account-incognito';
-      glyph.innerHTML = INCOGNITO_SVG;
-      btn.appendChild(glyph);
-    } else if (opts.avatar && String(opts.avatar).startsWith('data:image/')) {
-      const img = document.createElement('img');
-      img.src = opts.avatar;
-      img.alt = '';
-      btn.appendChild(img);
-    } else {
-      const letter = document.createElement('span');
-      letter.className = 'loose-nav-account-letter';
-      letter.textContent = (opts.label || '?').trim().charAt(0).toUpperCase() || '?';
-      letter.style.setProperty('--loose-nav-profile-hue', String(profileHue(opts.seed)));
-      btn.appendChild(letter);
-    }
+    btn.appendChild(profileAvatar(opts));
 
     btn.addEventListener('click', () => {
       opts.onClick?.();
@@ -71,43 +74,79 @@
     const navActive = !!(state && state.active);
     const api = bridge();
 
+    global.UsualDeskProfileRail?.close();
     rail.innerHTML = '';
+    const railItems = [];
+    const remember = (opts) => {
+      railItems.push({
+        key: opts.key,
+        active: !!opts.active,
+        label: opts.label,
+        detail: opts.menuDetail || '',
+        icon: typeof opts.avatar === 'string' && opts.avatar.startsWith('data:image/') ? opts.avatar : '',
+        renderAvatar: () => profileAvatar(opts),
+        onSelect: opts.onClick,
+        mount: () => accountButton(opts),
+      });
+    };
     for (const a of accounts) {
       const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
       const who = a.name && a.email ? `${a.name} (${a.email})` : display;
       const count = counts[a.partition] || 0;
       const tabsLabel = count === 1 ? '1 pestaña' : `${count} pestañas`;
       const isDefault = a.partition === defaultPartition;
-      rail.appendChild(
-        accountButton({
-          label: a.name || a.email,
-          tooltip: `${who} · ${tabsLabel}`,
-          avatar: a.avatar,
-          seed: a.email || a.partition,
-          incognito: !!a.incognito,
-          active: navActive && a.partition === state.activePartition,
-          isDefault,
-          partition: a.partition,
-          onClick: () => api?.looseNavUseAccount?.({ partition: a.partition }),
-        }),
-      );
+      remember({
+        key: a.partition,
+        label: a.name || a.email,
+        menuDetail: [a.incognito ? 'Incógnito' : a.name ? a.email : '', tabsLabel]
+          .filter(Boolean)
+          .join(' · '),
+        tooltip: `${who} · ${tabsLabel}`,
+        avatar: a.avatar,
+        seed: a.email || a.partition,
+        incognito: !!a.incognito,
+        active: navActive && a.partition === state.activePartition,
+        isDefault,
+        partition: a.partition,
+        onClick: () => api?.looseNavUseAccount?.({ partition: a.partition }),
+      });
     }
     for (const c of chrome) {
       const who = c.email || c.name;
-      rail.appendChild(
-        accountButton({
-          label: c.email || c.name,
-          tooltip: `${who} · traer desde Chrome`,
-          avatar: c.avatar,
-          seed: c.email || c.name,
-          incognito: false,
-          active: false,
-          isDefault: false,
-          onClick: () => api?.looseNavUseAccount?.({ chromeDirectory: c.directory }),
-        }),
-      );
+      remember({
+        key: `chrome:${c.directory}`,
+        label: c.email || c.name,
+        menuDetail: 'Perfil de Chrome · se trae a inplaize la primera vez que lo usás',
+        tooltip: `${who} · traer desde Chrome`,
+        avatar: c.avatar,
+        seed: c.email || c.name,
+        incognito: false,
+        active: false,
+        isDefault: false,
+        onClick: () => api?.looseNavUseAccount?.({ chromeDirectory: c.directory }),
+      });
+    }
+    const split = global.UsualDeskProfileRail
+      ? global.UsualDeskProfileRail.pickVisible(railItems, false)
+      : { visible: railItems, overflow: [] };
+    for (const item of split.visible) rail.appendChild(item.mount());
+    if (global.UsualDeskProfileRail && railItems.length > 1) {
+      global.UsualDeskProfileRail.mountMore(rail, global.UsualDeskProfileRail.menuItems(split));
     }
   }
+
+  global.__dockRefreshProfileRail = () => {
+    const api = bridge();
+    if (typeof api?.looseNavGetState === 'function') {
+      api.looseNavGetState()
+        .then((s) => {
+          if (s) render(s);
+        })
+        .catch(() => {});
+      return;
+    }
+    render({});
+  };
 
   function init() {
     const api = bridge();

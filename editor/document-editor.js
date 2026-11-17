@@ -182,16 +182,18 @@ const Column = Node.create({
 // Renglones del documento para los cálculos: cada párrafo, en orden de lectura.
 // Un encabezado, una imagen, un separador o el borde de una columna cortan el
 // modo cálculo, igual que un párrafo vacío.
-function collectCalcLines(parent, start, lines, ends) {
+function collectCalcLines(parent, start, lines, ends, ranges) {
   const cut = () => {
     lines.push('');
     ends.push(-1);
+    if (ranges) ranges.push(null);
   };
   parent.forEach((node, offset) => {
     const pos = start + offset;
     if (node.type.name === 'paragraph') {
       lines.push(node.textBetween(0, node.content.size, ' ', ' '));
       ends.push(pos + node.nodeSize - 1);
+      if (ranges) ranges.push({ from: pos, to: pos + node.nodeSize });
       return;
     }
     if (node.isTextblock || node.isLeaf) {
@@ -200,7 +202,7 @@ function collectCalcLines(parent, start, lines, ends) {
     }
     const isColumn = node.type.name === 'column';
     if (isColumn) cut();
-    collectCalcLines(node, pos + 1, lines, ends);
+    collectCalcLines(node, pos + 1, lines, ends, ranges);
     if (isColumn) cut();
   });
 }
@@ -227,13 +229,22 @@ function calcWidget(result) {
   };
 }
 
+function activeNotesCalc() {
+  const shared = typeof window !== 'undefined' ? window.InplaizeNotesCalc : null;
+  if (shared && typeof shared.evaluateLines === 'function') return shared;
+  return notesCalc;
+}
+
 function calcDecorations(doc) {
   const lines = [];
   const ends = [];
-  collectCalcLines(doc, 0, lines, ends);
+  const ranges = [];
+  collectCalcLines(doc, 0, lines, ends, ranges);
   const widgets = [];
-  notesCalc.evaluateLines(lines).forEach((result, index) => {
+  activeNotesCalc().evaluateLines(lines).forEach((result, index) => {
     if (!result || ends[index] < 0) return;
+    const range = ranges[index];
+    if (range) widgets.push(Decoration.node(range.from, range.to, { class: 'is-calc-line' }));
     widgets.push(Decoration.widget(ends[index], calcWidget(result), {
       side: 1,
       key: `calc:${result.display}`,
@@ -254,7 +265,9 @@ const CalcResults = Extension.create({
         key: new PluginKey('calcResults'),
         state: {
           init: (_config, state) => calcDecorations(state.doc),
-          apply: (tr, current) => (tr.docChanged ? calcDecorations(tr.doc) : current),
+          apply: (tr, current) => (
+            tr.docChanged || tr.getMeta('calcFormat') ? calcDecorations(tr.doc) : current
+          ),
         },
         props: {
           decorations(state) {
@@ -1048,6 +1061,10 @@ export function mount(host, options) {
       if (!editor) return null;
       const { from, to } = editor.state.selection;
       return { from, to };
+    },
+    refreshCalcs() {
+      if (!editor) return;
+      editor.view.dispatch(editor.state.tr.setMeta('calcFormat', true));
     },
     restoreSelection(range) {
       if (!editor) return;

@@ -20,12 +20,33 @@ body {
   position: relative;
   display: flex;
   align-items: stretch;
+  flex-wrap: nowrap;
   gap: var(--ud-chrome-strip-gap);
   height: var(--ud-chrome-strip-h);
   flex-shrink: 0;
+  min-width: 0;
+  overflow: hidden;
   background: var(--ud-chrome-strip-bg, #ffffff);
   color: var(--ud-chrome-text, #1f1f2b);
   border-bottom: 1px solid var(--ud-chrome-strip-border);
+}
+
+/* Puente del acceso activo hacia la barra de pestañas. */
+body:has(#shortcut-browser:not([hidden])) .shell-top {
+  overflow: visible;
+  border-bottom-color: transparent;
+  z-index: 6;
+}
+
+.strip-leading > .strip-search {
+  display: flex !important;
+  flex: 0 0 auto !important;
+  width: var(--ud-chrome-icon, 40px) !important;
+  min-width: var(--ud-chrome-icon, 40px) !important;
+  max-width: var(--ud-chrome-icon, 40px) !important;
+  height: var(--ud-chrome-icon, 40px) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 html[data-shell-frameless='true'] .shell-top {
@@ -38,7 +59,9 @@ html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
 html[data-shell-frameless='true'] .strip-add-shortcut,
 html[data-shell-frameless='true'] .shell-home-strip-btn,
+html[data-shell-frameless='true'] .strip-leading,
 html[data-shell-frameless='true'] .loose-nav-accounts,
+html[data-shell-frameless='true'] .strip-search,
 html[data-shell-frameless='true'] .strip-rail-divider {
   -webkit-app-region: no-drag;
 }
@@ -54,31 +77,35 @@ html[data-shell-frameless='true'] .strip-rail-divider {
   flex: 0 0 1px;
   align-self: stretch;
   width: 1px;
-  margin: 0 4px;
-  background: var(--ud-chrome-strip-border);
+  margin: 0 4px 0 calc(-1 * var(--ud-chrome-strip-gap));
+  background: var(--ud-chrome-divider, #3f3f48);
   -webkit-app-region: no-drag;
 }
 
 .loose-nav-accounts {
-  flex: 0 1 auto;
-  /* Reserva hasta el borde derecho de la dirección; con más perfiles crece. */
-  min-width: var(--ud-chrome-profiles-min-w);
+  flex: 0 0 auto;
+  min-width: 0;
+  width: max-content;
+  max-width: none;
   align-self: stretch;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
   gap: var(--ud-chrome-strip-gap);
-  /* Mismo hueco que a la derecha (gap de la franja + margen del separador). */
-  padding-left: calc(var(--ud-chrome-strip-gap) + 4px);
+  padding-left: 0;
   padding-right: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   scrollbar-width: none;
   -webkit-app-region: no-drag;
 }
 
+
 .loose-nav-accounts:empty {
+  display: none;
+}
+
+.strip-leading:has(.loose-nav-accounts:empty) + .strip-rail-divider {
   display: none;
 }
 
@@ -154,7 +181,7 @@ html[data-shell-frameless='true'] .strip-rail-divider {
   display: flex;
   align-items: center;
   gap: var(--ud-chrome-strip-gap);
-  flex: 1;
+  flex: 1 1 0%;
   min-width: 0;
   min-height: var(--ud-chrome-strip-h);
   padding: var(--ud-chrome-strip-pad-y) var(--ud-chrome-strip-pad-x) var(--ud-chrome-strip-pad-y) 0;
@@ -162,6 +189,14 @@ html[data-shell-frameless='true'] .strip-rail-divider {
   overflow-y: hidden;
   flex-wrap: nowrap;
   -webkit-app-region: inherit;
+}
+
+body:has(#shortcut-browser:not([hidden])) .shortcut-strip {
+  overflow: visible;
+}
+
+body:has(#shortcut-browser:not([hidden])) .strip-leading {
+  overflow: visible;
 }
 
 html[data-shell-frameless='true'] .shortcut-strip {
@@ -188,6 +223,10 @@ html[data-shell-frameless='true'] .shortcut-strip {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+body:has(#shortcut-browser:not([hidden])) .shell-shortcut-cell {
+  overflow: visible;
 }
 
 /* Estados específicos de la ventana web (los estilos base del icono viven en chrome-strip.css) */
@@ -302,10 +341,12 @@ html[data-usualdesk-detached-host='true'] .shell-top {
   margin: 0;
   box-sizing: border-box;
   background: var(--ud-chrome-strip-bg);
+  border-top: 2px solid var(--key-line);
   border-bottom: none;
   -webkit-app-region: no-drag;
   color: var(--ud-chrome-text);
   user-select: none;
+  z-index: 5;
 }
 
 .shortcut-browser[hidden] {
@@ -317,10 +358,34 @@ html[data-usualdesk-detached-host='true'] .shell-top {
   display: none;
 }
 
+/* Una sola pestaña: el clic en el icono abre solo la dirección. */
+.shortcut-browser.is-address-peek .shortcut-browser-tabs {
+  display: none;
+}
+
+.shortcut-browser.is-address-peek .shortcut-browser-toolbar {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+}
+
+/* Lupa: omnibox a todo el ancho; pestañas ocultas hasta Enter. */
+html.is-strip-compose[data-url-slide='down'] .shortcut-browser-tabs {
+  display: none !important;
+}
+
+html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar,
+html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editing {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
 .shortcut-browser-tabs {
   display: flex;
   align-items: stretch;
   flex: 1 1 auto;
+  width: auto;
   height: 100%;
   min-width: 0;
   padding: 0;
@@ -361,68 +426,30 @@ html[data-usualdesk-detached-host='true'] .shell-top {
   background: color-mix(in srgb, var(--key-add) 18%, transparent);
 }
 
-/* Sin foco, la dirección ocupa su columna y las pestañas quedan a la vista.
-   Al hacer clic se abre sobre toda la fila para leer la URL entera. */
+/* Dirección a la izquierda de las pestañas (misma fila). */
 .shortcut-browser-toolbar {
   position: relative;
   display: flex;
   align-items: stretch;
   align-self: stretch;
-  flex: 0 0 33%;
-  width: 33%;
-  max-width: 33%;
+  flex: 0 0 var(--ud-url-col);
+  width: var(--ud-url-col);
+  max-width: var(--ud-url-col);
   height: 100%;
   min-width: 0;
   min-height: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 8px;
   background: transparent;
   overflow: hidden;
 }
 
 .shortcut-browser-toolbar.is-editing {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  width: auto !important;
-  max-width: none !important;
-  flex: none !important;
-  pointer-events: none;
-}
-
-.shortcut-browser-toolbar.is-editing .shortcut-browser-address,
-.shortcut-browser-toolbar.is-editing .shortcut-browser-nav,
-.shortcut-browser-toolbar.is-editing .shortcut-add-page {
-  pointer-events: auto;
-}
-
-.shortcut-browser-split {
   position: relative;
-  flex: 0 0 12px;
-  width: 12px;
-  align-self: stretch;
-  cursor: col-resize;
-  -webkit-app-region: no-drag;
-}
-
-.shortcut-browser-split::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--key-line);
-  pointer-events: none;
-}
-
-.shortcut-browser-split:hover::before,
-html.is-url-col-drag .shortcut-browser-split::before {
-  width: 3px;
-}
-
-.shortcut-browser.is-url-hidden .shortcut-browser-split {
-  display: none;
+  z-index: 5;
+  flex: 0 0 var(--ud-url-col) !important;
+  width: var(--ud-url-col) !important;
+  max-width: var(--ud-url-col) !important;
 }
 
 .shortcut-browser-omnibox {
@@ -450,11 +477,8 @@ html.is-url-col-drag .shortcut-browser-split::before {
   background: var(--ud-chrome-field-bg);
 }
 
-/* Al editar la URL, el campo cubre la fila pero deja ver las pestañas, borrosas. */
 .shortcut-browser-toolbar.is-editing .shortcut-browser-omnibox {
-  background: color-mix(in srgb, var(--ud-chrome-field-bg) 58%, transparent);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: var(--ud-chrome-field-bg);
 }
 
 .shortcut-browser-nav {
@@ -510,6 +534,19 @@ html.is-url-col-drag .shortcut-browser-split::before {
   padding: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+.shortcut-browser.is-address-peek .omnibox-face {
+  display: none;
+}
+
+.shortcut-browser.is-address-peek .shortcut-browser-toolbar:not(.is-editing) .omnibox-face:not(.is-empty) + .shortcut-browser-address {
+  position: static;
+  width: auto;
+  height: 100%;
+  padding: 0 8px 0 2px;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .shortcut-browser-address::placeholder {

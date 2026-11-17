@@ -35,6 +35,10 @@ const DEFAULTS = {
   webIdleHibernateMinutes: 15,
   /** Estadísticas de uso anónimas (Aptabase). El usuario puede apagarlas en Configuración. */
   analyticsEnabled: true,
+  /** Cómo se escribe el resultado de un renglón que empieza con "=". */
+  calcThousands: '.',
+  calcDecimal: ',',
+  calcDecimals: 'auto',
   /** Último día (YYYY-MM-DD) en que se mandó la foto diaria de uso. */
   analyticsInventoryDay: '',
   /** UUID aleatorio de esta instalación: cuenta usuarios reales sin datos personales. */
@@ -79,6 +83,19 @@ function normalize(raw) {
   }
   if (typeof merged.analyticsEnabled !== 'boolean') {
     merged.analyticsEnabled = DEFAULTS.analyticsEnabled;
+  }
+  if (merged.calcThousands !== '.' && merged.calcThousands !== ',' && merged.calcThousands !== ' ' && merged.calcThousands !== '') {
+    merged.calcThousands = DEFAULTS.calcThousands;
+  }
+  merged.calcDecimal = merged.calcDecimal === '.' ? '.' : ',';
+  if (merged.calcThousands && merged.calcDecimal === merged.calcThousands) {
+    merged.calcDecimal = merged.calcThousands === '.' ? ',' : '.';
+  }
+  if (merged.calcDecimals !== 'auto') {
+    const places = Number(merged.calcDecimals);
+    merged.calcDecimals = Number.isInteger(places) && places >= 0 && places <= 6
+      ? String(places)
+      : DEFAULTS.calcDecimals;
   }
   if (typeof merged.analyticsInventoryDay !== 'string') {
     merged.analyticsInventoryDay = DEFAULTS.analyticsInventoryDay;

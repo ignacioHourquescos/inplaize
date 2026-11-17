@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>inplaize</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shell-home-menu.css" />
   <link rel="stylesheet" href="web-shell.css" />
   <script src="canvas-theme.js"></script>
@@ -21,7 +24,23 @@
     >
       <span class="dock-home-logo-mark" aria-hidden="true"></span>
     </button>
+    <div class="strip-leading">
     <nav id="loose-nav-accounts" class="loose-nav-accounts" aria-label="Perfiles de navegación"></nav>
+    <div class="strip-rail-divider strip-search-divider" aria-hidden="true"></div>
+    <button
+      type="button"
+      id="strip-search"
+      class="strip-search"
+      data-tooltip="Buscar"
+      data-tooltip-placement="bottom"
+      aria-label="Buscar"
+    >
+      <svg class="strip-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2.2"/>
+        <path d="M15.2 15.2 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    </div>
     <div class="strip-rail-divider" aria-hidden="true"></div>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos">
     <div id="strip-end-actions" class="strip-end-actions">
@@ -79,7 +98,9 @@
     </div>
   </header>
   <script src="ui-tooltip.js"></script>
+  <script src="profile-rail-menu.js"></script>
   <script src="shell-nav-profiles.js"></script>
+  <script src="strip-search.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="tab-strip-fit.js"></script>

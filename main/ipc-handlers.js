@@ -58,6 +58,7 @@ const {
 const { webMapKey } = require('./web-map-key');
 const focusMode = require('./focus-mode');
 const { applyDockWindowBounds } = require('./window-bounds');
+const { syncDockSwitcherPresence } = require('./dock-window');
 const { raiseAlwaysOnTopWindow, showAppMessageBox } = require('./window-focus');
 const { registerShellIpc } = require('./web-shell');
 const { registerDetachedFrameIpc } = require('./detached-web-frame');
@@ -399,6 +400,7 @@ function registerIpcHandlers(state) {
       return;
     }
     state.isExpanded = true;
+    syncDockSwitcherPresence(dock, true);
     analytics.track('home_viewed');
     applyDockWindowBounds(dock, true);
     try {
@@ -418,6 +420,8 @@ function registerIpcHandlers(state) {
     const dock = state.mainWindow;
 
     if (dock && !dock.isDestroyed()) {
+      syncDockSwitcherPresence(dock, false);
+
       applyDockWindowBounds(dock, false);
 
       dock.setIgnoreMouseEvents(true, { forward: true });
@@ -729,6 +733,7 @@ function registerIpcHandlers(state) {
         surface = 'web';
       } else {
         state.isExpanded = !state.isExpanded;
+        syncDockSwitcherPresence(dockWin, state.isExpanded);
         applyDockWindowBounds(dockWin, state.isExpanded);
         try {
           if (state.isExpanded) {

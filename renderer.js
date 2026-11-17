@@ -255,6 +255,9 @@ async function goToDockWelcomeHome(view) {
       await window.usualDesk.looseNavClose().catch(() => {});
     }
   } finally {
+    // Dock cerrado con el navegador abierto: su barra queda pintada para retomarlo.
+    // El main ya lo tiene cerrado y no reenvía estado, así que se despinta acá.
+    if (!looseNavState.active) renderLooseNavBar(looseNavState);
     syncDockHomeStripBtn();
     setTimeout(() => {
       blockLooseNavResume = false;
@@ -291,28 +294,12 @@ function syncLooseNavForDockModals() {
   window.usualDesk.setUrlPromptOpen?.(open)?.catch?.(() => {});
 }
 
-const THEME_PREVIEW_KEYS = ['edit', 'add', 'nav', 'pin', 'close'];
-
-/** Miniatura de un tema: la franja con sus colores clave y un pedazo de lienzo. */
+/** Miniatura de un tema: su dibujo (theme-art.js), pintado con los colores de ese tema. */
 function buildThemePreview(themeId) {
   const preview = document.createElement('span');
   preview.className = 'theme-preview';
   preview.dataset.uiTheme = themeId;
-  const strip = document.createElement('span');
-  strip.className = 'theme-preview-strip';
-  for (const key of THEME_PREVIEW_KEYS) {
-    const dot = document.createElement('i');
-    dot.className = `theme-preview-key is-${key}`;
-    strip.appendChild(dot);
-  }
-  const body = document.createElement('span');
-  body.className = 'theme-preview-body';
-  for (const cls of ['theme-preview-text', 'theme-preview-text is-muted', 'theme-preview-accent']) {
-    const line = document.createElement('i');
-    line.className = cls;
-    body.appendChild(line);
-  }
-  preview.append(strip, body);
+  preview.innerHTML = window.InplaizeThemeArt?.svgFor(themeId) || '';
   return preview;
 }
 
@@ -361,7 +348,6 @@ function syncAppearanceControls() {
   const api = window.InplaizeCanvasTheme;
   if (!api) return;
   syncRadioGroup('appearance-theme-grid', api.get());
-  syncRadioGroup('appearance-color-options', api.getColor());
 }
 
 /** Tarjeta a la que pasa el foco con las flechas, Inicio y Fin. */
@@ -395,17 +381,214 @@ function applyCanvasTheme(theme) {
   syncAppearanceControls();
 }
 
-function applyColorTheme(color) {
-  if (window.InplaizeCanvasTheme && typeof window.InplaizeCanvasTheme.setColor === 'function') {
-    window.InplaizeCanvasTheme.setColor(color);
+let settingsSection = 'design';
+let calcSliderPlaces = 2;
+let calcSaveRev = 0;
+let calcSaveChain = Promise.resolve();
+const CALC_THOUSANDS_CHAR = { dot: '.', comma: ',', space: ' ', none: '' };
+
+function thousandsTokenFromChar(ch) {
+  if (ch === ',') return 'comma';
+  if (ch === ' ') return 'space';
+  if (ch === '') return 'none';
+  return 'dot';
+}
+
+function decimalTokenFromChar(ch) {
+  return ch === '.' ? 'dot' : 'comma';
+}
+
+function showSettingsSection(id) {
+  settingsSection = id === 'calc' ? 'calc' : 'design';
+  document.querySelectorAll('[data-settings-section]').forEach((btn) => {
+    const on = btn.dataset.settingsSection === settingsSection;
+    btn.classList.toggle('is-selected', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+    btn.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll('[data-settings-panel]').forEach((panel) => {
+    panel.hidden = panel.dataset.settingsPanel !== settingsSection;
+  });
+}
+
+function syncCalcControls(fmt) {
+  const format = fmt || { thousands: '.', decimal: ',', decimals: 'auto' };
+  syncRadioGroup('calc-thousands', thousandsTokenFromChar(format.thousands));
+  syncRadioGroup('calc-decimal', decimalTokenFromChar(format.decimal));
+  const auto = format.decimals === 'auto';
+  const places = auto ? calcSliderPlaces : Number(format.decimals);
+  const autoBtn = document.getElementById('calc-decimals-auto');
+  if (autoBtn) {
+    autoBtn.classList.toggle('is-selected', auto);
+    autoBtn.setAttribute('aria-pressed', auto ? 'true' : 'false');
   }
-  syncAppearanceControls();
+  const range = document.getElementById('calc-decimals-range');
+  if (range) {
+    range.value = String(places);
+    range.setAttribute('aria-valuetext', auto ? 'Automático' : `${places} decimales`);
+    range.closest('.calc-decimals-slider')?.classList.toggle('is-auto', auto);
+  }
+  const badge = document.getElementById('calc-decimals-value');
+  if (badge) badge.textContent = auto ? 'Auto' : String(places);
+}
+
+function renderCalcPreview() {
+  const host = document.getElementById('calc-format-preview');
+  const calc = window.InplaizeNotesCalc;
+  if (!host || !calc || typeof calc.evaluateLines !== 'function' || typeof calc.formatNumber !== 'function') return;
+  const full = { decimals: 'auto' };
+  const left = [
+    `${calc.formatNumber(1234567.891, true, full)} × 2`,
+    `${calc.formatNumber(1, true, full)} ÷ 3`,
+    calc.formatNumber(850000, true, full),
+  ];
+  const results = calc.evaluateLines(['=1234567.891 * 2', '=1 / 3', '=850000']);
+  host.replaceChildren();
+  left.forEach((label, index) => {
+    const row = document.createElement('div');
+    row.className = 'calc-preview-row';
+    const expr = document.createElement('span');
+    expr.className = 'calc-preview-expr';
+    expr.textContent = label;
+    const out = document.createElement('span');
+    out.className = 'calc-preview-result';
+    const eq = document.createElement('span');
+    eq.className = 'calc-preview-eq';
+    eq.textContent = '=';
+    const display = results[index] && results[index].display ? results[index].display : '—';
+    out.append(eq, document.createTextNode(` ${display}`));
+    row.append(expr, out);
+    host.appendChild(row);
+  });
+}
+
+function publishCalcFormat() {
+  document.dispatchEvent(new CustomEvent('inplaize-calc-format'));
+}
+
+function persistCalcFormat(fmt) {
+  if (!fmt || !window.usualDesk || typeof window.usualDesk.setAppSettings !== 'function') return;
+  const rev = ++calcSaveRev;
+  const payload = {
+    calcThousands: fmt.thousands,
+    calcDecimal: fmt.decimal,
+    calcDecimals: fmt.decimals,
+  };
+  calcSaveChain = calcSaveChain.then(() => {
+    if (rev !== calcSaveRev) return null;
+    return window.usualDesk.setAppSettings(payload);
+  }).catch((err) => {
+    console.error('set-app-settings calc', err);
+  });
+}
+
+function commitCalcFormat(partial) {
+  const calc = window.InplaizeNotesCalc;
+  if (!calc || typeof calc.setFormat !== 'function' || typeof calc.getFormat !== 'function') return;
+  const current = calc.getFormat();
+  const merged = { ...current };
+  if (partial && partial.thousands != null) merged.thousands = partial.thousands;
+  if (partial && partial.decimal != null) merged.decimal = partial.decimal;
+  if (partial && partial.decimals != null) merged.decimals = partial.decimals;
+  if (merged.thousands && merged.thousands === merged.decimal) {
+    if (partial && partial.decimal != null && (partial.thousands == null)) {
+      merged.thousands = merged.decimal === '.' ? ',' : '.';
+    } else {
+      merged.decimal = merged.thousands === '.' ? ',' : '.';
+    }
+  }
+  const next = calc.setFormat(merged);
+  if (next.decimals !== 'auto') calcSliderPlaces = Number(next.decimals);
+  syncCalcControls(next);
+  renderCalcPreview();
+  publishCalcFormat();
+  persistCalcFormat(next);
+}
+
+function applyStoredCalcFormat(settings) {
+  const calc = window.InplaizeNotesCalc;
+  if (!calc || typeof calc.setFormat !== 'function' || !settings) return;
+  const next = calc.setFormat({
+    thousands: settings.calcThousands,
+    decimal: settings.calcDecimal,
+    decimals: settings.calcDecimals,
+  });
+  if (next.decimals !== 'auto') calcSliderPlaces = Number(next.decimals);
+  syncCalcControls(next);
+  renderCalcPreview();
+  publishCalcFormat();
+}
+
+function bindCalcSettings() {
+  const nav = document.querySelector('.settings-nav-list');
+  nav?.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-settings-section]');
+    if (!tab || !nav.contains(tab)) return;
+    showSettingsSection(tab.dataset.settingsSection);
+  });
+  nav?.addEventListener('keydown', (e) => {
+    if (!['ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+    const tabs = [...nav.querySelectorAll('[role="tab"]')];
+    const current = tabs.includes(document.activeElement) ? document.activeElement : null;
+    if (!current) return;
+    e.preventDefault();
+    const i = tabs.indexOf(current);
+    let next = current;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+    else if (e.key === 'Home') next = tabs[0];
+    else next = tabs[tabs.length - 1];
+    showSettingsSection(next.dataset.settingsSection);
+    next.focus();
+  });
+
+  const onChoice = (groupId, read) => {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.addEventListener('click', (e) => {
+      const btn = e.target.closest('[role="radio"]');
+      if (!btn || !group.contains(btn)) return;
+      commitCalcFormat(read(btn.dataset.value));
+    });
+    group.addEventListener('keydown', (e) => {
+      if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+      const cards = [...group.querySelectorAll('[role="radio"]')];
+      const current = cards.includes(document.activeElement) ? document.activeElement : null;
+      if (!current) return;
+      e.preventDefault();
+      const i = cards.indexOf(current);
+      let next = current;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = cards[(i + 1) % cards.length];
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = cards[(i - 1 + cards.length) % cards.length];
+      else if (e.key === 'Home') next = cards[0];
+      else next = cards[cards.length - 1];
+      commitCalcFormat(read(next.dataset.value));
+      next.focus();
+    });
+  };
+  onChoice('calc-thousands', (token) => ({ thousands: CALC_THOUSANDS_CHAR[token] ?? '.' }));
+  onChoice('calc-decimal', (token) => ({ decimal: token === 'dot' ? '.' : ',' }));
+
+  document.getElementById('calc-decimals-auto')?.addEventListener('click', () => {
+    commitCalcFormat({ decimals: 'auto' });
+  });
+  document.getElementById('calc-decimals-range')?.addEventListener('input', (e) => {
+    const places = Number(e.target.value);
+    calcSliderPlaces = places;
+    commitCalcFormat({ decimals: String(places) });
+  });
 }
 
 function openAppearanceModal() {
   if (!appearanceModalOverlay) return;
   renderThemePicker();
   syncAppearanceControls();
+  showSettingsSection(settingsSection);
+  const current = window.InplaizeNotesCalc?.getFormat?.();
+  if (current) {
+    syncCalcControls(current);
+    renderCalcPreview();
+  }
   window.usualDesk
     .getAppSettings()
     .then(syncAnalyticsCheckboxFromSettings)
@@ -413,7 +596,7 @@ function openAppearanceModal() {
   appearanceModalOverlay.classList.remove('hidden');
   syncLooseNavForDockModals();
   schedulePointerPassthroughSync();
-  document.querySelector('#appearance-theme-grid [aria-checked="true"]')?.focus();
+  document.querySelector('.settings-nav-item.is-selected')?.focus();
 }
 
 function closeAppearanceModal() {
@@ -1639,6 +1822,10 @@ function initAppSettingsUI() {
   });
 
   renderThemePicker();
+  showSettingsSection(settingsSection);
+  bindCalcSettings();
+  // Ya no hay selector de acento: queda el color propio de cada tema.
+  window.InplaizeCanvasTheme?.setColor?.('auto');
   const themeGrid = document.getElementById('appearance-theme-grid');
   themeGrid?.addEventListener('click', (e) => {
     const card = e.target.closest('[role="radio"]');
@@ -1655,25 +1842,6 @@ function initAppSettingsUI() {
     next.focus();
   });
 
-  const colorGroup = document.getElementById('appearance-color-options');
-  colorGroup?.querySelectorAll('[role="radio"]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const v = btn.dataset.value;
-      if (!v) return;
-      applyColorTheme(v);
-    });
-  });
-  colorGroup?.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const radios = [...colorGroup.querySelectorAll('[role="radio"]')];
-    const i = radios.indexOf(document.activeElement);
-    if (i < 0) return;
-    e.preventDefault();
-    const delta = e.key === 'ArrowRight' ? 1 : -1;
-    const next = radios[(i + delta + radios.length) % radios.length];
-    next?.focus();
-    if (next?.dataset.value) applyColorTheme(next.dataset.value);
-  });
   syncAppearanceControls();
 
   document.getElementById('appearance-modal-close')?.addEventListener('click', () => closeAppearanceModal());
@@ -1734,6 +1902,7 @@ async function loadInitialDockSettings() {
     const s = await window.usualDesk.getAppSettings();
     applySidebarDensityToDom(s.sidebarDensity);
     applyDockHotkeyLabel(s);
+    applyStoredCalcFormat(s);
   } catch {
     applySidebarDensityToDom('normal');
   }
@@ -4447,7 +4616,7 @@ function computeViewportBoundsPayload() {
   // El dropdown de sugerencias no puede dibujarse sobre la vista nativa: en vez
   // de taparla, empujamos la página hacia abajo `inset` px y mostramos el
   // dropdown (DOM) en el hueco que queda bajo la barra.
-  const inset = looseNavSuggestInset || 0;
+  const inset = (looseNavSuggestInset || 0) + (looseNavProfileMenuInset || 0);
   const h = Math.max(0, Math.round(r.height) - inset);
   if (w <= 0 || h <= 0) return null;
   return {
@@ -4501,6 +4670,16 @@ window.__dockInvalidateLooseNavViewport = invalidateLooseNavViewport;
  * hueco resultante bajo la barra. */
 const looseNavSuggest = { box: null, items: [], active: -1, seq: 0, inputEl: null, onCommit: null };
 let looseNavSuggestInset = 0;
+let looseNavProfileMenuInset = 0;
+
+function setLooseNavProfileMenuInset(px) {
+  const next = Math.max(0, Math.round(px || 0));
+  if (next === looseNavProfileMenuInset) return;
+  looseNavProfileMenuInset = next;
+  invalidateLooseNavViewport();
+}
+
+window.__dockSetProfileMenuInset = setLooseNavProfileMenuInset;
 
 function setLooseNavSuggestInset(px) {
   const next = Math.max(0, Math.round(px || 0));
@@ -4854,13 +5033,260 @@ function focusLooseNavOmnibox({ clear = false } = {}) {
   else if (!looseNavBlankAddress) looseNavOmniboxInput.select();
 }
 
+/** Seed pendiente del buscador de la franja → omnibox (handoff tipo Arc). */
+let stripSearchHandoff = null;
+/** Mientras escribís tras el handoff: sin BrowserView (Google no roba el teclado). */
+let stripComposeActive = false;
+let stripComposeTimer = 0;
+/** Rect del pill al iniciar el handoff (para FLIP de la omnibox). */
+let stripMorphFromRect = null;
+
+function stripSearchRailPartition() {
+  const rail = document.getElementById('loose-nav-accounts');
+  const btn = rail && rail.querySelector('.loose-nav-account[data-partition]');
+  return (btn && btn.dataset.partition) || looseNavOmniboxPartition() || '';
+}
+
+/**
+ * @param {boolean} on
+ * @param {{ origin?: 'strip' | 'tab' }} [opts]
+ *   strip / tab: origen del foco (compat); la omnibox ya está en la fila.
+ */
+function setStripCompose(on, { origin = 'strip' } = {}) {
+  const next = on === true;
+  const root = document.documentElement;
+  if (origin === 'tab') root.dataset.urlSlide = 'up';
+  else if (origin === 'strip') root.dataset.urlSlide = 'down';
+
+  if (next === stripComposeActive) {
+    if (next) window.usualDesk.setUrlPromptOpen?.(true);
+    return;
+  }
+
+  stripComposeActive = next;
+  clearTimeout(stripComposeTimer);
+  window.usualDesk.setUrlPromptOpen?.(next);
+
+  if (next) {
+    root.classList.add('is-strip-compose');
+    scheduleLooseNavViewportSync();
+    stripComposeTimer = window.setTimeout(() => {
+      if (document.activeElement === looseNavOmniboxInput) return;
+      setStripCompose(false);
+    }, 45000);
+    return;
+  }
+
+  root.classList.remove('is-strip-compose');
+  delete root.dataset.urlSlide;
+  scheduleLooseNavViewportSync();
+}
+
+/** Clic en la pestaña activa: enfoca la barra de dirección (siempre visible). */
+function openUrlBarFromTab() {
+  if (!looseNavState.active || !looseNavOmniboxInput) return;
+  setStripCompose(true, { origin: 'tab' });
+  looseNavBlankAddress = false;
+  const shown = looseNavDisplayUrl(looseNavState);
+  looseNavOmniboxInput.value = shown;
+  focusLooseNavOmnibox({ clear: false });
+  window.UsualDeskTabStripFit?.paintAddressFace(
+    document.getElementById('loose-nav-omnibox-face'),
+    shown
+  );
+}
+
+/** Guarda dónde estaba el buscador de la franja antes de ocultarlo. */
+function captureStripMorphFromRect() {
+  const strip = document.getElementById('strip-search');
+  const r = strip && strip.getBoundingClientRect();
+  if (r && r.width >= 8 && r.height >= 8) {
+    stripMorphFromRect = {
+      left: r.left,
+      top: r.top,
+      width: r.width,
+      height: r.height,
+    };
+    return;
+  }
+  if (stripMorphFromRect) return;
+  const chrome = document.getElementById('sidebar-chrome');
+  const fb = chrome && chrome.getBoundingClientRect();
+  if (!fb || fb.width < 8) return;
+  stripMorphFromRect = {
+    left: fb.left + 100,
+    top: fb.top + 10,
+    width: Math.min(260, fb.width * 0.32),
+    height: 32,
+  };
+}
+
+/**
+ * FLIP: la omnibox aparece como si fuera el pill expandiéndose hacia abajo.
+ * Anima el elemento real del chrome (no un ghost suelto que Electron tapaba).
+ */
+function playOmniboxFlipFromStrip() {
+  const from = stripMorphFromRect;
+  const el = looseNavOmnibox;
+  if (!from || !el || !looseNavBar || looseNavBar.classList.contains('hidden')) return false;
+  if (el.dataset.stripFlipping === '1') return true;
+
+  stripMorphFromRect = null;
+  el.dataset.stripFlipping = '1';
+  el.classList.add('is-editing', 'is-strip-flipping');
+  // Forzá layout del modo edición antes de medir el destino.
+  void el.offsetWidth;
+
+  // Layout final (omnibox ancha en modo edición).
+  const to = el.getBoundingClientRect();
+  if (to.width < 8 || to.height < 8) {
+    el.dataset.stripFlipping = '';
+    el.classList.remove('is-strip-flipping');
+    return false;
+  }
+
+  const dx = from.left - to.left;
+  const dy = from.top - to.top;
+  const sx = from.width / Math.max(to.width, 1);
+  const sy = from.height / Math.max(to.height, 1);
+
+  const clearFlip = () => {
+    el.dataset.stripFlipping = '';
+    el.classList.remove('is-strip-flipping');
+    el.style.transition = '';
+    el.style.transform = '';
+    el.style.transformOrigin = '';
+    el.style.borderRadius = '';
+    el.style.boxShadow = '';
+  };
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    clearFlip();
+    return true;
+  }
+
+  el.style.transformOrigin = '0 0';
+  el.style.transition = 'none';
+  el.style.borderRadius = '999px';
+  el.style.boxShadow = '0 12px 36px rgba(15, 18, 28, 0.22)';
+  el.style.transform = `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`;
+
+  // Doble rAF para que el browser pinte el estado "invertido" antes de animar.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!el.isConnected) {
+        clearFlip();
+        return;
+      }
+      el.style.transition = [
+        'transform 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'border-radius 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+        'box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1)',
+      ].join(', ');
+      el.style.transform = 'translate(0px, 0px) scale(1, 1)';
+      el.style.borderRadius = '0px';
+      el.style.boxShadow = 'none';
+
+      const done = () => {
+        el.removeEventListener('transitionend', done);
+        clearFlip();
+      };
+      el.addEventListener('transitionend', done);
+      window.setTimeout(done, 520);
+    });
+  });
+  return true;
+}
+
+function syncStripMorphText() {
+  /* no-op: el texto vive en la omnibox real */
+}
+
+function commitLooseNavOmniboxValue(val) {
+  const value = String(val || '').trim();
+  if (!value || !looseNavState.active) return;
+  setStripCompose(false);
+  if (looseNavOmniboxInput) looseNavOmniboxInput.blur();
+  looseNavOmniboxGo(value).catch(() => {});
+}
+
+/** Aplica el texto del strip a la omnibox cuando la navegación suelta ya está activa. */
+function applyStripSearchHandoff() {
+  const pending = stripSearchHandoff;
+  if (!pending || !looseNavState.active || !looseNavOmniboxInput) return;
+  stripSearchHandoff = null;
+  const seed = String(pending.seed || '');
+  const commit = pending.commit === true && !!seed;
+
+  looseNavBlankAddress = true;
+  const tabId = looseNavState.activeTabId ? String(looseNavState.activeTabId) : '';
+  if (tabId) looseNavBlankTabId = tabId;
+
+  setStripCompose(true, { origin: 'strip' });
+  // clear:false: el listener de focus ya no debe borrar el seed.
+  if (!looseNavOmniboxInput.value) focusLooseNavOmnibox({ clear: true });
+  else focusLooseNavOmnibox({ clear: false });
+
+  if (seed) {
+    looseNavOmniboxInput.value = seed;
+    try {
+      const len = seed.length;
+      looseNavOmniboxInput.setSelectionRange(len, len);
+    } catch {
+      /* ignore */
+    }
+    refreshLooseNavSuggest(looseNavOmniboxInput, commitLooseNavOmniboxValue);
+  } else {
+    looseNavOmniboxInput.value = '';
+  }
+  looseNavOmniboxInput.focus();
+  window.UsualDeskTabStripFit?.paintAddressFace(
+    document.getElementById('loose-nav-omnibox-face'),
+    seed
+  );
+  if (commit) commitLooseNavOmniboxValue(seed);
+}
+
+/**
+ * El buscador de la franja no navega solo: abre la omnibox (única caja real).
+ * `commit` true = Enter en el strip con texto (navega al llegar a la omnibox).
+ */
+function handoffStripSearchToOmnibox(seed = '', { commit = false } = {}) {
+  const text = String(seed || '');
+  // Rect del icono de lupa para el slide.
+  captureStripMorphFromRect();
+  const stripBtn = document.getElementById('strip-search');
+  if (stripBtn && document.activeElement === stripBtn) stripBtn.blur();
+
+  stripSearchHandoff = { seed: text.trim(), commit: commit === true && !!text.trim() };
+  setStripCompose(true, { origin: 'strip' });
+
+  if (looseNavState.active) {
+    requestAnimationFrame(() => applyStripSearchHandoff());
+    return;
+  }
+
+  const partition = stripSearchRailPartition();
+  looseNavBlankAddress = true;
+  looseNavBlankTabId = '';
+  window.usualDesk.looseNavNewTab('', partition ? { partition } : undefined).catch(() => {
+    stripSearchHandoff = null;
+    setStripCompose(false);
+    forgetLooseNavBlankAddress();
+  });
+}
+
+window.__dockHandoffStripSearch = handoffStripSearchToOmnibox;
+
 /** Como Chrome: el "+" abre la pestaña y lleva a la barra de dirección para escribir ahí. */
 function openLooseNavBlankTab() {
   if (!looseNavState.active) return;
   looseNavBlankAddress = true;
   looseNavBlankTabId = '';
+  setStripCompose(true, { origin: 'strip' });
   focusLooseNavOmnibox({ clear: true });
   window.usualDesk.looseNavNewTab('', { partition: looseNavOmniboxPartition() }).catch(() => {
+    setStripCompose(false);
     forgetLooseNavBlankAddress();
   });
 }
@@ -4869,17 +5295,27 @@ function openLooseNavBlankTab() {
 function focusFreshAddress() {
   if (!looseNavOmniboxInput || !looseNavState.active) return;
   const url = String(looseNavState.activeUrl || '');
-  if (url && !isLooseNavStartPage(url)) return;
+  if (url && !isLooseNavStartPage(url) && !looseNavAddressOnly(looseNavState)) return;
   const field = looseNavOmniboxInput;
-  if (document.activeElement === field && field.value.trim()) return;
+  const typed = field.value.trim();
+  // Handoff / compose: no borrar lo que el usuario ya tipeó en la omnibox.
+  if (stripSearchHandoff) return;
+  if (stripComposeActive && typed) {
+    focusLooseNavOmnibox({ clear: false });
+    return;
+  }
+  if (document.activeElement === field && typed) return;
   looseNavBlankAddress = true;
   const tabId = looseNavState.activeTabId ? String(looseNavState.activeTabId) : '';
   if (tabId) looseNavBlankTabId = tabId;
-  focusLooseNavOmnibox({ clear: true });
-  window.UsualDeskTabStripFit?.paintAddressFace(
-    document.getElementById('loose-nav-omnibox-face'),
-    ''
-  );
+  setStripCompose(true, { origin: 'strip' });
+  focusLooseNavOmnibox({ clear: !typed });
+  if (!typed) {
+    window.UsualDeskTabStripFit?.paintAddressFace(
+      document.getElementById('loose-nav-omnibox-face'),
+      ''
+    );
+  }
 }
 
 function renderLooseNavTabs(state) {
@@ -4888,7 +5324,14 @@ function renderLooseNavTabs(state) {
 
   looseNavTabsStrip.innerHTML = '';
 
+  if (state && state.pendingTabSlide) looseNavPendingTabSlide = true;
   const sessionTabs = state.tabs.filter((t) => !state.activePartition || t.partition === state.activePartition);
+  const nextIds = new Set(sessionTabs.map((t) => t.id));
+  // Si Enter abrió la primera pestaña, no precargar el set o no habría slide.
+  if (looseNavKnownTabIds == null) {
+    looseNavKnownTabIds = looseNavPendingTabSlide ? new Set() : new Set(nextIds);
+  }
+  let slidNewTab = false;
   for (const tab of sessionTabs) {
     const el = document.createElement('div');
     el.className = 'loose-nav-tab';
@@ -4897,6 +5340,12 @@ function renderLooseNavTabs(state) {
     el.setAttribute('aria-selected', tab.isActive ? 'true' : 'false');
     if (tab.isActive) el.classList.add('is-active');
     if (tab.loading) el.classList.add('is-loading');
+    if (looseNavPendingTabSlide && !slidNewTab && !looseNavKnownTabIds.has(tab.id)) {
+      el.classList.add('is-sliding-in');
+      slidNewTab = true;
+      looseNavPendingTabSlide = false;
+      el.addEventListener('animationend', () => el.classList.remove('is-sliding-in'), { once: true });
+    }
     const tabTip = tab.title || tab.url || 'Pestaña';
     el.setAttribute(
       'data-tooltip',
@@ -4958,7 +5407,10 @@ function renderLooseNavTabs(state) {
     });
 
     el.addEventListener('click', () => {
-      if (tab.isActive) return;
+      if (tab.isActive) {
+        openUrlBarFromTab();
+        return;
+      }
       window.usualDesk.looseNavSelectTab(tab.id).catch(() => {});
     });
     el.addEventListener('auxclick', (e) => {
@@ -4970,6 +5422,9 @@ function renderLooseNavTabs(state) {
 
     looseNavTabsStrip.appendChild(el);
   }
+
+  looseNavKnownTabIds = nextIds;
+  if (!slidNewTab) looseNavPendingTabSlide = false;
 
   const fit = window.UsualDeskTabStripFit;
   if (fit) {
@@ -5174,7 +5629,22 @@ function renderLooseNavAccounts(state) {
   ]);
   if (sig === looseNavAccountsSig) return;
   looseNavAccountsSig = sig;
+  window.UsualDeskProfileRail?.close();
   looseNavAccountsRail.innerHTML = '';
+
+  const railItems = [];
+  const remember = (opts) => {
+    railItems.push({
+      key: opts.key,
+      active: !!opts.active,
+      label: opts.label,
+      detail: opts.detail,
+      icon: typeof opts.avatar === 'string' && opts.avatar.startsWith('data:image/') ? opts.avatar : '',
+      renderAvatar: () => looseNavProfileAvatarNode(opts),
+      onSelect: () => runLooseNavAccountAction(opts.key, document.createElement('span'), opts.onClick),
+      mount: () => looseNavAccountButton(opts),
+    });
+  };
 
   for (const a of accounts) {
     const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
@@ -5182,7 +5652,7 @@ function renderLooseNavAccounts(state) {
     const count = counts[a.partition] || 0;
     const tabsLabel = count === 1 ? '1 pestaña' : `${count} pestañas`;
     const isDefault = a.partition === defaultPartition;
-    const opts = {
+    remember({
       key: a.partition,
       label: a.name || a.email,
       detail: [a.incognito ? 'Incógnito' : a.name ? a.email : '', tabsLabel].filter(Boolean).join(' · '),
@@ -5196,29 +5666,42 @@ function renderLooseNavAccounts(state) {
       onClick: () => activateLooseNavAccount({ partition: a.partition }),
       onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ partition: a.partition }),
       onRemove: a.incognito ? null : () => window.usualDesk.looseNavRemoveProfile({ partition: a.partition }),
-    };
-    looseNavAccountsRail.appendChild(looseNavAccountButton(opts));
+    });
   }
-  if (chrome.length) {
-    for (const c of chrome) {
-      const who = c.email || c.name;
-      const opts = {
-        key: `chrome:${c.directory}`,
-        label: c.email || c.name,
-        detail: 'Perfil de Chrome · se trae a inplaize la primera vez que lo usás',
-        fromChrome: true,
-        tooltip: `${who} · traer desde Chrome · clic derecho: usar como predeterminado`,
-        avatar: c.avatar,
-        seed: c.email || c.name,
-        active: false,
-        onClick: () => activateLooseNavAccount({ chromeDirectory: c.directory }),
-        onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ chromeDirectory: c.directory }),
-        onRemove: () => window.usualDesk.looseNavRemoveProfile({ chromeDirectory: c.directory }),
-      };
-      looseNavAccountsRail.appendChild(looseNavAccountButton(opts));
-    }
+  for (const c of chrome) {
+    const who = c.email || c.name;
+    remember({
+      key: `chrome:${c.directory}`,
+      label: c.email || c.name,
+      detail: 'Perfil de Chrome · se trae a inplaize la primera vez que lo usás',
+      fromChrome: true,
+      tooltip: `${who} · traer desde Chrome · clic derecho: usar como predeterminado`,
+      avatar: c.avatar,
+      seed: c.email || c.name,
+      active: false,
+      onClick: () => activateLooseNavAccount({ chromeDirectory: c.directory }),
+      onSetDefault: () => window.usualDesk.looseNavSetDefaultProfile({ chromeDirectory: c.directory }),
+      onRemove: () => window.usualDesk.looseNavRemoveProfile({ chromeDirectory: c.directory }),
+    });
+  }
+
+  const split = window.UsualDeskProfileRail
+    ? window.UsualDeskProfileRail.pickVisible(railItems, looseNavProfilesEditMode)
+    : { visible: railItems, overflow: [] };
+  for (const item of split.visible) looseNavAccountsRail.appendChild(item.mount());
+  // Menú de tres puntos: gestionar tilde / riel aunque no haya overflow.
+  if (window.UsualDeskProfileRail && railItems.length > 1) {
+    window.UsualDeskProfileRail.mountMore(
+      looseNavAccountsRail,
+      window.UsualDeskProfileRail.menuItems(split),
+    );
   }
 }
+
+window.__dockRefreshProfileRail = () => {
+  looseNavAccountsSig = '';
+  renderLooseNavAccounts(looseNavState);
+};
 
 /** Nodo con clase y texto para los paneles de perfil del modal. */
 function profilePanelNode(tag, className, text) {
@@ -5417,6 +5900,37 @@ function isLooseNavStartPage(url) {
   return !parsed.searchParams.has('q');
 }
 
+/** Pestañas de la sesión activa (perfil). */
+function looseNavSessionTabs(state) {
+  const tabs = (state && Array.isArray(state.tabs)) ? state.tabs : [];
+  const partition = state && state.activePartition ? state.activePartition : '';
+  if (!partition) return tabs;
+  return tabs.filter((t) => t.partition === partition);
+}
+
+/**
+ * Perfil sin ventanas “reales”: solo páginas de inicio.
+ * Ahí se muestra solo el buscador a 100%; la pestaña aparece al Enter.
+ */
+function looseNavAddressOnly(state) {
+  if (!state || !state.active) return false;
+  const sessionTabs = looseNavSessionTabs(state);
+  if (!sessionTabs.length) return true;
+  return sessionTabs.every((t) => isLooseNavStartPage(t.url));
+}
+
+function syncLooseNavAddressOnly(state) {
+  const root = document.documentElement;
+  const next = looseNavAddressOnly(state) || (stripComposeActive && root.dataset.urlSlide === 'down');
+  const prev = root.dataset.addressOnly === 'on';
+  root.dataset.addressOnly = next ? 'on' : 'off';
+  if (next && !prev && state && state.active) {
+    /* Primera apertura del perfil / sesión vacía: foco en el buscador vacío. */
+    looseNavBlankAddress = true;
+    requestAnimationFrame(() => focusFreshAddress());
+  }
+}
+
 function forgetLooseNavBlankAddress() {
   looseNavBlankAddress = false;
   looseNavBlankTabId = '';
@@ -5443,6 +5957,8 @@ function looseNavDisplayUrl(state) {
   const url = state && state.active && state.activeTabId ? String(state.activeUrl || '') : '';
   if (!url || /^about:/i.test(url)) return '';
   if (looseNavBlankAddress && isLooseNavStartPage(url)) return '';
+  /* Sesión vacía / solo NTP: el campo queda para buscar, no muestra google.com. */
+  if (looseNavAddressOnly(state) && isLooseNavStartPage(url)) return '';
   return url;
 }
 
@@ -5452,8 +5968,25 @@ function looseNavOmniboxPartition() {
     || '';
 }
 
-/** Enter en la dirección abre siempre una pestaña nueva, al final de la fila. */
+/** La próxima pestaña nueva (Enter en la dirección) entra con slide L→R. */
+let looseNavPendingTabSlide = false;
+let looseNavKnownTabIds = null;
+
+/**
+ * Enter: si el perfil recién abre (solo NTP), navega esa pestaña;
+ * si ya hay ventanas reales, abre una pestaña nueva al final.
+ */
 function looseNavOmniboxGo(value) {
+  const active = looseNavState.tabs.find((t) => t.isActive);
+  if (
+    active
+    && isLooseNavStartPage(active.url)
+    && looseNavAddressOnly(looseNavState)
+  ) {
+    forgetLooseNavBlankAddress();
+    return window.usualDesk.looseNavNavigate(value);
+  }
+  looseNavPendingTabSlide = true;
   return window.usualDesk.looseNavNewTab(value, { partition: looseNavOmniboxPartition() });
 }
 
@@ -5581,10 +6114,13 @@ function initLooseNavOmnibox() {
     ev.preventDefault();
     const val = looseNavOmniboxInput.value.trim();
     if (!val || !looseNavState.active) return;
+    /* Enter: suelta compose y recién ahí navega / abre la pestaña. */
+    setStripCompose(false);
     looseNavOmniboxInput.blur();
     try {
       await looseNavOmniboxGo(val);
     } catch {
+      setStripCompose(true, { origin: 'strip' });
       looseNavOmniboxInput.value = val;
       looseNavOmniboxInput.focus();
     }
@@ -5599,7 +6135,11 @@ function initLooseNavOmnibox() {
     addLooseNavPageShortcut().catch(() => {});
   });
   const syncUrlEditing = () => {
-    looseNavOmnibox.classList.toggle('is-editing', document.activeElement === looseNavOmniboxInput);
+    const flipping = looseNavOmnibox.dataset.stripFlipping === '1';
+    looseNavOmnibox.classList.toggle(
+      'is-editing',
+      flipping || document.activeElement === looseNavOmniboxInput
+    );
   };
   looseNavOmniboxInput.addEventListener('focus', syncUrlEditing);
   looseNavOmniboxInput.addEventListener('blur', syncUrlEditing);
@@ -5617,17 +6157,11 @@ function initLooseNavOmnibox() {
     ev.preventDefault();
     looseNavOmniboxInput.focus();
   });
-  const omniboxCommit = (val, opts = {}) => {
-    const value = String(val || '').trim();
-    if (!value || !looseNavState.active) return;
-    looseNavOmniboxInput.blur();
-    looseNavOmniboxGo(value).catch(() => {});
-  };
+  const omniboxCommit = (val) => commitLooseNavOmniboxValue(val);
   looseNavOmniboxInput.addEventListener('focus', () => {
-    if (looseNavBlankAddress) {
-      looseNavOmniboxInput.value = '';
-      return;
-    }
+    // Con dirección en blanco NO vaciar acá: los nudges de blank-address
+    // re-enfocan y borraban el tipeado del handoff Arc.
+    if (looseNavBlankAddress) return;
     looseNavOmniboxInput.select();
   });
   looseNavOmniboxInput.addEventListener('input', () => {
@@ -5635,6 +6169,11 @@ function initLooseNavOmnibox() {
   });
   looseNavOmniboxInput.addEventListener('blur', () => {
     setTimeout(() => closeLooseNavSuggest(), 150);
+    // Esperá un toque por si el blur es del handoff / re-focus.
+    window.setTimeout(() => {
+      if (document.activeElement === looseNavOmniboxInput) return;
+      if (stripComposeActive) setStripCompose(false);
+    }, 180);
     looseNavOmniboxInput.value = looseNavDisplayUrl(looseNavState);
     window.UsualDeskTabStripFit?.paintAddressFace(
       document.getElementById('loose-nav-omnibox-face'),
@@ -5665,6 +6204,10 @@ function renderLooseNavBar(state) {
   // Al salir de la navegación, soltá la edición de perfiles salvo que el lápiz
   // unificado siga activo (se siguen editando accesos + perfiles).
   if (!show && wasLoose && !shortcutsEditMode) setLooseNavProfilesEditMode(false);
+  if (!show) {
+    looseNavKnownTabIds = null;
+    looseNavPendingTabSlide = false;
+  }
   looseNavBar.classList.toggle('hidden', !show);
   if (looseNavSurface) looseNavSurface.classList.toggle('hidden', !show);
   document.documentElement.setAttribute('data-loose-nav', show ? 'on' : 'off');
@@ -5683,8 +6226,12 @@ function renderLooseNavBar(state) {
   renderLooseNavAccounts(looseNavState);
   renderLooseNavOmnibox(looseNavState);
   if (show) {
+    syncLooseNavAddressOnly(looseNavState);
     renderLooseNavTabs(looseNavState);
     scheduleLooseNavViewportSync();
+    if (stripSearchHandoff) {
+      requestAnimationFrame(() => applyStripSearchHandoff());
+    }
     if (!wasLoose && document.documentElement.getAttribute('data-home-menu-open') === 'on') {
       const toggle = document.getElementById('shortcuts-edit-toggle');
       const editOn = !!(
@@ -5695,6 +6242,9 @@ function renderLooseNavBar(state) {
     }
   } else {
     lastSentViewportBounds = null;
+    stripSearchHandoff = null;
+    document.documentElement.dataset.addressOnly = 'off';
+    if (stripComposeActive) setStripCompose(false);
     if (wasLoose) window.usualDesk.hideMenuOverlay?.();
   }
   syncDockHomeStripBtn();
@@ -5706,12 +6256,6 @@ function initLooseNavUiEvents() {
   looseNavNewTabBtn?.addEventListener('click', () => {
     openLooseNavBlankTab();
   });
-
-  window.UsualDeskTabStripFit?.bindUrlColumnSplit(
-    looseNavBar.querySelector('.loose-nav-tabs-row'),
-    document.getElementById('loose-nav-split'),
-    looseNavOmnibox,
-  );
 
   initLooseNavOmnibox();
 
