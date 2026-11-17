@@ -16,15 +16,29 @@ const engine = require('./browser-import');
 const historyStore = require('./history-store');
 const bookmarksStore = require('./bookmarks-store');
 const passwordsStore = require('./passwords-store');
-const { partitionFromSessionId } = require('./session-partition');
+const { partitionFromSessionId, sessionIdFromName } = require('./session-partition');
 const { LOOSE_NAV_SESSION_ID } = require('./constants');
 const { toSetDetails, removeCookies, hostOf } = require('./cookie-jar');
+const { applyChromeIdentityToPartition } = require('./chrome-identity');
+const { log } = require('./logger');
+
+/**
+ * Partition propia por carpeta de perfil de Chrome/Edge (misma fórmula que
+ * browse-profiles.importChromeProfile).
+ * @param {string} directory
+ * @returns {string}
+ */
+function partitionForBrowserProfile(directory) {
+  const dir = String(directory || 'Default').trim() || 'Default';
+  const sessionId = sessionIdFromName(`chrome-${dir}`) || 'chrome-default';
+  return partitionFromSessionId(sessionId);
+}
 
 /**
  * Inyecta TODAS las cookies en la partition (sin filtro de dominio).
  * @param {Array<object>} cookies
  * @param {string} targetPartition
- * @returns {Promise<number>} cuántas se setearon
+ * @returns {Promise<{ imported: number, skipped: number, rejected: number }>}
  */
 async function setAllCookies(cookies, targetPartition) {
   const { baseDomainOf } = require('./session-router');
@@ -43,14 +57,25 @@ async function setAllCookies(cookies, targetPartition) {
   await removeCookies(ses, (c) => incoming.has(siteOf(c)));
 
   let imported = 0;
+  let skipped = 0;
+  let rejected = 0;
+  /** @type {string[]} */
+  const rejectSamples = [];
   for (const c of cookies) {
     const details = toSetDetails(c);
-    if (!details) continue;
+    if (!details) {
+      skipped += 1;
+      continue;
+    }
     try {
       await ses.cookies.set(details);
       imported += 1;
-    } catch {
-      /* cookies individuales que Electron rechaza (dominios inválidos, etc.) */
+    } catch (err) {
+      rejected += 1;
+      if (rejectSamples.length < 8) {
+        const why = err && err.message ? String(err.message) : 'set_failed';
+        rejectSamples.push(`${details.name}@${hostOf(c)}: ${why}`);
+      }
     }
   }
   try {
@@ -58,7 +83,11 @@ async function setAllCookies(cookies, targetPartition) {
   } catch {
     /* noop */
   }
-  return imported;
+  log(
+    `browser-import cookies → partition=${targetPartition} imported=${imported} skipped=${skipped} rejected=${rejected}`
+      + (rejectSamples.length ? ` samples=${JSON.stringify(rejectSamples)}` : ''),
+  );
+  return { imported, skipped, rejected };
 }
 
 /**
@@ -87,7 +116,7 @@ async function importFullProfile(opts) {
   const browser = String((opts && opts.browser) || 'chrome');
   const directory = String((opts && opts.directory) || 'Default');
   const partition =
-    (opts && opts.partition) || partitionFromSessionId(LOOSE_NAV_SESSION_ID);
+    (opts && opts.partition) || partitionForBrowserProfile(directory) || partitionFromSessionId(LOOSE_NAV_SESSION_ID);
   const parts = Object.assign(
     { cookies: true, history: true, bookmarks: true, passwords: true },
     (opts && opts.parts) || {},
@@ -96,7 +125,10 @@ async function importFullProfile(opts) {
   const summary = {
     ok: true,
     partition,
+    directory,
     cookies: 0,
+    cookiesSkipped: 0,
+    cookiesRejected: 0,
     history: 0,
     bookmarks: 0,
     passwords: 0,
@@ -137,14 +169,20 @@ async function importFullProfile(opts) {
     };
     try {
       const cookies = await engine.fetchAllCookies(browser, directory, fetchOpts);
-      summary.cookies = await setAllCookies(cookies, partition);
+      const result = await setAllCookies(cookies, partition);
+      summary.cookies = result.imported;
+      summary.cookiesSkipped = result.skipped;
+      summary.cookiesRejected = result.rejected;
+      applyChromeIdentityToPartition(partition);
     } catch (err) {
       summary.cookiesError = (err && err.message) || 'IMPORT_FAILED';
     }
     if (fetchOpts.closedBrowser) summary.closedBrowser = true;
+  } else {
+    applyChromeIdentityToPartition(partition);
   }
 
   return summary;
 }
 
-module.exports = { importFullProfile, setAllCookies };
+module.exports = { importFullProfile, setAllCookies, partitionForBrowserProfile };

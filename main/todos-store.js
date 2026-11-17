@@ -5,9 +5,11 @@
  * Archivo: `userData/todos.json`.
  *
  *   {
- *     version: 2,
- *     title: string,
- *     columns: Array<{ id, width?, x?, y?, blocks: Array<{ id, type, text, done, indent }> }>
+ *     version: 3,
+ *     activePageId: string,
+ *     pages: Array<{ id, title, columns, archive }>,
+ *     // Espejo de la página activa (compat con v2 / analytics / tests):
+ *     title, columns, archive
  *   }
  *
  * `type` es "text" | "todo" | "bullet" | "document" | "image".
@@ -15,6 +17,7 @@
  * Una imagen guarda `src` (data URL) y `width`.
  * `archive` guarda lo que se soltó en el tacho, con `archivedAt`.
  * La versión 1 (lista plana de items) se migra a una columna de checkboxes.
+ * La versión 2 (una sola página) se envuelve en `pages`.
  */
 
 const { sanitizeDocument } = require('./document-content');
@@ -23,7 +26,8 @@ const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow } = require('electron');
 
-const FILE_VERSION = 2;
+const FILE_VERSION = 3;
+const MAX_PAGES = 20;
 const MAX_COLUMNS = 30;
 const MIN_COL_WIDTH = 88;
 const MAX_COL_WIDTH = 4000;
@@ -131,13 +135,59 @@ function sanitizeColumn(raw, seen) {
   return column;
 }
 
-function emptyPayload() {
+function sanitizeArchive(list, seen) {
+  const archive = [];
+  const archived = Array.isArray(list) ? list : [];
+  for (const entry of archived) {
+    if (archive.length >= MAX_ARCHIVE) break;
+    const item = sanitizeBlock(entry, seen, '');
+    if (!item) continue;
+    item.archivedAt = validIso(entry && entry.archivedAt) || new Date().toISOString();
+    archive.push(item);
+  }
+  return archive;
+}
+
+function sanitizePageBody(raw, seen, fallbackTitle) {
+  const columns = [];
+  const list = Array.isArray(raw && raw.columns) ? raw.columns : [];
+  for (const entry of list) {
+    if (columns.length >= MAX_COLUMNS) break;
+    const column = sanitizeColumn(entry, seen);
+    if (column) columns.push(column);
+  }
+  if (!columns.length) columns.push({ id: 'col-main', blocks: [] });
   return {
-    version: FILE_VERSION,
-    title: 'Tareas',
+    title: sanitizeText((raw && raw.title) || fallbackTitle || 'Notas', 200) || 'Notas',
+    columns,
+    archive: sanitizeArchive(raw && raw.archive, seen),
+  };
+}
+
+function emptyPage(id, title) {
+  return {
+    id: id || 'page-main',
+    title: title || 'Notas',
     columns: [{ id: 'col-main', blocks: [] }],
     archive: [],
   };
+}
+
+function withActiveMirror(pages, activePageId) {
+  const active = pages.find((p) => p.id === activePageId) || pages[0];
+  return {
+    version: FILE_VERSION,
+    activePageId: active.id,
+    pages,
+    title: active.title,
+    columns: active.columns,
+    archive: active.archive,
+  };
+}
+
+function emptyPayload() {
+  const page = emptyPage('page-main', 'Notas');
+  return withActiveMirror([page], page.id);
 }
 
 function columnFromLegacyItems(items) {
@@ -159,45 +209,51 @@ function columnFromLegacyItems(items) {
     });
     if (blocks.length >= MAX_BLOCKS) break;
   }
-  return {
-    version: FILE_VERSION,
-    title: 'Tareas',
+  const page = {
+    id: 'page-main',
+    title: 'Notas',
     columns: [{ id: 'col-main', blocks }],
     archive: [],
   };
+  return withActiveMirror([page], page.id);
 }
 
 function normalize(raw) {
   if (!raw || typeof raw !== 'object') return emptyPayload();
   const legacyItems = Array.isArray(raw.items) ? raw.items : null;
+  const hasPages = Array.isArray(raw.pages) && raw.pages.length > 0;
   const hasColumns = Array.isArray(raw.columns);
-  if (!hasColumns && legacyItems) return columnFromLegacyItems(legacyItems);
+  if (!hasPages && !hasColumns && legacyItems) return columnFromLegacyItems(legacyItems);
 
-  const seen = new Set();
-  const columns = [];
-  const list = hasColumns ? raw.columns : [];
-  for (const entry of list) {
-    if (columns.length >= MAX_COLUMNS) break;
-    const column = sanitizeColumn(entry, seen);
-    if (column) columns.push(column);
+  const pageIds = new Set();
+  const pages = [];
+
+  if (hasPages) {
+    for (const entry of raw.pages) {
+      if (pages.length >= MAX_PAGES) break;
+      if (!entry || typeof entry !== 'object') continue;
+      const id = sanitizeId(entry.id) || `page-${pages.length + 1}`;
+      if (pageIds.has(id)) continue;
+      pageIds.add(id);
+      const seen = new Set();
+      const body = sanitizePageBody(entry, seen, pages.length ? `Notas ${pages.length + 1}` : 'Notas');
+      pages.push({ id, ...body });
+    }
   }
-  if (!columns.length) return emptyPayload();
-  const title = sanitizeText(raw.title, 200);
-  const archive = [];
-  const archived = Array.isArray(raw.archive) ? raw.archive : [];
-  for (const entry of archived) {
-    if (archive.length >= MAX_ARCHIVE) break;
-    const item = sanitizeBlock(entry, seen, '');
-    if (!item) continue;
-    item.archivedAt = validIso(entry && entry.archivedAt) || new Date().toISOString();
-    archive.push(item);
+
+  if (!pages.length) {
+    const seen = new Set();
+    const body = sanitizePageBody(
+      { title: raw.title, columns: hasColumns ? raw.columns : [], archive: raw.archive },
+      seen,
+      'Notas'
+    );
+    pages.push({ id: 'page-main', ...body });
   }
-  return {
-    version: FILE_VERSION,
-    title,
-    columns,
-    archive,
-  };
+
+  const wanted = sanitizeId(raw.activePageId);
+  const activePageId = pages.some((p) => p.id === wanted) ? wanted : pages[0].id;
+  return withActiveMirror(pages, activePageId);
 }
 
 function loadTodos() {
@@ -238,4 +294,5 @@ module.exports = {
   loadTodos,
   saveTodos,
   broadcastTodosChanged,
+  MAX_PAGES,
 };

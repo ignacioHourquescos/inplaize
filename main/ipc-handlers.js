@@ -338,11 +338,16 @@ function trackStickyNoteChanges(before, after) {
 }
 
 function countTodoBlocks(payload) {
-  const columns = payload && Array.isArray(payload.columns) ? payload.columns : [];
+  const pages = payload && Array.isArray(payload.pages) && payload.pages.length
+    ? payload.pages
+    : [{ columns: payload && payload.columns }];
   let n = 0;
-  for (const col of columns) {
-    const blocks = col && Array.isArray(col.blocks) ? col.blocks : [];
-    for (const b of blocks) if (b && b.type === 'todo') n += 1;
+  for (const page of pages) {
+    const columns = page && Array.isArray(page.columns) ? page.columns : [];
+    for (const col of columns) {
+      const blocks = col && Array.isArray(col.blocks) ? col.blocks : [];
+      for (const b of blocks) if (b && b.type === 'todo') n += 1;
+    }
   }
   return n;
 }
@@ -1652,21 +1657,44 @@ function registerIpcHandlers(state) {
 
     const totals = {
       cookies: 0,
+      cookiesSkipped: 0,
+      cookiesRejected: 0,
       history: 0,
       bookmarks: 0,
       passwords: 0,
       passwordsSkipped: 0,
       passwordsVaultAvailable: true,
+      partitions: [],
     };
     let lastError = '';
     let anyDone = false;
+    let defaultPartition = '';
+    /** @type {Map<string, { name: string, userName: string, picturePath: string }>} */
+    const metaByDir = new Map();
+    try {
+      for (const p of browserImport.listProfiles(browser)) {
+        if (p && p.directory) {
+          metaByDir.set(String(p.directory), {
+            name: String(p.name || p.directory),
+            userName: String(p.userName || ''),
+            picturePath: String(p.picturePath || ''),
+          });
+        }
+      }
+    } catch {
+      /* sin meta: igual se importa con el nombre de la carpeta */
+    }
+    const browseProfiles = require('./browse-profiles');
     try {
       for (let i = 0; i < directories.length; i += 1) {
+        const directory = directories[i];
+        const partition = profileImport.partitionForBrowserProfile(directory);
         let summary = null;
         try {
           summary = await profileImport.importFullProfile({
             browser,
-            directory: directories[i],
+            directory,
+            partition,
             autoClose: true,
             relaunch: false,
             parts: parts ? { ...parts, cookies: importCookies } : { cookies: importCookies },
@@ -1678,13 +1706,33 @@ function registerIpcHandlers(state) {
         anyDone = true;
         if (summary.closedBrowser) reopenBrowser = true;
         totals.partition = summary.partition;
+        totals.partitions.push(summary.partition);
         totals.cookies += summary.cookies || 0;
+        totals.cookiesSkipped += summary.cookiesSkipped || 0;
+        totals.cookiesRejected += summary.cookiesRejected || 0;
         totals.history += summary.history || 0;
         totals.bookmarks += summary.bookmarks || 0;
         totals.passwords += summary.passwords || 0;
         totals.passwordsSkipped += summary.passwordsSkipped || 0;
         if (summary.cookiesError) totals.cookiesError = summary.cookiesError;
         if (summary.passwordsVaultAvailable === false) totals.passwordsVaultAvailable = false;
+
+        const meta = metaByDir.get(directory) || { name: directory, userName: '', picturePath: '' };
+        try {
+          await browseProfiles.registerImportedChromeProfile({
+            partition: summary.partition,
+            directory,
+            name: meta.name,
+            userName: meta.userName,
+            picturePath: meta.picturePath,
+            refresh: false,
+          });
+        } catch {
+          /* el perfil igual quedó con cookies en su partition */
+        }
+        if (!defaultPartition && summary.partition && (summary.cookies > 0 || !summary.cookiesError)) {
+          defaultPartition = summary.partition;
+        }
       }
     } finally {
       if (reopenBrowser) browserImport.relaunchBrowser(browser);
@@ -1692,7 +1740,8 @@ function registerIpcHandlers(state) {
 
     if (!anyDone) return { ok: false, error: lastError || 'IMPORT_FAILED' };
     try {
-      require('./browse-profiles').refreshAccounts();
+      if (defaultPartition) browseProfiles.setDefaultPartition(defaultPartition);
+      await browseProfiles.refreshAccounts();
     } catch {
       /* noop */
     }

@@ -35,10 +35,20 @@
   const rootEl = document.getElementById('notion-root');
   if (!homeEl || !rootEl) return;
 
+  const MAX_PAGES = 20;
+  const NOTES_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">'
+    + '<path d="M7 3.5h7.5L19 8v12.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.85" stroke-linejoin="round"/>'
+    + '<path d="M14.5 3.5V8H19" stroke="currentColor" stroke-width="1.85" stroke-linejoin="round"/>'
+    + '<path d="M9 12h6M9 15.5h4" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"/>'
+    + '</svg>';
+
   const state = {
-    title: 'Tareas',
+    title: 'Notas',
     columns: [],
     archive: [],
+    pages: [],
+    activePageId: '',
   };
 
   let saveTimer = null;
@@ -191,73 +201,239 @@
     scheduleSave();
   }
 
-  function snapshot() {
+  function serializeBlock(block, columnId) {
+    if (block.type === 'document') {
+      const doc = ensureDoc(block, columnId);
+      return {
+        id: block.id,
+        type: 'document',
+        text: doc.title || '',
+        done: false,
+        indent: block.indent || 0,
+        doc: {
+          id: block.id,
+          title: doc.title || '',
+          description: doc.description || '',
+          content: doc.content,
+          parentId: columnId,
+          createdAt: doc.createdAt,
+          updatedAt: doc.updatedAt,
+        },
+      };
+    }
+    if (block.type === 'image') {
+      return {
+        id: block.id,
+        type: 'image',
+        text: '',
+        done: false,
+        indent: 0,
+        src: block.src || '',
+        width: block.width || 0,
+      };
+    }
+    return {
+      id: block.id,
+      type: block.type,
+      text: block.text,
+      done: block.done === true,
+      indent: block.indent || 0,
+    };
+  }
+
+  function serializeColumns(columns) {
+    return (columns || []).map((column) => {
+      const entry = {
+        id: column.id,
+        blocks: column.blocks.map((block) => serializeBlock(block, column.id)),
+      };
+      if (column.width >= MIN_COL_WIDTH) entry.width = clampWidth(column.width);
+      return entry;
+    });
+  }
+
+  function serializeArchive(archive) {
+    return (archive || []).map((block) => {
+      const copy = {
+        id: block.id,
+        type: block.type,
+        text: block.text || '',
+        done: block.done === true,
+        indent: block.indent || 0,
+        archivedAt: block.archivedAt,
+      };
+      if (block.type === 'document' && block.doc) copy.doc = block.doc;
+      if (block.type === 'image') {
+        copy.src = block.src || '';
+        copy.text = '';
+        if (block.width) copy.width = block.width;
+      }
+      return copy;
+    });
+  }
+
+  function syncActiveIntoPages() {
+    if (!state.activePageId) return;
+    let page = state.pages.find((item) => item.id === state.activePageId);
+    if (!page) {
+      page = {
+        id: state.activePageId,
+        title: state.title || 'Notas',
+        columns: state.columns,
+        archive: state.archive,
+      };
+      state.pages.push(page);
+      return;
+    }
+    page.title = state.title || page.title || 'Notas';
+    page.columns = state.columns;
+    page.archive = state.archive;
+  }
+
+  function loadActiveFromPages() {
+    if (!Array.isArray(state.pages) || !state.pages.length) {
+      const page = {
+        id: makeId('page'),
+        title: 'Notas',
+        columns: [],
+        archive: [],
+      };
+      state.pages = [page];
+      state.activePageId = page.id;
+    }
+    if (!state.pages.some((page) => page.id === state.activePageId)) {
+      state.activePageId = state.pages[0].id;
+    }
+    const active = state.pages.find((page) => page.id === state.activePageId);
+    state.title = active.title || 'Notas';
+    state.columns = Array.isArray(active.columns) ? active.columns : [];
+    state.archive = Array.isArray(active.archive) ? active.archive : [];
+  }
+
+  function pageSnapshot() {
     return {
       title: state.title,
-      columns: state.columns.map((column) => {
-        const entry = {
-          id: column.id,
-          blocks: column.blocks.map((block) => {
-            if (block.type === 'document') {
-              const doc = ensureDoc(block, column.id);
-              return {
-                id: block.id,
-                type: 'document',
-                text: doc.title || '',
-                done: false,
-                indent: block.indent || 0,
-                doc: {
-                  id: block.id,
-                  title: doc.title || '',
-                  description: doc.description || '',
-                  content: doc.content,
-                  parentId: column.id,
-                  createdAt: doc.createdAt,
-                  updatedAt: doc.updatedAt,
-                },
-              };
-            }
-            if (block.type === 'image') {
-              return {
-                id: block.id,
-                type: 'image',
-                text: '',
-                done: false,
-                indent: 0,
-                src: block.src || '',
-                width: block.width || 0,
-              };
-            }
-            return {
-              id: block.id,
-              type: block.type,
-              text: block.text,
-              done: block.done === true,
-              indent: block.indent || 0,
-            };
-          }),
-        };
-        if (column.width >= MIN_COL_WIDTH) entry.width = clampWidth(column.width);
-        return entry;
-      }),
-      archive: state.archive.map((block) => {
-        const copy = {
-          id: block.id,
-          type: block.type,
-          text: block.text || '',
-          done: block.done === true,
-          indent: block.indent || 0,
-          archivedAt: block.archivedAt,
-        };
-        if (block.type === 'document' && block.doc) copy.doc = block.doc;
-        if (block.type === 'image') {
-          copy.src = block.src || '';
-          copy.text = '';
-          if (block.width) copy.width = block.width;
-        }
-        return copy;
-      }),
+      columns: serializeColumns(state.columns),
+      archive: serializeArchive(state.archive),
     };
+  }
+
+  function snapshot() {
+    syncActiveIntoPages();
+    return {
+      activePageId: state.activePageId,
+      pages: state.pages.map((page) => ({
+        id: page.id,
+        title: page.title || 'Notas',
+        columns: page.id === state.activePageId
+          ? serializeColumns(state.columns)
+          : serializeColumns(page.columns),
+        archive: page.id === state.activePageId
+          ? serializeArchive(state.archive)
+          : serializeArchive(page.archive),
+      })),
+      title: state.title,
+      columns: serializeColumns(state.columns),
+      archive: serializeArchive(state.archive),
+    };
+  }
+
+  function showNotesHome() {
+    if (typeof window.goToDockWelcomeHome === 'function') {
+      window.goToDockWelcomeHome('todos').catch(() => {});
+    } else {
+      document.getElementById('dock-home-panel')?.setAttribute('data-home-view', 'todos');
+    }
+  }
+
+  function notesPageLabel(page, index) {
+    const title = String(page && page.title || '').trim();
+    if (title) return title;
+    return index === 0 ? 'Notas' : `Notas ${index + 1}`;
+  }
+
+  function renderNotesNav(opts) {
+    const host = document.getElementById('home-nav-pages');
+    if (!host) return;
+    syncActiveIntoPages();
+    const panel = document.getElementById('dock-home-panel');
+    const onTodos = panel && panel.getAttribute('data-home-view') === 'todos';
+    host.innerHTML = '';
+    state.pages.forEach((page, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'home-nav-item home-nav-page';
+      btn.dataset.homeNav = 'todos';
+      btn.dataset.notesPageId = page.id;
+      const label = notesPageLabel(page, index);
+      btn.setAttribute('aria-label', label);
+      btn.dataset.tooltip = label;
+      btn.dataset.tooltipPlacement = 'right';
+      btn.setAttribute(
+        'aria-pressed',
+        onTodos && page.id === state.activePageId ? 'true' : 'false'
+      );
+      btn.innerHTML = NOTES_ICON_SVG;
+      if (opts && opts.slideId === page.id) {
+        btn.classList.add('is-sliding-in');
+        btn.addEventListener('animationend', () => btn.classList.remove('is-sliding-in'), { once: true });
+      }
+      btn.addEventListener('click', () => {
+        selectNotesPage(page.id);
+      });
+      host.appendChild(btn);
+    });
+    const addBtn = document.getElementById('home-nav-add-page');
+    if (addBtn) {
+      addBtn.disabled = state.pages.length >= MAX_PAGES;
+      addBtn.setAttribute('aria-disabled', addBtn.disabled ? 'true' : 'false');
+    }
+  }
+
+  function selectNotesPage(pageId) {
+    const id = String(pageId || '');
+    if (!id || !state.pages.some((page) => page.id === id)) return;
+    if (id === state.activePageId) {
+      showNotesHome();
+      renderNotesNav();
+      return;
+    }
+    if (saveTimer) persistNow();
+    syncActiveIntoPages();
+    state.activePageId = id;
+    loadActiveFromPages();
+    ensureShape();
+    selectedIds = new Set();
+    selectionAnchorId = null;
+    render(null);
+    seedHistory();
+    scheduleSave();
+    showNotesHome();
+    renderNotesNav();
+  }
+
+  function createNotesPage() {
+    if (state.pages.length >= MAX_PAGES) return;
+    if (saveTimer) persistNow();
+    syncActiveIntoPages();
+    const index = state.pages.length;
+    const page = {
+      id: makeId('page'),
+      title: index === 0 ? 'Notas' : `Notas ${index + 1}`,
+      columns: [],
+      archive: [],
+    };
+    state.pages.push(page);
+    state.activePageId = page.id;
+    loadActiveFromPages();
+    ensureShape();
+    selectedIds = new Set();
+    selectionAnchorId = null;
+    render(null);
+    seedHistory();
+    scheduleSave();
+    showNotesHome();
+    renderNotesNav({ slideId: page.id });
   }
 
   let saveChain = Promise.resolve();
@@ -296,7 +472,7 @@
   let historyLock = false;
 
   function historyJson() {
-    const data = snapshot();
+    const data = pageSnapshot();
     data.columns.forEach((column) => {
       column.blocks.forEach((block) => {
         if (block.doc) delete block.doc.updatedAt;
@@ -2814,6 +2990,32 @@
     };
   });
 
+  function applyPayload(payload) {
+    if (payload && Array.isArray(payload.pages) && payload.pages.length) {
+      state.pages = payload.pages.map((page, index) => ({
+        id: page.id || makeId('page'),
+        title: typeof page.title === 'string' && page.title.trim()
+          ? page.title
+          : (index === 0 ? 'Notas' : `Notas ${index + 1}`),
+        columns: Array.isArray(page.columns) ? page.columns : [],
+        archive: Array.isArray(page.archive) ? page.archive : [],
+      }));
+      const wanted = payload.activePageId ? String(payload.activePageId) : '';
+      state.activePageId = state.pages.some((page) => page.id === wanted)
+        ? wanted
+        : state.pages[0].id;
+    } else {
+      state.pages = [{
+        id: 'page-main',
+        title: typeof payload?.title === 'string' && payload.title.trim() ? payload.title : 'Notas',
+        columns: Array.isArray(payload?.columns) ? payload.columns : [],
+        archive: Array.isArray(payload?.archive) ? payload.archive : [],
+      }];
+      state.activePageId = 'page-main';
+    }
+    loadActiveFromPages();
+  }
+
   async function loadFromDisk() {
     if (document.documentElement.classList.contains('doc-modal-open')) return;
     const active = document.activeElement;
@@ -2825,26 +3027,32 @@
 
     const api = getApi();
     if (!api || typeof api.getTodos !== 'function') {
+      state.pages = [];
+      state.activePageId = '';
       state.archive = [];
+      loadActiveFromPages();
       ensureShape();
       render(null);
       seedHistory();
+      renderNotesNav();
       ready = true;
       return;
     }
     try {
       const payload = await api.getTodos();
-      state.title = typeof payload?.title === 'string' ? payload.title : 'Tareas';
-      state.columns = Array.isArray(payload?.columns) ? payload.columns : [];
-      state.archive = Array.isArray(payload?.archive) ? payload.archive : [];
+      applyPayload(payload);
     } catch {
-      state.title = 'Tareas';
+      state.pages = [];
+      state.activePageId = '';
+      state.title = 'Notas';
       state.columns = [];
       state.archive = [];
+      loadActiveFromPages();
     }
     ensureShape();
     render(null);
     seedHistory();
+    renderNotesNav();
     ready = true;
   }
 
@@ -2890,6 +3098,17 @@
   document.addEventListener('inplaize-calc-format', () => {
     state.columns.forEach(paintCalc);
   });
+
+  document.getElementById('home-nav-add-page')?.addEventListener('click', () => {
+    createNotesPage();
+  });
+
+  window.InplaizeNotesPages = {
+    activeId: () => state.activePageId,
+    renderNav: () => renderNotesNav(),
+    select: (pageId) => selectNotesPage(pageId),
+    create: () => createNotesPage(),
+  };
 
   loadFromDisk();
 

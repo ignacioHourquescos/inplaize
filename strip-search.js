@@ -97,21 +97,24 @@
         rail.parentElement.insertBefore(cluster, rail);
         cluster.appendChild(rail);
       }
-      let divider = cluster.querySelector(':scope > .strip-search-divider');
+      const host = cluster.parentElement;
+      let divider =
+        (host && host.querySelector(':scope > .strip-search-divider'))
+        || cluster.querySelector(':scope > .strip-search-divider');
       if (!divider) {
         divider = document.createElement('div');
         divider.className = 'strip-rail-divider strip-search-divider';
         divider.setAttribute('aria-hidden', 'true');
       }
-      /* Orden: lupa → divisor → perfiles. */
+      /* La lupa vive con los perfiles. El divisor queda a la izquierda de ese grupo. */
+      if (host && (divider.parentElement !== host || divider.nextElementSibling !== cluster)) {
+        host.insertBefore(divider, cluster);
+      }
       if (btn.parentElement !== cluster || cluster.firstElementChild !== btn) {
         cluster.insertBefore(btn, cluster.firstChild);
       }
-      if (divider.parentElement !== cluster || btn.nextElementSibling !== divider) {
-        cluster.insertBefore(divider, btn.nextSibling);
-      }
-      if (rail.parentElement !== cluster || divider.nextElementSibling !== rail) {
-        cluster.insertBefore(rail, divider.nextSibling);
+      if (rail.parentElement !== cluster || btn.nextElementSibling !== rail) {
+        cluster.insertBefore(rail, btn.nextSibling);
       }
       cluster.style.display = 'flex';
       cluster.style.flexDirection = 'row';

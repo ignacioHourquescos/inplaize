@@ -188,6 +188,7 @@ function renderChrome(payload) {
     if (it.isFocusMember) {
       btn.classList.add('shell-focus-member');
     }
+    if (it.iconInverted) btn.classList.add('is-icon-inverted');
     btn.setAttribute('aria-label', name);
     btn.dataset.shortcutId = it.id;
     btn.dataset.shortcutType = it.type || '';
@@ -202,10 +203,8 @@ function renderChrome(payload) {
     btn.addEventListener('click', () => {
       if (Date.now() < ignoreClickUntil) return;
       const addressBar = document.getElementById('shortcut-browser');
-      if (it.isActive && addressBar && addressBar.classList.contains('is-address-peek')) {
-        const field = document.getElementById('shortcut-omnibox-input');
-        field?.focus();
-        field?.select();
+      if (it.isActive && addressBar && !addressBar.hidden && addressBar.classList.contains('is-address-peek')) {
+        api.frameAction('hide-address').catch(() => {});
         return;
       }
       if (it.isActive && (!addressBar || addressBar.hidden)) {

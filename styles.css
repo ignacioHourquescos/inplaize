@@ -215,9 +215,14 @@ html[data-dock-layout='topbar'] .dock-home-strip-btn.file-drag-hover {
   -webkit-app-region: no-drag;
 }
 
-/* En home la columna ::after ya separa lupa|perfiles: evitamos doble trazo. */
-html[data-dock-layout='topbar']:not([data-loose-nav='on']) .strip-leading > .strip-search-divider {
+/* En home la línea de la columna ya separa el logo de la lupa: el divisor HTML no ocupa lugar. */
+html[data-dock-layout='topbar']:not([data-loose-nav='on']) #sidebar-chrome > .strip-search-divider {
   opacity: 0;
+  width: 0;
+  flex-basis: 0;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
 }
 
 /* El "+" va al final de la tira, a la izquierda de "listo". El fondo es el de la
@@ -1532,6 +1537,18 @@ html[data-dock-layout='topbar'] #modal-overlay {
   display: block;
 }
 
+.icon-select-trigger-thumb.is-inverted img {
+  filter: invert(1);
+}
+
+.icon-invert-toggle {
+  margin-top: 8px;
+}
+
+.icon-invert-toggle.hidden {
+  display: none !important;
+}
+
 .icon-select-trigger-emoji {
   font-size: 22px;
   line-height: 1;
@@ -1964,36 +1981,17 @@ html:has(.loose-nav-omnibox.is-strip-flipping) .strip-leading > .strip-search {
   pointer-events: none !important;
 }
 
-/* Columna home+lupa: la línea va DESPUÉS de la lupa (no entre home y buscar).
-   Gris neutro; sigue hacia el panel de inicio. */
+/* La línea queda a la izquierda de la lupa y solo en la franja, no baja al panel. */
 html[data-dock-layout='topbar'] #sidebar-chrome::after {
   content: '';
   position: absolute;
   top: 0;
-  bottom: -1px;
-  left: calc(
-    var(--ud-chrome-strip-pad-x)
-    + var(--ud-chrome-icon)
-    + var(--ud-chrome-strip-gap)
-    + var(--ud-chrome-icon)
-    + var(--ud-chrome-strip-gap)
-    - 1px
-  );
+  bottom: 0;
+  left: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) - 1px);
   width: 1px;
   background: var(--ud-chrome-divider, #3f3f48);
   pointer-events: none;
   z-index: 2;
-}
-
-/* Sin lupa visible, la línea vuelve a quedar solo después del home. */
-html[data-dock-layout='topbar']:not(:has(#strip-search)) #sidebar-chrome::after,
-html[data-dock-layout='topbar']:has(#strip-search[hidden]) #sidebar-chrome::after {
-  left: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap) - 1px);
-}
-
-/* Sin perfiles, el icono ya queda separado por la línea de la columna. */
-html[data-dock-layout='topbar'] .strip-leading:has(.loose-nav-accounts:empty) + .strip-rail-divider {
-  display: none;
 }
 
 /* Sin panel de inicio visible (editor inline, historial o navegación suelta)
@@ -2003,6 +2001,18 @@ html[data-loose-nav='on'] #sidebar-chrome::after,
 #sidebar:has(#loose-nav-surface:not(.hidden)) #sidebar-chrome::after,
 #sidebar:has(#dock-home-panel[data-home-view='history']) #sidebar-chrome::after {
   display: none;
+}
+
+/* Si la línea de la columna no se dibuja, el divisor junto a la lupa vuelve a verse. */
+html[data-dock-layout='topbar'] #sidebar:has(#dock-inline-editor:not(.hidden)) #sidebar-chrome > .strip-search-divider,
+html[data-dock-layout='topbar'] #sidebar:has(#loose-nav-surface:not(.hidden)) #sidebar-chrome > .strip-search-divider,
+html[data-dock-layout='topbar'] #sidebar:has(#dock-home-panel[data-home-view='history']) #sidebar-chrome > .strip-search-divider {
+  opacity: 1;
+  width: 1px;
+  flex: 0 0 1px;
+  min-width: 1px;
+  margin: 0 4px 0 calc(-1 * var(--ud-chrome-strip-gap));
+  overflow: visible;
 }
 
 html[data-dock-layout='topbar'] #shortcuts-container {
@@ -3582,6 +3592,17 @@ html[data-dock-layout='topbar'] .shortcut-card.shell-shortcut-item.is-active:hov
   filter: none !important;
 }
 
+/* En navegación de perfiles el puente es el del perfil. Un acceso no cierra un recuadro encima. */
+html[data-dock-layout='topbar'][data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active,
+html[data-dock-layout='topbar'][data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+}
+html[data-dock-layout='topbar'][data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active::before,
+html[data-dock-layout='topbar'][data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active::after {
+  content: none !important;
+}
+
 /* En sesión el encuadre vive en chrome-strip.css (icono estirado hasta la barra). */
 
 /* Foco (click derecho): borde lima secondary (pisa al seleccionado). */
@@ -3952,19 +3973,19 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tabs-cluster > .
   -webkit-app-region: no-drag;
 }
 
-/* Enter en la dirección: la pestaña nueva entra de izquierda a derecha. */
+/* Enter en la dirección: la pestaña nueva entra de abajo hacia arriba. */
 .loose-nav-tab.is-sliding-in {
-  animation: loose-nav-tab-slide-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: loose-nav-tab-slide-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes loose-nav-tab-slide-in {
   from {
     opacity: 0;
-    transform: translateX(-40%);
+    transform: translateY(100%);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
@@ -4227,7 +4248,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing
   overflow-y: auto;
   background: var(--ud-chrome-strip-bg);
   border: 1px solid var(--ud-chrome-strip-border);
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
 }
 
@@ -4236,7 +4257,7 @@ html[data-loose-nav='on'][data-dock-layout='topbar'] .loose-nav-tab.is-composing
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  border-radius: 9px;
+  border-radius: 0;
   cursor: pointer;
 }
 
@@ -5094,8 +5115,7 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
 }
 
 /* ---- Submenú de la home ----
-   Dos iconos a la izquierda: Notas (la página) y Descargas (la vista ampliada).
-   El nombre de la sección va como título arriba a la izquierda dentro de cada vista. */
+   Descargas arriba, secciones de notas debajo, y "+" al final para crear otra. */
 .home-nav {
   /* Misma columna que el icono de inplaize en la franja: mismo ancho y mismo margen. */
   --home-nav-w: calc(var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap));
@@ -5109,13 +5129,22 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   gap: 8px;
   padding: 8px 0 8px var(--ud-chrome-strip-pad-x);
   box-sizing: border-box;
-  border-right: 1px solid var(--ud-chrome-strip-border);
+  border-right: none;
   background: var(--ud-chrome-strip-bg);
   -webkit-app-region: no-drag;
 }
 
 #dock-home-panel[data-home-view='history'] > .home-nav {
   display: none;
+}
+
+.home-nav-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 0;
 }
 
 .home-nav-item {
@@ -5157,33 +5186,31 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   color: var(--ud-chrome-text);
 }
 
-/* Título de sección (Notas / Descargas): arriba a la izquierda. */
-.home-section-title {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 14px 16px 6px;
-  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
-  font-size: 22px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
-  color: var(--ud-chrome-text);
-  text-align: left;
-  user-select: none;
+.home-nav-add {
+  color: var(--ud-chrome-seg-muted);
 }
 
-#todo-home > .home-section-title {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  padding: 4px 0 16px;
-  /* Opaco en claro y oscuro: --ud-chrome-canvas sigue el tema. */
-  background: var(--ud-chrome-canvas);
+.home-nav-page.is-sliding-in {
+  animation: home-nav-page-slide-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-#downloads-home > .home-section-title {
-  padding: 14px 16px 4px;
+@keyframes home-nav-page-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-nav-page.is-sliding-in {
+    animation: none;
+  }
+}
+
 
 .downloads-expand-btn,
 .downloads-strip-resizer {
@@ -5354,11 +5381,21 @@ html[data-loose-nav='on'] .shortcut-card.shell-shortcut-item.is-active:hover {
   background-position: 0 0, 11px 11px;
 }
 
+.image-drawer-body.is-zoomed {
+  cursor: grab;
+}
+
+.image-drawer-body.is-panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
 .image-drawer-canvas {
   max-width: 100%;
   max-height: 100%;
   border-radius: 6px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  transform-origin: center center;
 }
 
 .image-drawer-pdf {

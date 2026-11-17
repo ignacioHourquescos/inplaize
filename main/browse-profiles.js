@@ -376,6 +376,60 @@ const IMPORT_ERRORS = {
 };
 
 /**
+ * Deja el perfil importado en el store (riel + cuentas) con su partition propia.
+ * @param {{
+ *   partition: string,
+ *   directory: string,
+ *   name?: string,
+ *   userName?: string,
+ *   picturePath?: string,
+ *   refresh?: boolean,
+ * }} opts
+ * @returns {Promise<string>} partition
+ */
+async function registerImportedChromeProfile(opts) {
+  const partition = String((opts && opts.partition) || '');
+  const directory = String((opts && opts.directory) || 'Default');
+  if (!partition) return '';
+  const name = String((opts && opts.name) || directory);
+  const userName = String((opts && opts.userName) || '');
+  const picturePath = String((opts && opts.picturePath) || '');
+  if (userName && picturePath) {
+    cachePhotoFromFile(userName, picturePath);
+  }
+  const store = loadStore();
+  saveStore({
+    ...store,
+    chrome: [
+      ...store.chrome.filter((c) => c.partition !== partition),
+      {
+        partition,
+        label: name,
+        email: userName,
+        directory,
+      },
+    ],
+  });
+  if (opts && opts.refresh !== false) {
+    await refreshAccounts();
+  }
+  const after = loadStore();
+  if (!after.accounts[partition] && userName) {
+    saveStore({
+      ...after,
+      accounts: {
+        ...after.accounts,
+        [partition]: [{ email: userName, name, photo: '' }],
+      },
+    });
+    if (opts && opts.refresh !== false) {
+      await warmAvatars();
+    }
+  }
+  return partition;
+}
+
+/**
  * Importa las cookies de un perfil de Chrome a una partition propia.
  * @param {Electron.BrowserWindow | null} host
  * @param {{ directory: string, name: string, userName: string, picturePath?: string }} chromeProfile
@@ -402,34 +456,14 @@ async function importChromeProfile(host, chromeProfile) {
     await showAppMessageBox(host, opts);
     return null;
   }
-  if (chromeProfile.userName && chromeProfile.picturePath) {
-    cachePhotoFromFile(chromeProfile.userName, chromeProfile.picturePath);
-  }
-  const store = loadStore();
-  saveStore({
-    ...store,
-    chrome: [
-      ...store.chrome.filter((c) => c.partition !== partition),
-      {
-        partition,
-        label: chromeProfile.name,
-        email: chromeProfile.userName || '',
-        directory: chromeProfile.directory,
-      },
-    ],
+  require('./chrome-identity').applyChromeIdentityToPartition(partition);
+  await registerImportedChromeProfile({
+    partition,
+    directory: chromeProfile.directory,
+    name: chromeProfile.name,
+    userName: chromeProfile.userName,
+    picturePath: chromeProfile.picturePath,
   });
-  await refreshAccounts();
-  const after = loadStore();
-  if (!after.accounts[partition] && chromeProfile.userName) {
-    saveStore({
-      ...after,
-      accounts: {
-        ...after.accounts,
-        [partition]: [{ email: chromeProfile.userName, name: chromeProfile.name, photo: '' }],
-      },
-    });
-    await warmAvatars();
-  }
   return partition;
 }
 
@@ -733,6 +767,7 @@ module.exports = {
   railEntries,
   importChromeByDirectory,
   importableChromeProfiles,
+  registerImportedChromeProfile,
   profileOrder,
   setProfileOrder,
   createAccountPartition,

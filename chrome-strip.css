@@ -269,8 +269,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   color: var(--ud-chrome-icon-muted);
 }
 
-/* Logo de inplaize en el botón de inicio. La pastilla usa los colores del
-   tema y el dibujo es su motivo (sol, pino, globo…), el mismo de la tarjeta. */
+/* Logo violeta de inplaize: pastilla del tema y la marca (cuadrado blanco, punto). */
 .dock-home-logo-mark {
   display: block;
   width: 26px;
@@ -278,38 +277,29 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   border-radius: 8px;
   position: relative;
   color: #fff;
-  background: linear-gradient(145deg, var(--key-line, #a78bfa), var(--accent, #6d28d9));
+  background: linear-gradient(145deg, #a78bfa, #6d28d9);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
-.dock-home-logo-mark .logo-glyphs {
+.dock-home-logo-mark .logo-mark {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 78%;
-  height: 78%;
-  transform: translate(-50%, -50%);
-  overflow: visible;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
   pointer-events: none;
 }
 
-.dock-home-logo-mark .logo-glyph {
-  display: none;
+/* El lápiz ya no vive en la franja: está en el menú, como Gestión de barra. */
+#strip-edit-toggle {
+  display: none !important;
 }
 
-:is(html, .theme-preview)[data-ui-theme='light'] .dock-home-logo-mark .logo-glyph[data-theme='light'],
-:is(html, .theme-preview)[data-ui-theme='sand'] .dock-home-logo-mark .logo-glyph[data-theme='sand'],
-:is(html, .theme-preview)[data-ui-theme='mint'] .dock-home-logo-mark .logo-glyph[data-theme='mint'],
-:is(html, .theme-preview)[data-ui-theme='lavender'] .dock-home-logo-mark .logo-glyph[data-theme='lavender'],
-:is(html, .theme-preview)[data-ui-theme='sky'] .dock-home-logo-mark .logo-glyph[data-theme='sky'],
-:is(html, .theme-preview)[data-ui-theme='dark'] .dock-home-logo-mark .logo-glyph[data-theme='dark'],
-:is(html, .theme-preview)[data-ui-theme='midnight'] .dock-home-logo-mark .logo-glyph[data-theme='midnight'],
-:is(html, .theme-preview)[data-ui-theme='neon'] .dock-home-logo-mark .logo-glyph[data-theme='neon'],
-:is(html, .theme-preview)[data-ui-theme='forest'] .dock-home-logo-mark .logo-glyph[data-theme='forest'],
-:is(html, .theme-preview)[data-ui-theme='sunset'] .dock-home-logo-mark .logo-glyph[data-theme='sunset'] {
-  display: inline;
+.shell-shortcut-item.is-icon-inverted .shell-shortcut-icon-img,
+.shell-shortcut-item.is-icon-inverted .shortcut-icon-img {
+  filter: invert(1);
 }
 
 .dock-home-strip-btn:hover .dock-home-logo-mark,
@@ -973,7 +963,8 @@ html[data-dock-layout='topbar'] .strip-leading > .loose-nav-accounts {
   display: none !important;
 }
 
-/* Divisor entre lupa y perfiles, mismo trazo que el resto de la franja. */
+/* Divisor a la izquierda de la lupa. La lupa queda en el mismo grupo que los perfiles. */
+.strip-search-divider,
 .strip-leading > .strip-search-divider {
   flex: 0 0 1px;
   align-self: stretch;
@@ -1082,6 +1073,20 @@ body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active::after {
   border-left-color: var(--key-line);
   border-bottom-color: var(--key-line);
   border-bottom-left-radius: 12px;
+}
+
+/* Tapa el trazo recto bajo el acceso, igual que el puente de un perfil.
+   No depende de anchor(): el icono vive más adentro (celda de la franja). */
+body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active .shell-shortcut-icon-wrap::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  height: 5px;
+  background: var(--ud-chrome-strip-bg);
+  pointer-events: none;
 }
 
 /* Tapa la línea recta debajo del icono. El ancla tiene que vivir en un

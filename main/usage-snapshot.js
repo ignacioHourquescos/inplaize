@@ -40,11 +40,16 @@ function describeShortcut(s) {
 function countTodos(payload) {
   let total = 0;
   let done = 0;
-  for (const col of (payload && payload.columns) || []) {
-    for (const b of (col && col.blocks) || []) {
-      if (!b || b.type !== 'todo') continue;
-      total += 1;
-      if (b.done) done += 1;
+  const pages = payload && Array.isArray(payload.pages) && payload.pages.length
+    ? payload.pages
+    : [{ columns: payload && payload.columns }];
+  for (const page of pages) {
+    for (const col of (page && page.columns) || []) {
+      for (const b of (col && col.blocks) || []) {
+        if (!b || b.type !== 'todo') continue;
+        total += 1;
+        if (b.done) done += 1;
+      }
     }
   }
   return { total, done };

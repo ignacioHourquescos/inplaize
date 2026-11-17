@@ -105,9 +105,6 @@ html[data-shell-frameless='true'] .strip-rail-divider {
   display: none;
 }
 
-.strip-leading:has(.loose-nav-accounts:empty) + .strip-rail-divider {
-  display: none;
-}
 
 .loose-nav-accounts::-webkit-scrollbar {
   display: none;
@@ -192,7 +189,9 @@ html[data-shell-frameless='true'] .strip-rail-divider {
 }
 
 body:has(#shortcut-browser:not([hidden])) .shortcut-strip {
-  overflow: visible;
+  overflow: visible !important;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 body:has(#shortcut-browser:not([hidden])) .strip-leading {
@@ -226,7 +225,8 @@ html[data-shell-frameless='true'] .shortcut-strip {
 }
 
 body:has(#shortcut-browser:not([hidden])) .shell-shortcut-cell {
-  overflow: visible;
+  overflow: visible !important;
+  align-self: center;
 }
 
 /* Estados específicos de la ventana web (los estilos base del icono viven en chrome-strip.css) */
@@ -715,6 +715,12 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   border: none;
   border-radius: 0;
   box-shadow: inset 0 -3px 0 var(--key-line);
+}
+
+.subtab.is-active::before,
+.subtab.is-active::after {
+  content: none;
+  box-shadow: none;
 }
 
 .subtab-icon {

@@ -110,12 +110,9 @@ function initShellHomeMenu(api) {
   if (editToggle) {
     editToggle.addEventListener('click', () => {
       const on = editToggle.classList.contains('is-on') || editToggle.getAttribute('aria-checked') === 'true';
-      if (on) {
-        setOpen(false);
-        api.exitShortcutsEditMode?.();
-      } else {
-        api.enterShortcutsEditMode?.();
-      }
+      setOpen(false);
+      if (on) api.exitShortcutsEditMode?.();
+      else api.enterShortcutsEditMode?.();
     });
   }
 
@@ -155,6 +152,13 @@ const SHELL_HOME_MENU_DRAWER_HTML = `
         <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.3 4.3l1.8 1.8M17.9 17.9l1.8 1.8M19.7 4.3l-1.8 1.8M6.1 17.9l-1.8 1.8" stroke="currentColor" stroke-width="1.65" stroke-linecap="round"/>
       </svg>
       <span class="dock-home-menu-item-label">Configuración</span>
+    </button>
+    <button type="button" id="shortcuts-edit-toggle" class="dock-home-menu-item" role="menuitem" aria-checked="false">
+      <svg class="dock-home-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        <path d="m13.5 6.5 4 4" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <span class="dock-home-menu-item-label">Gestión de barra</span>
     </button>
     <div class="dock-home-menu-sep" role="separator" aria-hidden="true"></div>
     <button type="button" id="quit-app-btn" class="dock-home-menu-item dock-home-menu-item-danger" role="menuitem">

@@ -189,6 +189,7 @@ function renderChrome(payload) {
     if (it.isFocusMember) {
       btn.classList.add('shell-focus-member');
     }
+    if (it.iconInverted) btn.classList.add('is-icon-inverted');
     btn.setAttribute('aria-label', name);
     btn.dataset.shortcutId = it.id;
     btn.dataset.shortcutType = it.type || '';
