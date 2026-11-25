@@ -152,6 +152,7 @@ function bindFileDragSpringTarget(btn, shortcutId) {
 }
 
 function renderChrome(payload) {
+  window.UsualDeskWorkspace?.close();
   if (payload && payload.focusMode) {
     applyFocusModeToDom(payload.focusMode);
   }
@@ -179,8 +180,9 @@ function renderChrome(payload) {
     btn.className = 'shell-shortcut-item';
     if (it.isActive) btn.classList.add('is-active');
     if (it.isOpen) btn.classList.add('is-open');
+    const isWorkspace = it.type === 'workspace';
     const isWeb = it.type === 'web';
-    const canClose = isWeb && it.isOpen && it.mapKey;
+    const canClose = (isWeb || isWorkspace) && it.isOpen && it.mapKey;
     const canFocusGesture = isWeb;
     const webTabClosed = isWeb && !it.isOpen;
     if (webTabClosed) {
@@ -190,19 +192,31 @@ function renderChrome(payload) {
       btn.classList.add('shell-focus-member');
     }
     if (it.iconInverted) btn.classList.add('is-icon-inverted');
+    if (isWorkspace) btn.classList.add('is-workspace');
     btn.setAttribute('aria-label', name);
     btn.dataset.shortcutId = it.id;
     btn.dataset.shortcutType = it.type || '';
 
     const wrap = document.createElement('span');
     wrap.className = 'shell-shortcut-icon-wrap';
-    wrap.appendChild(buildShortcutIcon(it.icon || '', name));
+    if (isWorkspace && window.UsualDeskWorkspace) {
+      wrap.appendChild(window.UsualDeskWorkspace.folderGlyph(it.members));
+    } else {
+      wrap.appendChild(buildShortcutIcon(it.icon || '', name));
+    }
     btn.appendChild(wrap);
     applyStripBadge(btn, it.id);
 
     let ignoreClickUntil = 0;
     btn.addEventListener('click', () => {
       if (Date.now() < ignoreClickUntil) return;
+      if (isWorkspace) {
+        if (focusModeState.active && !it.isFocusMember && window.usualDeskShell.exitFocusMode) {
+          window.usualDeskShell.exitFocusMode().catch(() => {});
+        }
+        window.usualDeskShell.activateShortcut(it.id);
+        return;
+      }
       // Left-click sobre un icono que NO es miembro del Modo Foco lo cancela.
       // Si SÍ es miembro, solo navegamos hacia esa ventana sin romper el foco,
       // para poder moverse entre las pestañas que forman parte del foco.
@@ -335,6 +349,13 @@ const shellHomeBtn = document.getElementById('shell-home-btn');
 if (shellHomeBtn && window.usualDeskShell.openDockWelcomeHome) {
   shellHomeBtn.addEventListener('click', () => {
     window.usualDeskShell.openDockWelcomeHome('todos').catch(() => {});
+  });
+}
+
+const shellDownloadsBtn = document.getElementById('shell-downloads-btn');
+if (shellDownloadsBtn && window.usualDeskShell.openDockWelcomeHome) {
+  shellDownloadsBtn.addEventListener('click', () => {
+    window.usualDeskShell.openDockWelcomeHome('downloads').catch(() => {});
   });
 }
 

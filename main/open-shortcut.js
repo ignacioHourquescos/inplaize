@@ -781,10 +781,8 @@ async function openWebShortcut(shortcut) {
     win.__usualDeskShortcutLabel = shortcut.name || 'Web';
     win.__usualDeskShortcut = shortcut;
     const woke = require('./detached-web-frame').wakeHost(win);
-    if (win.isMinimized()) win.restore();
     if (win.isFullScreen()) win.setFullScreen(false);
-    if (!win.isMaximized()) win.maximize();
-    win.focus();
+    forceWindowForeground(win);
     win.__usualDeskNotificationsMuted = desiredNotificationsMuted;
     const hosted = getHostedWebContents(win);
     if (hosted) hosted.setAudioMuted(desiredAudioMuted);
@@ -825,7 +823,144 @@ async function openWebShortcut(shortcut) {
   setLastFocusedWebMapKey(mapKey);
 }
 
+const workspaceOpenInflight = new Map();
+
+function workspaceWindowKey(id) {
+  return `workspace:${String(id || '')}`;
+}
+
+function tabCoversWorkspaceMember(tab, member, hostPartition) {
+  const wantUrl = normalizeUrlKey(member.url || '');
+  if (!wantUrl) return false;
+  const wantPart = partitionFromSessionId(member.sessionId);
+  const tabPart = (tab && tab.partition) || hostPartition;
+  if (tabPart !== wantPart) return false;
+  const pinned = tab && tab.workspaceUrl ? normalizeUrlKey(tab.workspaceUrl) : '';
+  if (pinned === wantUrl) return true;
+  return normalizeUrlKey((tab && tab.url) || '') === wantUrl;
+}
+
+function stampWorkspaceTab(tab, member) {
+  if (!tab || !member) return;
+  tab.workspaceUrl = member.url;
+  tab.partition = partitionFromSessionId(member.sessionId);
+}
+
+/**
+ * Un toque en la carpeta abre cada página del workspace como pestaña
+ * de una sola ventana. Las apps de escritorio se lanzan aparte.
+ * @param {import('./shortcuts-store').Shortcut | Record<string, unknown>} workspace
+ */
+async function openWorkspaceTabs(workspace) {
+  const key = workspaceWindowKey(workspace && workspace.id);
+  const inflight = workspaceOpenInflight.get(key);
+  if (inflight) {
+    await inflight.catch(() => {});
+    return openWorkspaceTabs(workspace);
+  }
+  const job = openWorkspaceTabsNow(workspace, key);
+  workspaceOpenInflight.set(key, job);
+  try {
+    await job;
+  } finally {
+    if (workspaceOpenInflight.get(key) === job) workspaceOpenInflight.delete(key);
+  }
+}
+
+/**
+ * @param {import('./shortcuts-store').Shortcut | Record<string, unknown>} workspace
+ * @param {string} mapKey
+ */
+async function openWorkspaceTabsNow(workspace, mapKey) {
+  const members = Array.isArray(workspace.members) ? workspace.members : [];
+  const webs = members.filter(
+    (member) =>
+      member &&
+      member.type !== 'app' &&
+      member.type !== 'workspace' &&
+      typeof member.url === 'string' &&
+      /^https?:\/\//i.test(member.url.trim()),
+  );
+  const apps = members.filter((member) => member && member.type === 'app');
+
+  for (const app of apps) {
+    try {
+      await openShortcut(app);
+    } catch {
+      /* una app que no arranca no impide abrir el resto */
+    }
+  }
+  if (!webs.length) return;
+
+  const first = webs[0];
+  const partition = partitionFromSessionId(first.sessionId);
+  const frame = require('./detached-web-frame');
+  let win = webWindowsByUrlKey.get(mapKey);
+
+  if (!win || win.isDestroyed()) {
+    const hostShortcut = {
+      id: first.id,
+      type: 'web',
+      name: first.name || workspace.name || 'Web',
+      url: first.url.trim(),
+      sessionId: first.sessionId || '',
+      audioMuted: first.audioMuted === true,
+      notificationsMuted: first.notificationsMuted === true,
+    };
+    win = await frame.createDetachedWebHostWindow(hostShortcut, mapKey, partition);
+    win.__usualDeskShortcutLabel = workspace.name || hostShortcut.name || 'Workspace';
+    const state = win.__usualDeskTabState;
+    const main = state && state.tabs.get(state.mainId);
+    stampWorkspaceTab(main, first);
+    win.on('closed', () => {
+      deleteWebWindowForMapKey(mapKey);
+    });
+    wireWebWindowFocusTracking(win, mapKey);
+  } else {
+    frame.wakeHost(win);
+  }
+
+  const state = win.__usualDeskTabState;
+  const openings = [];
+  for (const member of webs) {
+    if (!state) break;
+    let covered = false;
+    for (const tab of state.tabs.values()) {
+      if (!tabCoversWorkspaceMember(tab, member, state.partition)) continue;
+      stampWorkspaceTab(tab, member);
+      covered = true;
+      break;
+    }
+    if (covered) continue;
+    openings.push(
+      frame
+        .openSubTabInHost(win, member.url.trim(), {
+          background: true,
+          partition: partitionFromSessionId(member.sessionId),
+        })
+        .then((tabId) => {
+          stampWorkspaceTab(state.tabs.get(tabId), member);
+        }),
+    );
+  }
+  await Promise.all(openings);
+
+  try {
+    require('./embed-app-host').suspendOnHost(win);
+  } catch {
+    /* la ventana igual se enfoca si no hay una app embebida */
+  }
+  focusWebWindowByMapKey(mapKey);
+  setLastFocusedWebMapKey(mapKey);
+  syncOpenWebKeysToDock();
+}
+
 async function openShortcut(shortcut) {
+  if (shortcut && shortcut.type === 'workspace') {
+    await openWorkspaceTabs(shortcut);
+    return;
+  }
+
   if (shortcut.type === 'app') {
     if (process.platform === 'win32') {
       try {
@@ -873,7 +1008,7 @@ async function openShortcut(shortcut) {
  * @param {string} mapKey
  * @returns {boolean}
  */
-function focusWebWindowByMapKey(mapKey) {
+function focusWebWindowByMapKey(mapKey, opts = {}) {
   if (!mapKey || typeof mapKey !== 'string') return false;
   const win = webWindowsByUrlKey.get(mapKey);
   if (!win || win.isDestroyed()) return false;
@@ -883,7 +1018,23 @@ function focusWebWindowByMapKey(mapKey) {
   if (!win.isMaximized()) win.maximize();
   forceWindowForeground(win);
   const hosted = getHostedWebContents(win);
-  if (hosted && !hosted.isDestroyed()) {
+  if (opts && opts.searchBar) {
+    const focusShell = () => {
+      if (!win || win.isDestroyed()) return;
+      try {
+        win.webContents.focus();
+      } catch {
+        /* noop */
+      }
+      try {
+        win.webContents.send('focus-search-bar');
+      } catch {
+        /* noop */
+      }
+    };
+    focusShell();
+    setTimeout(focusShell, 60);
+  } else if (hosted && !hosted.isDestroyed()) {
     try {
       hosted.focus();
     } catch {

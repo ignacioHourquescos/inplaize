@@ -16,6 +16,10 @@ const {
 
   pushUndoBeforeChange,
 
+  walkShortcuts,
+
+  findShortcutById,
+
 } = require('./shortcuts-store');
 
 const {
@@ -169,6 +173,8 @@ const IPC_CHANNELS = [
 
   'chrome-open-add-shortcut',
 
+  'pin-tab-as-shortcut',
+
   'chrome-open-appearance',
 
   'chrome-enter-shortcuts-edit-mode',
@@ -294,6 +300,167 @@ const IPC_CHANNELS = [
 function trackCountChange(before, after, addedEvent, removedEvent) {
   if (after > before && addedEvent) analytics.track(addedEvent);
   else if (after < before && removedEvent) analytics.track(removedEvent);
+}
+
+function pinTabTitle(raw, url) {
+  const title = String(raw || '').trim();
+  if (title && !/^(pestaña|cargando…|cargando\.\.\.|web)$/i.test(title)) return title.slice(0, 60);
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '').slice(0, 60) || 'Web';
+  } catch {
+    return 'Web';
+  }
+}
+
+function pinUniqueName(list, base) {
+  const name = (base || 'Web').trim().slice(0, 60) || 'Web';
+  let candidate = name;
+  let i = 2;
+  const taken = (value) => list.some(
+    (item) => String((item && item.name) || '').trim().toLowerCase() === value.toLowerCase(),
+  );
+  while (taken(candidate)) {
+    const suffix = ` (${i})`;
+    candidate = `${name.slice(0, Math.max(1, 60 - suffix.length))}${suffix}`;
+    i += 1;
+  }
+  return candidate;
+}
+
+function pinSessionsMatch(pinSession, shortcutSession) {
+  const { sanitizeSessionId } = require('./session-partition');
+  const a = sanitizeSessionId(pinSession);
+  const b = sanitizeSessionId(shortcutSession);
+  if (a === b) return true;
+  const blank = (value) => !value || value === 'dock-default';
+  return blank(a) && blank(b);
+}
+
+function pinUrlsMatch(liveUrl, savedUrl, normalizeUrlKey) {
+  const live = normalizeUrlKey(liveUrl);
+  const saved = normalizeUrlKey(savedUrl);
+  if (!live || !saved) return false;
+  if (live === saved || live.startsWith(`${saved}/`) || saved.startsWith(`${live}/`)) return true;
+  try {
+    const a = new URL(live);
+    const b = new URL(saved);
+    const hostA = a.hostname.replace(/^www\./, '');
+    const hostB = b.hostname.replace(/^www\./, '');
+    if (hostA !== hostB) return false;
+    const pathA = a.pathname.replace(/\/+$/, '') || '/';
+    const pathB = b.pathname.replace(/\/+$/, '') || '/';
+    return pathA === pathB || pathA.startsWith(`${pathB}/`) || pathB.startsWith(`${pathA}/`);
+  } catch {
+    return false;
+  }
+}
+
+/** Icono automático (favicon). Un emoji o un archivo elegido a mano no se pisa. */
+function autoSiteIcon(icon) {
+  const value = String(icon || '').trim();
+  if (!value) return true;
+  if (value.startsWith('data:image/')) return true;
+  return /^https?:\/\//i.test(value);
+}
+
+function resolvePinFavicon(id, url, hint, replace) {
+  Promise.resolve()
+    .then(async () => {
+      const { resolveWebFavicon } = require('./web-favicon');
+      const dataUrl = await resolveWebFavicon(url, hint);
+      if (!dataUrl || !dataUrl.startsWith('data:image/')) return;
+      const next = loadShortcuts();
+      const item = findShortcutById(next, id);
+      if (!item) return;
+      if (item.icon && !replace) return;
+      if (item.icon === dataUrl) return;
+      if (replace && item.icon) pushUndoBeforeChange();
+      item.icon = dataUrl;
+      saveShortcuts(next);
+      broadcastShortcutsChanged();
+    })
+    .catch(() => {});
+}
+
+function findMatchingPinnedPage(list, url, sessionId) {
+  const { normalizeUrlKey } = require('./web-map-key');
+  return walkShortcuts(list, (item) => (
+    item.type === 'web'
+    && pinSessionsMatch(sessionId, item.sessionId)
+    && pinUrlsMatch(url, item.url, normalizeUrlKey)
+  ));
+}
+
+function detachShortcut(list, id) {
+  const key = String(id || '');
+  if (!key) return null;
+  const top = list.findIndex((item) => item && String(item.id) === key);
+  if (top >= 0) return list.splice(top, 1)[0];
+  for (const item of list) {
+    if (!item || item.type !== 'workspace' || !Array.isArray(item.members)) continue;
+    const index = item.members.findIndex((member) => member && String(member.id) === key);
+    if (index >= 0) return item.members.splice(index, 1)[0];
+  }
+  return null;
+}
+
+/**
+ * Soltar sobre un icono: las dos piezas pasan a un workspace (carpeta).
+ * Si el destino ya es un workspace, la página entra ahí.
+ * No muta `list` cuando no hay nada que agrupar.
+ */
+function stackPageOnto(list, targetId, pageEntry) {
+  const target = list.find((item) => item && String(item.id) === String(targetId));
+  if (!target || !pageEntry) return null;
+  const existing = findMatchingPinnedPage(list, pageEntry.url, pageEntry.sessionId);
+  if (existing && String(existing.id) === String(target.id)) {
+    return { ok: false, reason: 'exists', id: String(target.id) };
+  }
+  const incoming = existing
+    ? JSON.parse(JSON.stringify(existing))
+    : pageEntry;
+
+  if (target.type === 'workspace') {
+    const members = Array.isArray(target.members) ? target.members : [];
+    if (members.some((member) => member && String(member.id) === String(incoming.id))) {
+      return { ok: false, reason: 'exists', id: String(target.id) };
+    }
+    if (existing) detachShortcut(list, existing.id);
+    const live = list.find((item) => item && String(item.id) === String(target.id));
+    if (!live) return null;
+    live.members = [...(Array.isArray(live.members) ? live.members : []), incoming];
+    unwrapThinWorkspaces(list);
+    return { ok: true, id: String(live.id), createdPage: !existing };
+  }
+
+  const targetIndex = list.findIndex((item) => item && String(item.id) === String(target.id));
+  const targetCopy = JSON.parse(JSON.stringify(target));
+  detachShortcut(list, target.id);
+  if (existing) detachShortcut(list, existing.id);
+  const names = [];
+  walkShortcuts(list, (item) => {
+    names.push(item);
+    return false;
+  });
+  const workspace = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    type: 'workspace',
+    name: pinUniqueName(names, 'Workspace'),
+    members: [targetCopy, incoming],
+  };
+  list.splice(Math.max(0, Math.min(list.length, targetIndex)), 0, workspace);
+  unwrapThinWorkspaces(list);
+  const placed = list.find((item) => item && item.type === 'workspace' && String(item.id) === workspace.id);
+  return { ok: true, id: placed ? placed.id : workspace.id, createdPage: !existing };
+}
+
+function unwrapThinWorkspaces(list) {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const item = list[i];
+    if (!item || item.type !== 'workspace' || !Array.isArray(item.members)) continue;
+    if (item.members.length === 1) list.splice(i, 1, item.members[0]);
+    else if (!item.members.length) list.splice(i, 1);
+  }
 }
 
 /** Notas ya contadas como editadas en esta sesión: el renderer guarda en cada tecla. */
@@ -763,6 +930,14 @@ function registerIpcHandlers(state) {
       ? { result: 'shown', surface: surface || 'unknown' }
       : { result: 'hidden' });
 
+    if (revealed && surface === 'home') {
+      setTimeout(() => {
+        if (!dockWin || dockWin.isDestroyed()) return;
+        try { dockWin.focus(); } catch { /* noop */ }
+        try { dockWin.webContents.focus(); } catch { /* noop */ }
+      }, 80);
+    }
+
     recordHotkeyToggle(revealed);
   }
 
@@ -827,9 +1002,8 @@ function registerIpcHandlers(state) {
       if (win && !win.isDestroyed() && win.__usualDeskDetachedChromeHost) {
         const mk = win.__usualDeskDetachedOwnMapKey;
         if (mk) {
-          const list = loadShortcuts();
-          const s = list.find((x) => x && x.type === 'web' && webMapKey(x) === mk);
-          if (s && s.id != null) sid = String(s.id);
+          const { shortcutIdForHostMapKey } = require('./detached-web-frame');
+          sid = shortcutIdForHostMapKey(mk);
         }
       }
     } catch {
@@ -900,6 +1074,86 @@ function registerIpcHandlers(state) {
       });
     }
     return true;
+  });
+
+  ipcMain.handle('pin-tab-as-shortcut', async (_event, page) => {
+    const url = page && typeof page.url === 'string' ? page.url.trim() : '';
+    if (!/^https?:\/\//i.test(url)) return { ok: false, reason: 'url' };
+    const { sanitizeSessionId, sessionIdFromName } = require('./session-partition');
+    const list = loadShortcuts().map((item) => (item && typeof item === 'object' ? { ...item } : item));
+    const requestedSession = sanitizeSessionId(page && page.sessionId);
+    const title = pinTabTitle(page && page.title, url);
+    const sessionId = requestedSession || sessionIdFromName(title) || sanitizeSessionId(`id-${Date.now()}`);
+    const existing = findMatchingPinnedPage(list, url, sessionId);
+    const ontoId = page && page.ontoId != null ? String(page.ontoId) : '';
+    const target = ontoId ? list.find((item) => item && String(item.id) === ontoId) : null;
+    const { sameSiteIconHint } = require('./web-favicon');
+    const hint = sameSiteIconHint(url, page && page.favicon);
+
+    const visibleId = (match) => {
+      if (!match) return '';
+      if (list.some((item) => item && String(item.id) === String(match.id))) return String(match.id);
+      const folder = list.find((item) => (
+        item
+        && item.type === 'workspace'
+        && Array.isArray(item.members)
+        && item.members.some((member) => member && String(member.id) === String(match.id))
+      ));
+      return folder ? String(folder.id) : String(match.id);
+    };
+
+    if (!target) {
+      if (existing) {
+        if (autoSiteIcon(existing.icon)) resolvePinFavicon(existing.id, url, hint, true);
+        return { ok: false, reason: 'exists', id: visibleId(existing) };
+      }
+      const name = pinUniqueName(list, title);
+      const id = Date.now().toString();
+      const entry = {
+        id,
+        name,
+        type: 'web',
+        url,
+        sessionId: requestedSession || sessionIdFromName(name) || sanitizeSessionId(`id-${id}`),
+      };
+      const index = typeof page.index === 'number' && Number.isFinite(page.index) ? page.index : list.length;
+      const at = Math.max(0, Math.min(list.length, Math.round(index)));
+      const before = list.length;
+      pushUndoBeforeChange();
+      list.splice(at, 0, entry);
+      saveShortcuts(list);
+      trackCountChange(before, list.length, 'shortcut_created', 'shortcut_deleted');
+      broadcastShortcutsChanged();
+      resolvePinFavicon(id, url, hint, false);
+      return { ok: true, id };
+    }
+
+    const names = [];
+    walkShortcuts(list, (item) => {
+      names.push(item);
+      return false;
+    });
+    const entry = existing || {
+      id: Date.now().toString(),
+      name: pinUniqueName(names, title),
+      type: 'web',
+      url,
+      sessionId,
+    };
+    const stacked = stackPageOnto(list, ontoId, entry);
+    if (!stacked || !stacked.ok) {
+      return stacked || { ok: false, reason: 'exists', id: visibleId(existing) || ontoId };
+    }
+    pushUndoBeforeChange();
+    saveShortcuts(list);
+    if (stacked.createdPage) analytics.track('shortcut_created');
+    broadcastShortcutsChanged();
+    if (stacked.createdPage) {
+      resolvePinFavicon(entry.id, url, hint, false);
+    } else if (existing && autoSiteIcon(existing.icon)) {
+      resolvePinFavicon(existing.id, url, hint, true);
+    }
+    return { ok: true, id: stacked.id };
   });
 
   ipcMain.handle('chrome-open-appearance', () => {
@@ -1000,7 +1254,17 @@ function registerIpcHandlers(state) {
 
 
 
+  ipcMain.on('dock-suppress-expand', () => {
+    state.suppressExpandOnFocusUntil = Date.now() + 600;
+    state.expandOnFocusToken = 0;
+    state.reopenHomeOnFocus = false;
+  });
+
   ipcMain.handle('open-shortcut', async (_event, shortcut) => {
+
+    state.suppressExpandOnFocusUntil = Date.now() + 600;
+    state.expandOnFocusToken = 0;
+    state.reopenHomeOnFocus = false;
 
     if (shortcut && typeof shortcut === 'object') {
       analytics.track('shortcut_opened', describeShortcut(shortcut));
@@ -1418,9 +1682,9 @@ function registerIpcHandlers(state) {
     // Recibir archivos desde el teléfono (QR en el panel de descargas).
     const phoneUpload = require('./phone-upload-server');
     phoneUpload.startPhoneUploadServer().catch(() => {});
-    ipcMain.handle('phone-upload-get-info', () => {
+    ipcMain.handle('phone-upload-get-info', (_event, qrColor) => {
       analytics.track('phone_upload_opened');
-      return phoneUpload.getConnectInfo();
+      return phoneUpload.getConnectInfo(qrColor);
     });
   }
 

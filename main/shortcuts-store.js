@@ -86,9 +86,32 @@ function pushUndoBeforeChange() {
   if (undoStack.length > MAX_SHORTCUT_UNDO) undoStack.shift();
 }
 
+/** Recorre accesos de la franja y los que viven dentro de un workspace. */
+function walkShortcuts(list, visit) {
+  if (!Array.isArray(list) || typeof visit !== 'function') return null;
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    if (visit(item)) return item;
+    if (item.type === 'workspace' && Array.isArray(item.members)) {
+      for (const member of item.members) {
+        if (member && visit(member)) return member;
+      }
+    }
+  }
+  return null;
+}
+
+function findShortcutById(list, id) {
+  const key = String(id || '');
+  if (!key) return null;
+  return walkShortcuts(list, (item) => String(item.id) === key);
+}
+
 module.exports = {
   loadShortcuts,
   saveShortcuts,
   broadcastShortcutsChanged,
   pushUndoBeforeChange,
+  walkShortcuts,
+  findShortcutById,
 };

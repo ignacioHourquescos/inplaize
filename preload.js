@@ -8,7 +8,9 @@ contextBridge.exposeInMainWorld('usualDesk', {
   setIgnoreMouse: (ignore) => ipcRenderer.invoke('set-ignore-mouse', ignore),
   getShortcuts: () => ipcRenderer.invoke('get-shortcuts'),
   saveShortcuts: (shortcuts) => ipcRenderer.invoke('save-shortcuts', shortcuts),
+  pinTabAsShortcut: (page) => ipcRenderer.invoke('pin-tab-as-shortcut', page || {}),
   openShortcut: (shortcut) => ipcRenderer.invoke('open-shortcut', shortcut),
+  suppressDockExpand: () => ipcRenderer.send('dock-suppress-expand'),
   openPastedUrl: (url) => ipcRenderer.invoke('open-pasted-url', url),
   showUrlPrompt: () => ipcRenderer.invoke('url-prompt-show'),
   openAppBrowser: () => ipcRenderer.invoke('app-browser-open'),
@@ -135,6 +137,9 @@ contextBridge.exposeInMainWorld('usualDesk', {
   onLooseNavShortcut: (callback) => {
     ipcRenderer.on('loose-nav-shortcut', (_event, action) => callback(String(action || '')));
   },
+  onFocusSearchBar: (callback) => {
+    ipcRenderer.on('focus-search-bar', () => callback());
+  },
   looseNavNavigate: (url) => ipcRenderer.invoke('loose-nav-navigate', { url }),
   looseNavBack: () => ipcRenderer.invoke('loose-nav-back'),
   looseNavForward: () => ipcRenderer.invoke('loose-nav-forward'),
@@ -219,7 +224,7 @@ contextBridge.exposeInMainWorld('usualDesk', {
   onDownloadDone: (callback) => {
     ipcRenderer.on('dock-download-done', (_event, payload) => callback(payload));
   },
-  getPhoneUploadInfo: () => ipcRenderer.invoke('phone-upload-get-info'),
+  getPhoneUploadInfo: (qrColor) => ipcRenderer.invoke('phone-upload-get-info', qrColor || ''),
 
   /* ---- Cajón mágico (comprimir/convertir archivos con ffmpeg) ---- */
   magicTransform: (filePath, action, target) =>

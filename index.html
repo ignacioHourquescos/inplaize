@@ -12,6 +12,7 @@
   <script src="canvas-theme.js"></script>
   <link rel="stylesheet" href="onboarding.css">
   <link rel="stylesheet" href="page-find-bar.css">
+  <link rel="stylesheet" href="strip-chrome-lock.css">
 </head>
 <body>
   <div id="app">
@@ -34,6 +35,7 @@
     <!-- Sidebar panel -->
     <div id="sidebar" data-mouse-hit>
       <div id="sidebar-chrome">
+        <div class="strip-url-cluster" data-mouse-hit>
         <button
           type="button"
           id="dock-home-btn"
@@ -46,30 +48,88 @@
         >
           <span class="dock-home-logo-mark" aria-hidden="true">
             <svg class="logo-mark" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
-              <rect x="7.5" y="7.5" width="11" height="11" rx="3" fill="#fff"/>
-              <circle cx="13" cy="13" r="2" fill="#8b5cf6"/>
+              <rect x="7.5" y="7.5" width="11" height="11" rx="3" fill="currentColor"/>
+              <circle cx="13" cy="13" r="2" fill="var(--ud-chrome-strip-bg)"/>
+            </svg>
+          </span>
+        </button>
+        <button
+          type="button"
+          id="dock-downloads-btn"
+          class="dock-downloads-strip-btn shell-shortcut-item"
+          data-mouse-hit
+          data-tooltip="Descargas"
+          data-tooltip-placement="bottom"
+          aria-label="Descargas"
+          aria-pressed="false"
+        >
+          <span class="dock-home-logo-mark" aria-hidden="true">
+            <svg class="logo-mark" viewBox="0 0 26 26" fill="none" aria-hidden="true" focusable="false">
+              <path d="M13 6.5v11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M8.5 13.5 13 18l4.5-4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </span>
         </button>
         <div class="strip-rail-divider strip-search-divider" aria-hidden="true"></div>
         <div class="strip-leading" data-mouse-hit>
+        <form
+          id="strip-profile-search"
+          class="strip-profile-search"
+          autocomplete="off"
+          data-mouse-hit
+          hidden
+        >
+          <span class="strip-profile-search-field" data-mouse-hit>
+          <button
+            type="button"
+            class="strip-profile-search-lupa"
+            data-mouse-hit
+            data-tooltip="Buscar con el perfil principal"
+            data-tooltip-placement="bottom"
+            aria-label="Buscar con el perfil principal"
+            aria-expanded="false"
+          >
+            <span class="strip-search-mark" aria-hidden="true">
+              <svg class="strip-profile-search-icon" viewBox="0 0 24 24" fill="none">
+                <circle cx="10.5" cy="10.5" r="5.6" stroke="currentColor" stroke-width="2.3"/>
+                <path d="M14.8 14.8 19.2 19.2" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+              </svg>
+            </span>
+          </button>
+          <input
+            type="text"
+            class="strip-profile-search-input"
+            data-mouse-hit
+            spellcheck="false"
+            autocomplete="off"
+            enterkeyhint="search"
+            aria-label="Buscar con el perfil principal"
+            placeholder="Buscar"
+            tabindex="-1"
+          />
+          <span class="strip-profile-search-avatar"></span>
+          </span>
+        </form>
+        <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de navegación"></nav>
+        </div>
+        </div>
         <button
           type="button"
           id="strip-search"
           class="strip-search"
           data-mouse-hit
-          data-tooltip="Buscar"
+          data-tooltip="Mostrar pestañas"
           data-tooltip-placement="bottom"
-          aria-label="Buscar"
+          aria-label="Mostrar la barra de pestañas"
+          aria-expanded="false"
         >
-          <svg class="strip-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2.2"/>
-            <path d="M15.2 15.2 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>
+          <span class="strip-search-line" aria-hidden="true"></span>
+          <span class="strip-search-mark" aria-hidden="true">
+            <svg class="strip-search-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M6.5 9.5 12 15l5.5-5.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
         </button>
-        <nav id="loose-nav-accounts" class="loose-nav-accounts" data-mouse-hit aria-label="Perfiles de navegación"></nav>
-        </div>
-        <div class="strip-rail-divider" aria-hidden="true"></div>
         <div id="shortcuts-container">
         <div id="strip-end-actions" class="strip-end-actions">
           <button
@@ -143,19 +203,10 @@
         </div>
       </div>
 
-      <div id="loose-nav-bar" class="loose-nav-bar hidden" data-mouse-hit aria-label="Navegador">
+      <div id="loose-nav-bar" class="loose-nav-bar is-search-idle hidden" data-mouse-hit aria-label="Buscador">
         <div class="loose-nav-tabs-row">
           <form id="loose-nav-omnibox" class="loose-nav-omnibox" autocomplete="off" data-mouse-hit>
             <div id="loose-nav-controls" class="loose-nav-controls"></div>
-            <button type="button" id="loose-nav-add-shortcut-btn" class="loose-nav-add-shortcut" data-mouse-hit data-tooltip-placement="bottom" hidden>
-              <span class="loose-nav-add-shortcut-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 16.5V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  <path d="M8.2 3.5h7.6L14.6 9l2.4 2.2H7L9.4 9 8.2 3.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-                </svg>
-              </span>
-              <span class="loose-nav-add-shortcut-label">Generar acceso directo…</span>
-            </button>
             <div id="loose-nav-omnibox-face" class="omnibox-face is-empty" aria-hidden="true"></div>
             <input
               id="loose-nav-omnibox-input"
@@ -188,20 +239,6 @@
       <div id="dock-viewport" class="dock-viewport">
         <div id="dock-home-panel" class="dock-home-panel" data-home-view="todos">
           <nav id="home-nav" class="home-nav" data-mouse-hit aria-label="Secciones">
-            <button
-              type="button"
-              class="home-nav-item"
-              data-home-nav="downloads"
-              aria-pressed="false"
-              aria-label="Descargas"
-              data-tooltip="Descargas"
-              data-tooltip-placement="right"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
             <div id="home-nav-pages" class="home-nav-pages" role="group" aria-label="Secciones de notas"></div>
             <button
               type="button"
@@ -217,25 +254,11 @@
             </button>
           </nav>
           <section id="todo-home" class="todo-home" data-mouse-hit aria-label="Notas">
+            <div id="notes-segments" class="notes-segments" role="tablist" aria-label="Secciones de notas"></div>
             <div id="notion-root" class="notion-root"></div>
           </section>
 
           <div id="canvas-rail" class="canvas-rail" data-mouse-hit>
-            <button
-              type="button"
-              id="dock-downloads-btn"
-              class="canvas-history-btn canvas-downloads-btn"
-              data-mouse-hit
-              aria-label="Descargas"
-              aria-pressed="false"
-              data-tooltip="Descargas"
-              data-tooltip-placement="right"
-            >
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 4v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                <path d="M6 12l6 7 6-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
             <button
               type="button"
               id="canvas-undo-btn"
@@ -297,9 +320,7 @@
               data-tooltip="Arrastrá para agrandar o achicar"
               data-tooltip-placement="right"
             ></div>
-            <div id="downloads-home-grid" class="downloads-home-grid">
-              <!-- Tile fijo: QR para recibir archivos desde el teléfono. Siempre primero.
-                   Los divisores violeta por fecha se insertan por JS a continuación. -->
+            <aside class="downloads-home-side" aria-label="Teléfono y filtros">
               <div class="download-tile-cell" id="downloads-phone-cell">
                 <div
                   id="downloads-phone-tile"
@@ -314,65 +335,116 @@
                   <p id="downloads-phone-hint" class="downloads-phone-hint">Generando…</p>
                 </div>
               </div>
-            </div>
-            <p id="downloads-home-empty" class="downloads-home-empty">
-              Acá aparece lo que llegue a Descargas o al Escritorio: desde tus
-              ventanas, otros programas o tu teléfono.
-            </p>
-            <!-- Cajón mágico: dock flotante en la parte inferior de la grilla. -->
-            <aside id="magic-drawer" class="magic-drawer" data-mouse-hit aria-label="Cajón mágico">
-              <div class="magic-drawer-zones">
-                <div
-                  class="magic-zone"
-                  id="magic-zone-compress-image"
-                  data-action="compress-image"
-                  data-accepts="image"
-                  data-tooltip="Soltá una imagen para comprimirla"
-                  data-tooltip-placement="top"
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/>
-                    <circle cx="9" cy="9" r="1.8" fill="currentColor"/>
-                    <path d="M4 17l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <span class="magic-zone-label">Comprimir imagen</span>
-                </div>
-                <div
-                  class="magic-zone"
-                  id="magic-zone-compress-video"
-                  data-action="compress-video"
-                  data-accepts="video"
-                  data-tooltip="Soltá un video para comprimirlo"
-                  data-tooltip-placement="top"
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="2.5" y="5" width="13" height="14" rx="3" stroke="currentColor" stroke-width="2"/>
-                    <path d="M15.5 10l6-3.5v11l-6-3.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                  </svg>
-                  <span class="magic-zone-label">Comprimir video</span>
-                </div>
-                <div
-                  class="magic-zone"
-                  id="magic-zone-convert"
-                  data-action="convert"
-                  data-accepts="image video audio"
-                  data-tooltip="Soltá un archivo para convertir su formato"
-                  data-tooltip-placement="top"
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M4 9a8 8 0 0 1 14-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M18 3v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M20 15a8 8 0 0 1-14 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    <path d="M6 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <span class="magic-zone-label">Convertir</span>
-                </div>
+              <div id="downloads-filters" class="downloads-filters">
+                <label class="downloads-filter-search">
+                  <input
+                    id="downloads-filter-search"
+                    type="search"
+                    placeholder="Buscar archivo"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="Buscar archivo"
+                  />
+                </label>
+                <label class="downloads-filter-field">
+                  <span class="downloads-filter-label">Tipo</span>
+                  <select id="downloads-filter-type" class="downloads-filter-select" data-filter="type" aria-label="Tipo de archivo">
+                    <option value="all">Todos</option>
+                    <option value="image">Imágenes</option>
+                    <option value="video">Videos</option>
+                    <option value="pdf">PDF</option>
+                    <option value="doc">Documentos</option>
+                    <option value="audio">Audio</option>
+                    <option value="archive">Comprimidos</option>
+                    <option value="other">Otros</option>
+                  </select>
+                </label>
+                <label class="downloads-filter-field">
+                  <span class="downloads-filter-label">Fecha</span>
+                  <select id="downloads-filter-date" class="downloads-filter-select" data-filter="date" aria-label="Fecha">
+                    <option value="all">Todo</option>
+                    <option value="today">Hoy</option>
+                    <option value="7d">7 días</option>
+                    <option value="30d">30 días</option>
+                  </select>
+                </label>
+                <label class="downloads-filter-field">
+                  <span class="downloads-filter-label">Origen</span>
+                  <select id="downloads-filter-origin" class="downloads-filter-select" data-filter="origin" aria-label="Origen">
+                    <option value="all">Todo</option>
+                    <option value="downloads">Descargas</option>
+                    <option value="desktop">Escritorio</option>
+                    <option value="phone">Teléfono</option>
+                  </select>
+                </label>
+                <label class="downloads-filter-field">
+                  <span class="downloads-filter-label">Estado</span>
+                  <select id="downloads-filter-progress" class="downloads-filter-select" aria-label="Estado de descarga">
+                    <option value="all">Todos</option>
+                    <option value="progress">En curso</option>
+                  </select>
+                </label>
               </div>
             </aside>
+            <div class="downloads-home-main">
+              <p id="downloads-home-empty" class="downloads-home-empty">
+                Acá aparece lo que llegue a Descargas o al Escritorio: desde tus
+                ventanas, otros programas o tu teléfono.
+              </p>
+              <div id="downloads-home-grid" class="downloads-home-grid"></div>
+              <aside id="magic-drawer" class="magic-drawer" data-mouse-hit aria-label="Cajón mágico">
+                <div class="magic-drawer-zones">
+                  <div
+                    class="magic-zone"
+                    id="magic-zone-compress-image"
+                    data-action="compress-image"
+                    data-accepts="image"
+                    data-tooltip="Soltá una imagen para comprimirla"
+                    data-tooltip-placement="top"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/>
+                      <circle cx="9" cy="9" r="1.8" fill="currentColor"/>
+                      <path d="M4 17l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="magic-zone-label">Comprimir imagen</span>
+                  </div>
+                  <div
+                    class="magic-zone"
+                    id="magic-zone-compress-video"
+                    data-action="compress-video"
+                    data-accepts="video"
+                    data-tooltip="Soltá un video para comprimirlo"
+                    data-tooltip-placement="top"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="2.5" y="5" width="13" height="14" rx="3" stroke="currentColor" stroke-width="2"/>
+                      <path d="M15.5 10l6-3.5v11l-6-3.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="magic-zone-label">Comprimir video</span>
+                  </div>
+                  <div
+                    class="magic-zone"
+                    id="magic-zone-convert"
+                    data-action="convert"
+                    data-accepts="image video audio"
+                    data-tooltip="Soltá un archivo para convertir su formato"
+                    data-tooltip-placement="top"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M4 9a8 8 0 0 1 14-2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M18 3v4h-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M20 15a8 8 0 0 1-14 2.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M6 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="magic-zone-label">Convertir</span>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
 
-          <!-- Visor fijo (1/3 derecho): imágenes (con edición básica), PDFs y videos.
-               Sin archivo seleccionado muestra un placeholder. -->
+          <!-- Visor (1/3 derecho): solo aparece al abrir un archivo previsualizable. -->
           <aside id="image-drawer" class="image-drawer is-empty" data-mouse-hit aria-label="Vista previa de archivo">
             <div class="image-drawer-head">
               <span id="image-drawer-title" class="image-drawer-title"></span>
@@ -805,12 +877,17 @@
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="strip-search.js"></script>
+  <script src="strip-chrome-lock.js"></script>
+  <script src="strip-profile-search.js"></script>
   <script src="profile-rail-menu.js"></script>
   <script src="onboarding.js"></script>
   <script src="page-find-bar.js"></script>
   <script src="tab-strip-fit.js"></script>
+  <script src="tab-pin-drag.js"></script>
+  <script src="workspace-folder.js"></script>
   <script src="theme-art.js"></script>
   <script src="renderer.js"></script>
+  <script src="image-markup.js"></script>
   <script src="document-editor.bundle.js"></script>
   <script src="document-markdown.js"></script>
   <script src="document-modal.js"></script>

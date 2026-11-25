@@ -51,6 +51,7 @@
     btn.type = 'button';
     btn.className = 'loose-nav-account';
     if (opts.partition) btn.dataset.partition = opts.partition;
+    if (opts.incognito) btn.dataset.incognito = '1';
     btn.title = opts.tooltip;
     btn.setAttribute('aria-label', opts.tooltip);
     btn.setAttribute('aria-pressed', opts.active ? 'true' : 'false');
@@ -58,9 +59,19 @@
     if (opts.isDefault) btn.classList.add('is-default');
     btn.appendChild(profileAvatar(opts));
 
-    btn.addEventListener('click', () => {
+    btn.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
       opts.onClick?.();
     });
+    if (opts.onSetDefault) {
+      btn.addEventListener('contextmenu', (ev) => {
+        if (opts.isDefault) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        opts.onSetDefault();
+      });
+    }
     return btn;
   }
 
@@ -81,6 +92,8 @@
       railItems.push({
         key: opts.key,
         active: !!opts.active,
+        isDefault: !!opts.isDefault,
+        partition: typeof opts.partition === 'string' ? opts.partition : '',
         label: opts.label,
         detail: opts.menuDetail || '',
         icon: typeof opts.avatar === 'string' && opts.avatar.startsWith('data:image/') ? opts.avatar : '',
@@ -89,19 +102,25 @@
         mount: () => accountButton(opts),
       });
     };
-    for (const a of accounts) {
-      const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
-      const who = a.name && a.email ? `${a.name} (${a.email})` : display;
+    const railAccounts = [
+      ...accounts.filter((a) => !a.incognito),
+      ...accounts.filter((a) => a.incognito),
+    ];
+    for (const a of railAccounts) {
+      const display = a.name || a.email || a.label;
+      const who = a.incognito
+        ? 'Sin sesión'
+        : (a.name && a.email ? `${a.name} (${a.email})` : display);
       const count = counts[a.partition] || 0;
       const tabsLabel = count === 1 ? '1 pestaña' : `${count} pestañas`;
       const isDefault = a.partition === defaultPartition;
       remember({
         key: a.partition,
-        label: a.name || a.email,
+        label: a.incognito ? 'Sin sesión' : (a.name || a.email),
         menuDetail: [a.incognito ? 'Incógnito' : a.name ? a.email : '', tabsLabel]
           .filter(Boolean)
           .join(' · '),
-        tooltip: `${who} · ${tabsLabel}`,
+        tooltip: `${who} · ${tabsLabel} · ${isDefault ? 'perfil principal' : 'clic derecho: dejar como principal'}`,
         avatar: a.avatar,
         seed: a.email || a.partition,
         incognito: !!a.incognito,
@@ -109,6 +128,7 @@
         isDefault,
         partition: a.partition,
         onClick: () => api?.looseNavUseAccount?.({ partition: a.partition }),
+        onSetDefault: () => api?.looseNavSetDefaultProfile?.({ partition: a.partition }),
       });
     }
     for (const c of chrome) {
@@ -117,22 +137,39 @@
         key: `chrome:${c.directory}`,
         label: c.email || c.name,
         menuDetail: 'Perfil de Chrome · se trae a inplaize la primera vez que lo usás',
-        tooltip: `${who} · traer desde Chrome`,
+        tooltip: `${who} · traer desde Chrome · clic derecho: dejar como principal`,
         avatar: c.avatar,
         seed: c.email || c.name,
         incognito: false,
         active: false,
         isDefault: false,
         onClick: () => api?.looseNavUseAccount?.({ chromeDirectory: c.directory }),
+        onSetDefault: () => api?.looseNavSetDefaultProfile?.({ chromeDirectory: c.directory }),
       });
     }
+    const editing = document.documentElement.getAttribute('data-profiles-edit') === 'on';
+    const primary = railItems.find((item) => item.isDefault) || railItems[0] || null;
+    const rest = primary && !editing ? railItems.filter((item) => item !== primary) : railItems;
+    global.UsualDeskStripProfileSearch?.sync({
+      profile: editing ? null : primary,
+      mountAvatar: primary && !editing ? () => primary.mount() : null,
+      onSubmit: (value) => {
+        global.UsualDeskStripProfileSearch?.setOpen(false);
+        delete document.documentElement.dataset.profileLupa;
+        document.querySelector('#strip-profile-search .loose-nav-account')?.classList.add('is-active');
+        const partition = primary && primary.partition ? primary.partition : '';
+        api?.looseNavNewTab?.(value, partition ? { partition } : undefined);
+      },
+      editing,
+    });
     const split = global.UsualDeskProfileRail
-      ? global.UsualDeskProfileRail.pickVisible(railItems, false)
-      : { visible: railItems, overflow: [] };
+      ? global.UsualDeskProfileRail.pickVisible(rest, editing, editing ? undefined : 2)
+      : { visible: rest, overflow: [] };
     for (const item of split.visible) rail.appendChild(item.mount());
     if (global.UsualDeskProfileRail && railItems.length > 1) {
       global.UsualDeskProfileRail.mountMore(rail, global.UsualDeskProfileRail.menuItems(split));
     }
+    document.getElementById('strip-search')?.classList.remove('is-guest-active');
   }
 
   global.__dockRefreshProfileRail = () => {

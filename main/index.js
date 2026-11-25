@@ -150,6 +150,17 @@ app.whenReady().then(() => {
   enableAutoStart();
 
   createWindow();
+  try {
+    const { attachStripChromeLock } = require('./strip-chrome-lock-inject');
+    app.on('browser-window-created', (_e, win) => {
+      if (win && !win.isDestroyed()) attachStripChromeLock(win.webContents);
+    });
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (win && !win.isDestroyed()) attachStripChromeLock(win.webContents);
+    });
+  } catch {
+    /* noop */
+  }
   require('./web-hibernation').startWebHibernation();
   require('./process-report').startProcessReports();
   require('./usage-snapshot').startUsageSnapshots();

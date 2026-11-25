@@ -8,6 +8,8 @@
  * "=sueldo: 850000" define una variable, que vale para los renglones de más
  * abajo en la misma columna. "total" suma los resultados de arriba, desde el
  * total anterior. "1200 + 21%" suma el porcentaje.
+ * Un renglón que empieza con + − * / o ^ usa el resultado anterior (ANS),
+ * como la calculadora: después de 125, "/12" es 125/12.
  * Coma y punto valen como decimal; "1.234,56" y "1.234.567" llevan miles.
  * Lo que no se puede calcular queda como texto común, sin resultado.
  * El resultado se escribe con el formato de setFormat: separador de miles,
@@ -241,6 +243,14 @@
     return tokens.length === 1 || (tokens.length === 2 && tokens[1].t === '%');
   }
 
+  /** + − * / ^ al inicio: el operando izquierdo es el resultado anterior. */
+  function withAnswer(tokens, ans) {
+    if (ans == null || !tokens.length) return tokens;
+    const op = tokens[0].t;
+    if (op !== '+' && op !== '-' && op !== '*' && op !== '/' && op !== '^') return tokens;
+    return [{ t: 'num', v: ans }, ...tokens];
+  }
+
   /**
    * Recibe los textos de una columna, de arriba hacia abajo ('' para lo que
    * no es texto).
@@ -250,18 +260,21 @@
     const vars = new Map();
     let sumAbove = 0;
     let calcMode = false;
+    let ans = null;
     return (Array.isArray(lines) ? lines : []).map((raw) => {
       const src = String(raw == null ? '' : raw).trim();
       if (!src) {
         calcMode = false;
+        ans = null;
         return null;
       }
       if (src[0] === '=') calcMode = true;
       if (!calcMode) return null;
       const line = parseLine(src);
       if (!line) return null;
-      const tokens = tokenize(line.expr);
-      if (!tokens || !tokens.length) return null;
+      const parsed = tokenize(line.expr);
+      if (!parsed || !parsed.length) return null;
+      const tokens = withAnswer(parsed, ans);
       let result;
       try {
         result = evaluate(tokens, vars, sumAbove);
@@ -272,6 +285,7 @@
       const value = clean(result.v);
       const number = formatNumber(value, true);
       if (!number) return null;
+      ans = value;
       if (line.name) vars.set(line.name.toLowerCase(), { v: value, pct: result.pct });
       if (result.usesTotal) sumAbove = 0;
       else if (!result.pct) sumAbove = clean(sumAbove + value);

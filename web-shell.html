@@ -9,10 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Miranda+Sans:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="shell-home-menu.css" />
   <link rel="stylesheet" href="web-shell.css" />
+  <link rel="stylesheet" href="strip-chrome-lock.css" />
   <script src="canvas-theme.js"></script>
 </head>
 <body>
   <header class="shell-top" role="banner">
+    <div class="strip-url-cluster">
     <button
       type="button"
       id="shell-home-btn"
@@ -24,29 +26,78 @@
     >
       <span class="dock-home-logo-mark" aria-hidden="true">
         <svg class="logo-mark" viewBox="0 0 26 26" aria-hidden="true" focusable="false">
-          <rect x="7.5" y="7.5" width="11" height="11" rx="3" fill="#fff"/>
-          <circle cx="13" cy="13" r="2" fill="#8b5cf6"/>
+          <rect x="7.5" y="7.5" width="11" height="11" rx="3" fill="currentColor"/>
+          <circle cx="13" cy="13" r="2" fill="var(--ud-chrome-strip-bg)"/>
+        </svg>
+      </span>
+    </button>
+    <button
+      type="button"
+      id="shell-downloads-btn"
+      class="shell-downloads-strip-btn shell-shortcut-item"
+      aria-pressed="false"
+      data-tooltip="Descargas"
+      data-tooltip-placement="bottom"
+      aria-label="Descargas"
+    >
+      <span class="dock-home-logo-mark" aria-hidden="true">
+        <svg class="logo-mark" viewBox="0 0 26 26" fill="none" aria-hidden="true" focusable="false">
+          <path d="M13 6.5v11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M8.5 13.5 13 18l4.5-4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </span>
     </button>
     <div class="strip-rail-divider strip-search-divider" aria-hidden="true"></div>
     <div class="strip-leading">
+    <form id="strip-profile-search" class="strip-profile-search" autocomplete="off" hidden>
+      <span class="strip-profile-search-field">
+      <button
+        type="button"
+        class="strip-profile-search-lupa"
+        data-tooltip="Buscar con el perfil principal"
+        data-tooltip-placement="bottom"
+        aria-label="Buscar con el perfil principal"
+        aria-expanded="false"
+      >
+        <span class="strip-search-mark" aria-hidden="true">
+          <svg class="strip-profile-search-icon" viewBox="0 0 24 24" fill="none">
+            <circle cx="10.5" cy="10.5" r="5.6" stroke="currentColor" stroke-width="2.3"/>
+            <path d="M14.8 14.8 19.2 19.2" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+          </svg>
+        </span>
+      </button>
+      <input
+        type="text"
+        class="strip-profile-search-input"
+        spellcheck="false"
+        autocomplete="off"
+        enterkeyhint="search"
+        aria-label="Buscar con el perfil principal"
+        placeholder="Buscar"
+        tabindex="-1"
+      />
+      <span class="strip-profile-search-avatar"></span>
+      </span>
+    </form>
+    <nav id="loose-nav-accounts" class="loose-nav-accounts" aria-label="Perfiles de navegación"></nav>
+    </div>
+    </div>
     <button
       type="button"
       id="strip-search"
       class="strip-search"
-      data-tooltip="Buscar"
+      data-tooltip="Mostrar pestañas"
       data-tooltip-placement="bottom"
-      aria-label="Buscar"
+      aria-label="Mostrar la barra de pestañas"
+      aria-expanded="false"
     >
-      <svg class="strip-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2.2"/>
-        <path d="M15.2 15.2 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-      </svg>
+      <span class="strip-search-line" aria-hidden="true"></span>
+      <span class="strip-search-mark" aria-hidden="true">
+        <svg class="strip-search-icon" viewBox="0 0 24 24" fill="none">
+          <path d="M6.5 9.5 12 15l5.5-5.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
     </button>
-    <nav id="loose-nav-accounts" class="loose-nav-accounts" aria-label="Perfiles de navegación"></nav>
-    </div>
-    <div class="strip-rail-divider" aria-hidden="true"></div>
     <div id="shortcut-strip" class="shortcut-strip" role="toolbar" aria-label="Accesos directos">
     <div id="strip-end-actions" class="strip-end-actions">
       <button
@@ -106,9 +157,12 @@
   <script src="profile-rail-menu.js"></script>
   <script src="shell-nav-profiles.js"></script>
   <script src="strip-search.js"></script>
+  <script src="strip-chrome-lock.js"></script>
+  <script src="strip-profile-search.js"></script>
   <script src="strip-gestures.js"></script>
   <script src="shell-home-menu.js"></script>
   <script src="tab-strip-fit.js"></script>
+  <script src="workspace-folder.js"></script>
   <script src="web-shell-renderer.js"></script>
 </body>
 </html>

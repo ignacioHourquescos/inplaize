@@ -990,11 +990,44 @@ export function mount(host, options) {
         'aria-label': 'Contenido del documento',
         'aria-multiline': 'true',
       },
-      handleClick(_view, _pos, event) {
+      handleClick(view, pos, event) {
         const target = event.target;
         const anchor = target && target.closest ? target.closest('a') : null;
         if (anchor) event.preventDefault();
-        return false;
+        const img = target && target.closest ? target.closest('img') : null;
+        const markup = window.InplaizeImageMarkup;
+        if (!img || !view.dom.contains(img) || !markup || typeof markup.open !== 'function') return false;
+        let imagePos = pos;
+        let imageNode = view.state.doc.nodeAt(imagePos);
+        if (!imageNode || imageNode.type.name !== 'image') {
+          const $pos = view.state.doc.resolve(Math.max(0, Math.min(pos, view.state.doc.content.size)));
+          if ($pos.nodeBefore && $pos.nodeBefore.type.name === 'image') {
+            imageNode = $pos.nodeBefore;
+            imagePos = $pos.pos - imageNode.nodeSize;
+          } else if ($pos.nodeAfter && $pos.nodeAfter.type.name === 'image') {
+            imageNode = $pos.nodeAfter;
+            imagePos = $pos.pos;
+          } else {
+            return false;
+          }
+        }
+        if (!imageNode.attrs.src) return false;
+        event.preventDefault();
+        try {
+          view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, imagePos)));
+        } catch {
+          /* la imagen igual se abre para dibujar */
+        }
+        const at = imagePos;
+        markup.open(imageNode.attrs.src, (next) => {
+          if (!alive || !editor) return;
+          const current = editor.state.doc.nodeAt(at);
+          if (!current || current.type.name !== 'image') return;
+          const clean = sanitizeBrowserSrc(next);
+          if (!clean) return;
+          editor.view.dispatch(editor.state.tr.setNodeMarkup(at, undefined, { ...current.attrs, src: clean }));
+        });
+        return true;
       },
       handlePaste(_view, event) {
         const files = imageFiles(event.clipboardData);

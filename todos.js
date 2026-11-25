@@ -346,43 +346,125 @@
     }
   }
 
+  function defaultNotesTitle(index) {
+    return index === 0 ? 'Notas' : `Notas ${index + 1}`;
+  }
+
   function notesPageLabel(page, index) {
     const title = String(page && page.title || '').trim();
     if (title) return title;
-    return index === 0 ? 'Notas' : `Notas ${index + 1}`;
+    return defaultNotesTitle(index);
+  }
+
+  function commitOpenSegmentTitle() {
+    const input = document.querySelector('#notes-segments .notes-segment-input');
+    if (!input || input.dataset.cancel === '1' || input.dataset.done === '1') return;
+    const pageId = input.dataset.notesPageId || '';
+    const pageIndex = state.pages.findIndex((page) => page.id === pageId);
+    if (pageIndex < 0) return;
+    const next = input.value.trim() || defaultNotesTitle(pageIndex);
+    const page = state.pages[pageIndex];
+    page.title = next;
+    if (page.id === state.activePageId) state.title = next;
+    input.dataset.done = '1';
+    scheduleSave();
+  }
+
+  function beginRenameSegment(pageId) {
+    const host = document.getElementById('notes-segments');
+    if (!host || host.querySelector('.notes-segment-input')) return;
+    const pageIndex = state.pages.findIndex((page) => page.id === pageId);
+    const page = pageIndex >= 0 ? state.pages[pageIndex] : null;
+    const chip = host.querySelector(`[data-notes-page-id="${CSS.escape(pageId)}"]`);
+    if (!page || !chip) return;
+    selectedIds = new Set();
+    selectionAnchorId = null;
+    applySelectionClasses();
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'notes-segment-input';
+    input.dataset.notesPageId = page.id;
+    input.value = notesPageLabel(page, pageIndex);
+    input.maxLength = 48;
+    input.setAttribute('aria-label', 'Título de la sección');
+    chip.replaceWith(input);
+    input.focus();
+    input.select();
+    const finish = () => {
+      if (input.dataset.finish === '1') return;
+      input.dataset.finish = '1';
+      if (input.dataset.cancel !== '1') commitOpenSegmentTitle();
+      if (input.isConnected) renderNotesNav();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        input.dataset.cancel = '1';
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', finish);
   }
 
   function renderNotesNav(opts) {
     const host = document.getElementById('home-nav-pages');
-    if (!host) return;
+    const segments = document.getElementById('notes-segments');
+    if (!host && !segments) return;
+    commitOpenSegmentTitle();
     syncActiveIntoPages();
     const panel = document.getElementById('dock-home-panel');
     const onTodos = panel && panel.getAttribute('data-home-view') === 'todos';
-    host.innerHTML = '';
+    if (host) host.innerHTML = '';
+    if (segments) segments.innerHTML = '';
     state.pages.forEach((page, index) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'home-nav-item home-nav-page';
-      btn.dataset.homeNav = 'todos';
-      btn.dataset.notesPageId = page.id;
       const label = notesPageLabel(page, index);
-      btn.setAttribute('aria-label', label);
-      btn.dataset.tooltip = label;
-      btn.dataset.tooltipPlacement = 'right';
-      btn.setAttribute(
-        'aria-pressed',
-        onTodos && page.id === state.activePageId ? 'true' : 'false'
-      );
-      btn.innerHTML = NOTES_ICON_SVG;
-      if (opts && opts.slideId === page.id) {
-        btn.classList.add('is-sliding-in');
-        btn.addEventListener('animationend', () => btn.classList.remove('is-sliding-in'), { once: true });
+      const selected = onTodos && page.id === state.activePageId;
+      if (host) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'home-nav-item home-nav-page';
+        btn.dataset.homeNav = 'todos';
+        btn.dataset.notesPageId = page.id;
+        btn.setAttribute('aria-label', label);
+        btn.dataset.tooltip = label;
+        btn.dataset.tooltipPlacement = 'right';
+        btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        btn.innerHTML = NOTES_ICON_SVG;
+        if (opts && opts.slideId === page.id) {
+          btn.classList.add('is-sliding-in');
+          btn.addEventListener('animationend', () => btn.classList.remove('is-sliding-in'), { once: true });
+        }
+        btn.addEventListener('click', () => {
+          selectNotesPage(page.id);
+        });
+        host.appendChild(btn);
       }
-      btn.addEventListener('click', () => {
-        selectNotesPage(page.id);
-      });
-      host.appendChild(btn);
+      if (segments) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'notes-segment-chip';
+        chip.dataset.notesPageId = page.id;
+        chip.setAttribute('role', 'tab');
+        chip.setAttribute('aria-selected', selected ? 'true' : 'false');
+        chip.textContent = label;
+        chip.dataset.tooltip = selected ? 'Clic para cambiar el título' : label;
+        chip.dataset.tooltipPlacement = 'bottom';
+        if (opts && opts.slideId === page.id) {
+          chip.classList.add('is-sliding-in');
+          chip.addEventListener('animationend', () => chip.classList.remove('is-sliding-in'), { once: true });
+        }
+        chip.addEventListener('click', () => {
+          if (page.id === state.activePageId) beginRenameSegment(page.id);
+          else selectNotesPage(page.id);
+        });
+        segments.appendChild(chip);
+      }
     });
+    if (opts && opts.editId) beginRenameSegment(opts.editId);
     const addBtn = document.getElementById('home-nav-add-page');
     if (addBtn) {
       addBtn.disabled = state.pages.length >= MAX_PAGES;
@@ -433,7 +515,7 @@
     seedHistory();
     scheduleSave();
     showNotesHome();
-    renderNotesNav({ slideId: page.id });
+    renderNotesNav({ slideId: page.id, editId: page.id });
   }
 
   let saveChain = Promise.resolve();
@@ -2017,6 +2099,19 @@
         return;
       }
       if (gesture.onImage && gesture.blockId) {
+        const found = findBlock(gesture.blockId);
+        const markup = window.InplaizeImageMarkup;
+        if (found && found.block.src && markup && typeof markup.open === 'function') {
+          const blockId = gesture.blockId;
+          markup.open(found.block.src, (next) => {
+            const current = findBlock(blockId);
+            if (!current || !next) return;
+            current.block.src = next;
+            render({ id: current.block.id, skipFocus: true });
+            scheduleSave(`image:${current.block.id}`);
+          });
+          return;
+        }
         selectedIds = new Set([gesture.blockId]);
         selectionAnchorId = gesture.blockId;
         applySelectionClasses();
@@ -2759,7 +2854,7 @@
       frame.className = 'notion-image-frame';
       frame.tabIndex = 0;
       frame.setAttribute('role', 'img');
-      frame.setAttribute('aria-label', 'Imagen');
+      frame.setAttribute('aria-label', 'Imagen. Clic para dibujar encima');
       const img = document.createElement('img');
       img.className = 'notion-image';
       img.alt = '';
@@ -2851,6 +2946,7 @@
   }, true);
 
   document.addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('.notes-segment-input')) return;
     if ((e.key === 'Backspace' || e.key === 'Delete') && selectedIds.size && !editingText()) {
       if (document.documentElement.classList.contains('doc-modal-open')) return;
       e.preventDefault();
@@ -2906,7 +3002,7 @@
     if (e.button !== 0 || blockGesture || (press && press.dragging)) return;
     const origin = eventElement(e);
     if (!origin || !homeEl.contains(origin)) return;
-    if (origin.closest('.notion-col-resize, .notion-col-remove, .notion-col-add, .notion-menu, .notion-calc')) return;
+    if (origin.closest('.notion-col-resize, .notion-col-remove, .notion-col-add, .notion-menu, .notion-calc, .notes-segments')) return;
 
     const row = origin.closest('.notion-block');
     if (row && origin.closest('.notion-grip')) {

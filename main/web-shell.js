@@ -72,6 +72,40 @@ function isWhatsAppWeb(url) {
 }
 
 /** @param {unknown} shortcut */
+function workspaceChromeItem(shortcut) {
+  const members = (Array.isArray(shortcut.members) ? shortcut.members : []).map((member) => ({
+    id: String(member.id),
+    type: member.type || 'web',
+    name: (member.name && String(member.name)) || '',
+    icon: iconFromShortcut(member),
+    iconInverted: member.iconInverted === true,
+    url: typeof member.url === 'string' ? member.url : '',
+    sessionId: typeof member.sessionId === 'string' ? member.sessionId : '',
+  }));
+  const workspaceKey = `workspace:${shortcut.id}`;
+  let isOpen = false;
+  let isActive = false;
+  try {
+    const openShortcutApi = require('./open-shortcut');
+    isOpen = openShortcutApi.getOpenWebWindowKeys().includes(workspaceKey);
+    isActive = openShortcutApi.focusedWebMapKey() === workspaceKey;
+  } catch {
+    /* el estado abierto se pinta en el próximo refresh */
+  }
+  return {
+    id: String(shortcut.id),
+    type: 'workspace',
+    name: (shortcut.name && String(shortcut.name)) || 'Workspace',
+    icon: '',
+    iconInverted: false,
+    members,
+    mapKey: workspaceKey,
+    isOpen,
+    isActive,
+    isFocusMember: false,
+  };
+}
+
 function iconFromShortcut(shortcut) {
   if (!shortcut || typeof shortcut !== 'object') return '';
   const icon = /** @type {{ icon?: string }} */ (shortcut).icon;
@@ -94,6 +128,9 @@ function buildChromePayload() {
   const items = shortcuts.map((s) => {
     const name = (s.name && String(s.name)) || '';
     const icon = iconFromShortcut(s);
+    if (s.type === 'workspace') {
+      return workspaceChromeItem(s);
+    }
     if (s.type === 'web') {
       const mk = webMapKey(s);
       return {
@@ -329,6 +366,11 @@ function ensureShellWindow() {
 
   shellWin.loadFile(path.join(root, 'web-shell.html'));
   lockWindowZoom(shellWin.webContents);
+  try {
+    require('./strip-chrome-lock-inject').attachStripChromeLock(shellWin.webContents);
+  } catch {
+    /* noop */
+  }
 
   shellWin.webContents.once('did-finish-load', () => {
     broadcastChromeToRenderer();
@@ -483,7 +525,15 @@ function selectTabByMapKey(mapKey) {
 }
 
 function closeTabByMapKey(mapKey) {
-  if (!mapKey || !tabs.has(mapKey)) return false;
+  if (!mapKey) return false;
+  if (!tabs.has(mapKey)) {
+    try {
+      require('./open-shortcut').closeWebWindowByMapKey(mapKey);
+    } catch {
+      /* la carpeta puede vivir en otra ventana */
+    }
+    return false;
+  }
   destroyTabView(mapKey);
 
   if (activeMapKey === mapKey) {
@@ -666,7 +716,8 @@ function registerShellIpc(ipcMain) {
   ipcMain.handle('shell-activate-shortcut', async (_event, id) => {
     if (id == null) return false;
     const list = loadShortcuts();
-    const s = list.find((x) => String(x.id) === String(id));
+    const { findShortcutById } = require('./shortcuts-store');
+    const s = findShortcutById(list, id);
     if (!s) return false;
     const { openShortcut } = require('./open-shortcut');
     await openShortcut(s);

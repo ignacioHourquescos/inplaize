@@ -1,157 +1,95 @@
 /**
- * Icono de lupa en la franja: al clic enfoca la omnibox (misma fila que pestañas).
- * No es un campo de texto; el tipeo vive en la barra de dirección.
+ * Control de la franja que abre la barra de pestañas.
+ * Es una línea entre perfiles y accesos, con un chevron chico en el medio.
+ * Cerrada apunta hacia abajo; abierta, hacia arriba.
  */
 (function initStripSearch(global) {
   let pinning = false;
-  let handingOff = false;
 
-  function bridge() {
-    if (global.usualDesk && typeof global.usualDesk.looseNavNewTab === 'function') return global.usualDesk;
-    if (global.usualDeskShell && typeof global.usualDeskShell.looseNavNewTab === 'function') return global.usualDeskShell;
-    if (global.usualDeskDetached && typeof global.usualDeskDetached.looseNavNewTab === 'function') {
-      return global.usualDeskDetached;
-    }
-    return null;
-  }
-
-  function firstPartition() {
-    const rail = document.getElementById('loose-nav-accounts');
-    const btn = rail && rail.querySelector('.loose-nav-account[data-partition]');
-    const partition = btn && btn.dataset.partition ? btn.dataset.partition : '';
-    return partition;
-  }
-
-  function hasHandoff() {
-    return typeof global.__dockHandoffStripSearch === 'function';
-  }
-
-  function handoffToOmnibox(seed, opts) {
-    if (!hasHandoff() || handingOff) return false;
-    handingOff = true;
-    try {
-      global.__dockHandoffStripSearch(seed, opts || {});
-    } finally {
-      queueMicrotask(() => {
-        handingOff = false;
-      });
-    }
-    return true;
-  }
-
-  function goSearch(text) {
-    const value = String(text || '').trim();
-    if (!value) return;
-    const api = bridge();
-    if (!api) return;
-    /* Desde un acceso directo: buscar en el primer perfil del dock, no en el acceso. */
-    const partition = firstPartition();
-    const profile = {
-      ...(partition ? { partition } : {}),
-      slideIn: true,
-    };
-    if (global.usualDeskDetached && api === global.usualDeskDetached) {
-      api.looseNavNewTab(value, profile).catch(() => {});
-      return;
-    }
-    api.looseNavNewTab(value, profile).catch(() => {});
+  function chevronMarkup() {
+    return '<span class="strip-search-line" aria-hidden="true"></span>'
+      + '<span class="strip-search-mark" aria-hidden="true">'
+      + '<svg class="strip-search-icon" viewBox="0 0 24 24" fill="none">'
+      + '<path d="M6.5 9.5 12 15l5.5-5.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+      + '</svg></span>';
   }
 
   function ensureButton() {
     let btn = document.getElementById('strip-search');
-    if (btn && btn.tagName === 'BUTTON') return btn;
-    if (btn && btn.tagName !== 'BUTTON') {
-      btn.remove();
-      btn = null;
+    const ready = btn && btn.tagName === 'BUTTON'
+      && btn.querySelector('.strip-search-line')
+      && btn.querySelector('.strip-search-mark .strip-search-icon');
+    if (ready) return btn;
+    if (btn && btn.tagName === 'BUTTON') {
+      btn.innerHTML = chevronMarkup();
+      return btn;
     }
-    btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'strip-search';
-    btn.className = 'strip-search';
-    btn.setAttribute('data-mouse-hit', '');
-    btn.setAttribute('data-tooltip', 'Buscar');
-    btn.setAttribute('data-tooltip-placement', 'bottom');
-    btn.setAttribute('aria-label', 'Buscar');
-    btn.innerHTML =
-      '<svg class="strip-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-      '<circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2.2"/>' +
-      '<path d="M15.2 15.2 20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>' +
-      '</svg>';
-    return btn;
+    const fresh = document.createElement('button');
+    fresh.type = 'button';
+    fresh.id = 'strip-search';
+    fresh.className = 'strip-search';
+    fresh.setAttribute('data-mouse-hit', '');
+    fresh.setAttribute('data-tooltip', 'Mostrar pestañas');
+    fresh.setAttribute('data-tooltip-placement', 'bottom');
+    fresh.setAttribute('aria-label', 'Mostrar la barra de pestañas');
+    fresh.setAttribute('aria-expanded', 'false');
+    fresh.innerHTML = chevronMarkup();
+    if (btn && btn.parentElement) btn.replaceWith(fresh);
+    return fresh;
   }
 
-  function pinBesideProfiles() {
+  /** El chevron queda entre el contenedor de perfiles y el de accesos directos. */
+  function pinBetweenContainers() {
     if (pinning) return;
-    const rail = document.getElementById('loose-nav-accounts');
-    if (!rail || !rail.parentElement) return;
+    const cluster = document.querySelector('.strip-url-cluster');
+    if (!cluster || !cluster.parentElement) return;
     pinning = true;
     try {
       const btn = ensureButton();
-      let cluster = rail.parentElement.classList.contains('strip-leading')
-        ? rail.parentElement
-        : null;
-      if (!cluster) {
-        cluster = document.createElement('div');
-        cluster.className = 'strip-leading';
-        if (rail.hasAttribute('data-mouse-hit')) cluster.setAttribute('data-mouse-hit', '');
-        rail.parentElement.insertBefore(cluster, rail);
-        cluster.appendChild(rail);
-      }
       const host = cluster.parentElement;
-      let divider =
-        (host && host.querySelector(':scope > .strip-search-divider'))
-        || cluster.querySelector(':scope > .strip-search-divider');
-      if (!divider) {
-        divider = document.createElement('div');
-        divider.className = 'strip-rail-divider strip-search-divider';
-        divider.setAttribute('aria-hidden', 'true');
+      if (btn.parentElement !== host || btn.previousElementSibling !== cluster) {
+        const after = cluster.nextSibling;
+        if (after) host.insertBefore(btn, after);
+        else host.appendChild(btn);
       }
-      /* La lupa vive con los perfiles. El divisor queda a la izquierda de ese grupo. */
-      if (host && (divider.parentElement !== host || divider.nextElementSibling !== cluster)) {
-        host.insertBefore(divider, cluster);
-      }
-      if (btn.parentElement !== cluster || cluster.firstElementChild !== btn) {
-        cluster.insertBefore(btn, cluster.firstChild);
-      }
-      if (rail.parentElement !== cluster || btn.nextElementSibling !== rail) {
-        cluster.insertBefore(rail, btn.nextSibling);
-      }
-      cluster.style.display = 'flex';
-      cluster.style.flexDirection = 'row';
-      cluster.style.flexWrap = 'nowrap';
-      cluster.style.alignItems = 'center';
-      cluster.style.flex = '';
-      btn.hidden = false;
-      btn.style.display = '';
-      btn.style.visibility = '';
-      btn.style.opacity = '';
     } finally {
       pinning = false;
     }
   }
 
+  function spinIcon(btn) {
+    const icon = btn.querySelector('.strip-search-icon');
+    if (!icon || typeof icon.animate !== 'function') return;
+    const opening = btn.getAttribute('aria-expanded') !== 'true';
+    const from = opening ? 0 : 180;
+    const to = opening ? 180 : 0;
+    const over = opening ? 210 : -30;
+    icon.getAnimations().forEach((anim) => anim.cancel());
+    icon.animate(
+      [
+        { transform: 'rotate(' + from + 'deg) scale(1)' },
+        { transform: 'rotate(' + over + 'deg) scale(1.28)', offset: 0.58 },
+        { transform: 'rotate(' + to + 'deg) scale(1)' },
+      ],
+      { duration: 560, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' },
+    );
+  }
+
   function bind() {
-    pinBesideProfiles();
+    pinBetweenContainers();
     const btn = document.getElementById('strip-search');
     if (!btn || btn.dataset.bound === '1') return;
     btn.dataset.bound = '1';
-
-    const open = (ev) => {
+    btn.addEventListener('click', (ev) => {
       ev.preventDefault();
-      if (hasHandoff()) {
-        handoffToOmnibox('', { commit: false });
-        return;
-      }
-      const api = bridge();
-      if (!api) return;
-      goSearch('');
-    };
-    btn.addEventListener('click', open);
+      spinIcon(btn);
+      if (typeof global.__dockRevealNavBar === 'function') global.__dockRevealNavBar();
+    });
 
     const root = document.getElementById('sidebar-chrome') || document.querySelector('.shell-top');
     if (root && root.dataset.searchWatch !== '1') {
       root.dataset.searchWatch = '1';
-      const observer = new MutationObserver(() => pinBesideProfiles());
+      const observer = new MutationObserver(() => pinBetweenContainers());
       observer.observe(root, { childList: true, subtree: true });
     }
   }

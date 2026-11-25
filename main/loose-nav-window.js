@@ -19,6 +19,7 @@ const browseTabsStore = require('./browse-tabs-store');
 const historyStore = require('./history-store');
 const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
 const passwordManager = require('./password-manager');
+const { applyTabNavigation, pickPageFavicon } = require('./web-favicon');
 
 /**
  * Registra una visita en el historial de la app (alimenta las sugerencias de la
@@ -215,6 +216,7 @@ function buildStatePayload() {
       email: '',
       name: labelOf(partition),
       avatar: browseProfiles.avatarFor(partition),
+      ...(partition === browseProfiles.guestPartition() ? { incognito: true } : {}),
     });
   }
   const order = browseProfiles.profileOrder();
@@ -239,6 +241,7 @@ function buildStatePayload() {
     activeCanGoBack: !!(active && active.canGoBack),
     activeCanGoForward: !!(active && active.canGoForward),
     activeLoading: !!(active && active.loading),
+    promptAddress: !!(activeTabId && addressPromptTabs.has(activeTabId)),
     pendingTabSlide: slide,
     accounts: { accounts: railAccounts, chrome: cache.rail.chrome },
     activePartition,
@@ -473,10 +476,10 @@ function attachTabEvents(tab) {
   });
 
   wc.on('page-favicon-updated', (_e, favicons) => {
-    if (Array.isArray(favicons) && favicons.length) {
-      tab.favicon = String(favicons[0] || '');
-      broadcastState();
-    }
+    const picked = pickPageFavicon(favicons, tab.url);
+    if (!picked || picked === tab.favicon) return;
+    tab.favicon = picked;
+    broadcastState();
   });
 
   wc.on('did-start-loading', () => {
@@ -487,7 +490,7 @@ function attachTabEvents(tab) {
   wc.on('did-stop-loading', () => {
     tab.loading = false;
     try {
-      tab.url = wc.getURL() || tab.url;
+      applyTabNavigation(tab, wc.getURL() || tab.url);
       if (tab.title === 'Cargando…') tab.title = wc.getTitle() || tab.url;
       tab.canGoBack = wc.canGoBack();
       tab.canGoForward = wc.canGoForward();
@@ -499,7 +502,7 @@ function attachTabEvents(tab) {
   });
 
   wc.on('did-navigate', (_e, url) => {
-    tab.url = String(url || tab.url || '');
+    applyTabNavigation(tab, String(url || tab.url || ''));
     try {
       tab.canGoBack = wc.canGoBack();
       tab.canGoForward = wc.canGoForward();
@@ -514,7 +517,7 @@ function attachTabEvents(tab) {
   });
 
   wc.on('did-navigate-in-page', (_e, url) => {
-    tab.url = String(url || tab.url || '');
+    applyTabNavigation(tab, String(url || tab.url || ''));
     try {
       tab.canGoBack = wc.canGoBack();
       tab.canGoForward = wc.canGoForward();
@@ -538,7 +541,7 @@ function attachTabEvents(tab) {
     return { action: 'deny' };
   });
 
-  /** El foco suele estar en la página: los atajos de la barra se atrapan acá. */
+  /** El foco suele estar en la página: los atajos del navegador se atrapan acá. */
   wc.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const mod = input.control || input.meta;
@@ -765,10 +768,14 @@ async function openTabFromUrl(url, opts = {}) {
     });
   }
 
+  const willPromptAddress = !!(opts.promptAddress && !opts.background && activeTabId === id);
+  if (willPromptAddress) {
+    addressPromptTabs.add(id);
+  }
+
   broadcastState();
 
-  if (opts.promptAddress && !opts.background && activeTabId === id) {
-    addressPromptTabs.add(id);
+  if (willPromptAddress) {
     setImmediate(() => nudgeAddressPrompt(id));
     setTimeout(() => nudgeAddressPrompt(id), 450);
     setTimeout(() => addressPromptTabs.delete(id), 1600);
@@ -814,6 +821,8 @@ function tabIdsOfSession(partition) {
  */
 async function switchToSession(partition) {
   if (!partition) return false;
+  // El prompt de la lupa deja la vista despegada: si no se suelta, el perfil nuevo no aparece.
+  if (urlPromptOpen) urlPromptOpen = false;
   const ids = tabIdsOfSession(partition);
   if (!ids.length) {
     await openTabFromUrl(LOOSE_NAV_NEW_TAB_URL, { partition, promptAddress: true });
@@ -1623,7 +1632,7 @@ function registerLooseNavIpc() {
 
   ipcMain.handle('loose-nav-select-tab', (_e, tabId) => selectTab(String(tabId || '')));
   ipcMain.handle('loose-nav-close-tab', (_e, tabId) => closeTab(String(tabId || '')));
-  ipcMain.handle('loose-nav-new-tab', async (_e, payload) => {
+  ipcMain.handle('loose-nav-new-tab', async (event, payload) => {
     const p = payload && typeof payload === 'object' ? payload : {};
     const raw = typeof p.url === 'string' ? p.url.trim() : '';
     const target = raw ? normalizeNavInput(raw) : LOOSE_NAV_NEW_TAB_URL;
@@ -1636,6 +1645,13 @@ function registerLooseNavIpc() {
       afterId: p.nextToActive && current ? current.id : undefined,
       promptAddress: !raw,
     });
+    const dock = getDockWindow();
+    if (dock && !dock.isDestroyed() && event.sender !== dock.webContents) {
+      if (typeof expandDockHook === 'function') {
+        try { expandDockHook(); } catch { /* noop */ }
+      }
+      try { dock.focus(); } catch { /* noop */ }
+    }
     return true;
   });
 

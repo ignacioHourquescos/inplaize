@@ -28,25 +28,43 @@ body {
   overflow: hidden;
   background: var(--ud-chrome-strip-bg, #ffffff);
   color: var(--ud-chrome-text, #1f1f2b);
-  border-bottom: 1px solid var(--ud-chrome-strip-border);
+  /* Cerrada la barra, no queda el filete negro del lienzo entre los iconos y la página. */
+  border-bottom: none;
 }
 
-/* Puente del acceso activo hacia la barra de pestañas. */
-body:has(#shortcut-browser:not([hidden])) .shell-top {
+/* Puente de la lupa o del acceso activo hacia la barra inferior. */
+html[data-bar-sprout] .shell-top,
+html[data-profile-lupa='on'] .shell-top,
+body:has(#shortcut-browser:not([hidden]):not(.is-search-idle)) .shell-top {
   overflow: visible;
   border-bottom-color: transparent;
+  border-bottom-width: 0;
   z-index: 6;
 }
 
-.strip-leading > .strip-search {
+.strip-url-cluster > .strip-search,
+.strip-url-cluster > .strip-leading > .strip-search,
+.shell-top > .strip-search,
+html[data-bar-sprout] .strip-url-cluster > .strip-search,
+html[data-bar-sprout] .strip-url-cluster > .strip-leading > .strip-search,
+html[data-bar-sprout] .shell-top > .strip-search {
   display: flex !important;
-  flex: 0 0 auto !important;
-  width: var(--ud-chrome-icon, 40px) !important;
-  min-width: var(--ud-chrome-icon, 40px) !important;
-  max-width: var(--ud-chrome-icon, 40px) !important;
-  height: var(--ud-chrome-icon, 40px) !important;
+  flex: 0 0 var(--ud-chrome-split, 18px) !important;
+  align-self: stretch !important;
+  width: var(--ud-chrome-split, 18px) !important;
+  min-width: var(--ud-chrome-split, 18px) !important;
+  max-width: var(--ud-chrome-split, 18px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
   visibility: visible !important;
   opacity: 1 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  clip-path: none !important;
+  box-shadow: none !important;
+  anchor-name: none !important;
+  background: transparent !important;
 }
 
 html[data-shell-frameless='true'] .shell-top {
@@ -59,17 +77,34 @@ html[data-shell-frameless='true'] .dock-home-menu-btn,
 html[data-shell-frameless='true'] .shortcut-strip .shell-shortcut-item,
 html[data-shell-frameless='true'] .strip-add-shortcut,
 html[data-shell-frameless='true'] .shell-home-strip-btn,
+html[data-shell-frameless='true'] .shell-downloads-strip-btn,
+html[data-shell-frameless='true'] .strip-url-cluster,
 html[data-shell-frameless='true'] .strip-leading,
 html[data-shell-frameless='true'] .loose-nav-accounts,
 html[data-shell-frameless='true'] .strip-search,
+html[data-shell-frameless='true'] .strip-profile-search,
+html[data-shell-frameless='true'] .strip-profile-search-lupa,
 html[data-shell-frameless='true'] .strip-rail-divider {
   -webkit-app-region: no-drag;
 }
 
-.shell-top > .shell-home-strip-btn {
+.shell-top > .shell-home-strip-btn,
+.strip-url-cluster > .shell-home-strip-btn {
   flex-shrink: 0;
   align-self: center;
   margin-left: var(--ud-chrome-strip-pad-x);
+}
+
+.shell-top > .shell-downloads-strip-btn,
+.strip-url-cluster > .shell-downloads-strip-btn {
+  flex-shrink: 0;
+  align-self: center;
+  margin-left: calc(var(--ud-chrome-home-gap) - var(--ud-chrome-strip-gap));
+}
+
+.strip-url-cluster > .shell-home-strip-btn,
+.strip-url-cluster > .shell-downloads-strip-btn {
+  margin-right: calc(-1 * var(--ud-chrome-home-pull));
 }
 
 /* Separador de alto completo entre perfiles de navegación y accesos directos. */
@@ -112,12 +147,14 @@ html[data-shell-frameless='true'] .strip-rail-divider {
 
 .loose-nav-account {
   position: relative;
+  z-index: 9;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   width: var(--ud-chrome-icon);
   height: var(--ud-chrome-icon);
+  -webkit-app-region: no-drag;
   padding: 7px;
   box-sizing: border-box;
   border: 1px solid transparent;
@@ -188,13 +225,13 @@ html[data-shell-frameless='true'] .strip-rail-divider {
   -webkit-app-region: inherit;
 }
 
-body:has(#shortcut-browser:not([hidden])) .shortcut-strip {
+body:has(#shortcut-browser:not([hidden]):not(.is-search-idle)) .shortcut-strip {
   overflow: visible !important;
   padding-top: 0;
   padding-bottom: 0;
 }
 
-body:has(#shortcut-browser:not([hidden])) .strip-leading {
+body:has(#shortcut-browser:not([hidden]):not(.is-search-idle)) .strip-leading {
   overflow: visible;
 }
 
@@ -224,7 +261,7 @@ html[data-shell-frameless='true'] .shortcut-strip {
   flex-shrink: 0;
 }
 
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-cell {
+body:has(#shortcut-browser:not([hidden]):not(.is-search-idle)) .shell-shortcut-cell {
   overflow: visible !important;
   align-self: center;
 }
@@ -327,21 +364,23 @@ html[data-usualdesk-detached-host='true'] .shell-top {
 
 /* ==========================================================================
    Navegador de cada acceso: dirección y pestañas en la misma fila.
-   Alto = DETACHED_TABSTRIP_H (40) en detached-web-frame.js.
+   Alto = --ud-chrome-search-h / DETACHED_TABSTRIP_H.
    ========================================================================== */
 .shortcut-browser {
   position: relative;
+  z-index: 7;
   display: flex;
   flex-direction: row;
   align-items: stretch;
   gap: 0;
   flex-shrink: 0;
-  height: 40px;
+  height: var(--ud-chrome-search-h);
   padding: 0;
   margin: 0;
   box-sizing: border-box;
   background: var(--ud-chrome-strip-bg);
-  border-top: 2px solid var(--key-line);
+  /* Línea de color a todo el ancho; la tapa bajo la lupa / inplaize la corta a la izquierda. */
+  border-top: var(--ud-sprout-stroke, 2px) solid var(--key-line);
   border-bottom: none;
   -webkit-app-region: no-drag;
   color: var(--ud-chrome-text);
@@ -353,7 +392,90 @@ html[data-usualdesk-detached-host='true'] .shell-top {
   display: none !important;
 }
 
-/* Al bajar en la página se esconde la dirección; la fila sigue midiendo 40px. */
+/* Oculta hasta lupa o tipeo sin selección. El hueco lo controla main. */
+.shortcut-browser[hidden],
+.shortcut-browser:not(.is-search-revealed) {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+}
+
+.shortcut-browser.is-search-revealed:not([hidden]) {
+  display: flex !important;
+  height: var(--ud-chrome-search-h);
+  min-height: var(--ud-chrome-search-h);
+  max-height: var(--ud-chrome-search-h);
+  z-index: 5;
+}
+
+/* Con la barra cerrada el acceso activo lleva borde cerrado. Abierta, la línea lo une a la barra.
+   inplaize / Descargas no usan borde de color (no hay raya debajo). */
+html:not([data-bar-sprout]) .shell-shortcut-item.is-active:not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.dock-home-strip-btn):not(.dock-downloads-strip-btn),
+html:not([data-bar-sprout]) .shell-shortcut-item.is-active:not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):hover,
+html:not([data-bar-sprout]) .shell-shortcut-item.is-active:not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):active {
+  border: 2px solid var(--key-line);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.shortcut-browser.is-search-idle:not(.is-tabs-forced) .shortcut-browser-tabs,
+html[data-bar-sprout='lupa'] .shortcut-browser:not(.is-tabs-forced) .shortcut-browser-tabs {
+  display: none !important;
+}
+
+.shortcut-browser.is-tabs-forced .shortcut-browser-tabs {
+  display: flex !important;
+}
+
+.shortcut-browser.is-search-idle:not(.is-tabs-forced) .shortcut-browser-toolbar,
+.shortcut-browser.is-search-idle:not(.is-tabs-forced) .shortcut-browser-toolbar.is-editing,
+html[data-bar-sprout='lupa'] .shortcut-browser:not(.is-tabs-forced) .shortcut-browser-toolbar,
+html[data-bar-sprout='lupa'] .shortcut-browser:not(.is-tabs-forced) .shortcut-browser-toolbar.is-editing {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.shortcut-browser.is-search-idle .shortcut-browser-omnibox {
+  position: relative;
+}
+
+.shortcut-browser.is-search-idle .shortcut-browser-address {
+  caret-color: color-mix(in srgb, var(--ud-chrome-text) 58%, transparent);
+}
+
+.shortcut-browser.is-search-idle .shortcut-browser-toolbar:not(.is-editing) .shortcut-browser-omnibox:has(.shortcut-browser-address:placeholder-shown)::before {
+  content: '';
+  position: absolute;
+  left: var(--ud-chrome-lupa-x);
+  top: 50%;
+  width: 1px;
+  height: 15px;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, var(--ud-chrome-text) 46%, transparent);
+  animation: search-caret-blink 1.15s steps(1, end) infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes search-caret-blink {
+  0%, 46% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shortcut-browser.is-search-idle .shortcut-browser-toolbar:not(.is-editing) .shortcut-browser-omnibox:has(.shortcut-browser-address:placeholder-shown)::before {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
+/* Al bajar en la página se esconde la dirección; la fila no cambia de alto. */
 .shortcut-browser.is-url-hidden .shortcut-browser-toolbar {
   display: none;
 }
@@ -367,6 +489,18 @@ html[data-usualdesk-detached-host='true'] .shell-top {
   flex: 1 1 auto;
   width: 100%;
   max-width: none;
+}
+
+/* Búsqueda del perfil principal: la misma fila de dirección, vacía, sin las pestañas del acceso. */
+.shortcut-browser.is-profile-search .shortcut-browser-tabs {
+  display: none !important;
+}
+
+.shortcut-browser.is-profile-search .shortcut-browser-toolbar,
+.shortcut-browser.is-profile-search .shortcut-browser-toolbar.is-editing {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
 }
 
 /* Lupa: omnibox a todo el ancho; pestañas ocultas hasta Enter. */
@@ -439,7 +573,7 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   min-width: 0;
   min-height: 0;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   background: transparent;
   overflow: hidden;
 }
@@ -463,7 +597,7 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   gap: 0;
   height: auto;
   margin: 0;
-  padding: 0;
+  padding: 0 8px 0 var(--ud-chrome-strip-pad-x);
   border: none;
   border-radius: 0;
   background: var(--ud-chrome-field-bg);
@@ -485,29 +619,53 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--key-nav);
+  color: var(--key-line);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
 .shortcut-browser-nav svg {
   display: block;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.6;
 }
 
 .shortcut-browser-nav:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--key-nav) 18%, transparent);
+  color: var(--key-line);
+  background: color-mix(in srgb, var(--key-line) 16%, transparent);
 }
 
 .shortcut-browser-nav:disabled {
-  color: color-mix(in srgb, var(--ud-chrome-text) 38%, transparent);
+  color: color-mix(in srgb, var(--key-line) 38%, transparent);
   cursor: default;
+}
+
+.shortcut-browser-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  /* El ancho incluye el aire tras Descargas, para que el divisor coincida. */
+  width: var(--ud-chrome-home-cluster);
+  min-width: var(--ud-chrome-home-cluster);
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.shortcut-browser-controls-divider {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+  margin: 6px var(--ud-chrome-strip-gap) 6px 0;
+  flex-shrink: 0;
+  background: var(--ud-chrome-divider, #3f3f48);
 }
 
 .shortcut-browser-address {
@@ -515,7 +673,7 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   min-width: 0;
   height: 100%;
   margin: 0;
-  padding: 0 8px 0 2px;
+  padding: 0 8px 0 var(--ud-chrome-url-inset, 6px);
   border: none;
   border-radius: 0;
   background: transparent;
@@ -523,6 +681,7 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
+  line-height: var(--ud-chrome-search-h);
   outline: none;
 }
 
@@ -544,7 +703,7 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   position: static;
   width: auto;
   height: 100%;
-  padding: 0 8px 0 2px;
+  padding: 0 8px 0 var(--ud-chrome-url-inset, 6px);
   opacity: 1;
   pointer-events: auto;
 }
@@ -562,16 +721,23 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: var(--ud-chrome-nav-pin, 24px);
+  height: var(--ud-chrome-nav-pin, 24px);
   margin: 0;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--key-pin);
+  color: var(--ud-chrome-nav-icon);
   cursor: pointer;
   -webkit-app-region: no-drag;
+}
+
+.shortcut-add-page:disabled {
+  color: var(--ud-chrome-nav-icon-off);
+  cursor: default;
+  background: transparent !important;
+  pointer-events: none;
 }
 
 .shortcut-add-page-label {
@@ -582,12 +748,13 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   display: none;
 }
 
-.shortcut-add-page:hover {
-  background: color-mix(in srgb, var(--key-pin) 18%, transparent);
+.shortcut-add-page:hover:not(:disabled) {
+  color: var(--ud-chrome-text);
+  background: color-mix(in srgb, var(--ud-chrome-text) 14%, transparent);
 }
 
-.shortcut-add-page:active {
-  background: color-mix(in srgb, var(--key-pin) 28%, transparent);
+.shortcut-add-page:active:not(:disabled) {
+  background: color-mix(in srgb, var(--ud-chrome-text) 20%, transparent);
 }
 
 .shortcut-add-page-icon {
@@ -603,6 +770,7 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
 .shortcut-add-page-icon svg {
   width: 15px;
   height: 15px;
+  stroke-width: 2.4;
 }
 
 .shortcut-add-page-check,
@@ -723,6 +891,66 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
   box-shadow: none;
 }
 
+/* Una sola entrada: sube y el fondo pasa de rosa pleno al reposo en el mismo tiempo. */
+.subtab.is-entering {
+  z-index: 4;
+  animation: subtab-slide-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes subtab-slide-in {
+  from {
+    transform: translateY(100%);
+    background-color: var(--key-line);
+  }
+  to {
+    transform: translateY(0);
+    background-color: color-mix(in srgb, var(--ud-chrome-text) 13%, transparent);
+  }
+}
+
+.subtab-enter-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.subtab-enter-fx svg {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.subtab:has(.subtab-enter-fx) > .subtab-icon,
+.subtab:has(.subtab-enter-fx) > .subtab-title,
+.subtab:has(.subtab-enter-fx) > .subtab-close {
+  position: relative;
+  z-index: 1;
+}
+
+.subtab.is-entering-css::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--key-line);
+  pointer-events: none;
+  animation: subtab-enter-cool 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes subtab-enter-cool {
+  from { opacity: 0.92; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subtab.is-entering,
+  .subtab.is-entering-css::after {
+    animation: none;
+  }
+}
+
 .subtab-icon {
   width: 16px;
   height: 16px;
@@ -827,4 +1055,24 @@ html.is-strip-compose[data-url-slide='down'] .shortcut-browser-toolbar.is-editin
 .subtab-nav-btn:disabled {
   color: color-mix(in srgb, var(--ud-chrome-text) 38%, transparent);
   cursor: default;
+}
+
+.shell-home-strip-btn .dock-home-logo-mark,
+.shell-downloads-strip-btn .dock-home-logo-mark {
+  width: var(--ud-chrome-home-mark, 26px) !important;
+  height: var(--ud-chrome-home-mark, 26px) !important;
+  color: var(--ud-chrome-text) !important;
+  background: var(--ud-chrome-strip-bg) !important;
+  background-image: none !important;
+  border: 1.5px solid var(--ud-chrome-text) !important;
+  box-shadow: none !important;
+}
+
+.shell-top > .strip-search .strip-search-mark {
+  width: 22px !important;
+  height: 18px !important;
+  border-radius: 6px !important;
+  color: var(--ud-chrome-icon-muted, #c8c8d4) !important;
+  background: var(--ud-chrome-strip-bg) !important;
+  background-image: none !important;
 }

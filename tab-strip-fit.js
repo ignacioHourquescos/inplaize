@@ -36,7 +36,7 @@
     return { scheme: match[1], host: match[2], rest: match[3] };
   }
 
-  function paintAddressFace(el, raw) {
+  function paintAddressFace(el, raw, favicon) {
     if (!el) return;
     const parts = splitAddress(raw);
     el.replaceChildren();
@@ -45,6 +45,15 @@
       return;
     }
     el.classList.remove('is-empty');
+    const icon = typeof favicon === 'string' && /^(https?:|data:)/i.test(favicon) ? favicon : '';
+    if (icon) {
+      const img = document.createElement('img');
+      img.className = 'omnibox-favicon';
+      img.alt = '';
+      img.src = icon;
+      img.addEventListener('error', () => img.remove());
+      el.appendChild(img);
+    }
     if (parts.scheme) {
       const scheme = document.createElement('span');
       scheme.className = 'omnibox-scheme';

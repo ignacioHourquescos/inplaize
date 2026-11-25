@@ -112,6 +112,11 @@ function createDockWindow(display, state) {
   win.loadFile(path.join(root, 'index.html'));
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   lockWindowZoom(win.webContents);
+  try {
+    require('./strip-chrome-lock-inject').attachStripChromeLock(win.webContents);
+  } catch {
+    /* noop */
+  }
 
   win.webContents.once('did-finish-load', () => {
     if (!win.isDestroyed()) win.setBackgroundColor('#00000000');
@@ -210,9 +215,18 @@ function createDockWindow(display, state) {
       if (frozenWeb) {
         state.reopenHomeOnFocus = false;
       } else {
-        state.expandDock();
-        return;
+        // Un clic en un acceso enfoca el dock un instante. Si abrimos ya,
+        // se ven las pestañas del perfil de Chrome antes de volver a la ventana.
+        const token = Date.now();
+        state.expandOnFocusToken = token;
+        setTimeout(() => {
+          if (state.expandOnFocusToken !== token) return;
+          if (state.suppressExpandOnFocusUntil && Date.now() < state.suppressExpandOnFocusUntil) return;
+          if (!win || win.isDestroyed() || state.isExpanded) return;
+          state.expandDock();
+        }, 140);
       }
+      return;
     }
     rememberHomeIfShowing();
     restoreDockLayer();

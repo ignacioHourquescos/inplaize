@@ -1,6 +1,6 @@
 {
   "name": "inplaize",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "Floating dock of quick-access shortcuts for your desktop",
   "main": "main/index.js",
   "scripts": {

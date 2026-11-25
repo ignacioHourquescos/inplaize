@@ -823,21 +823,24 @@ async function startPhoneUploadServer() {
 }
 
 /**
- * Info para el popover del panel de descargas: URL actual (la IP puede cambiar
- * de red a red, por eso se calcula en cada llamada) y QR como data URL.
+ * Info para el panel de descargas: URL actual (la IP puede cambiar de red a
+ * red, por eso se calcula en cada llamada) y el QR como PNG transparente.
+ * @param {string} [qrColor] color secundario del tema (hex o rgb)
  * @returns {Promise<{ ok: boolean, url?: string, qrDataUrl?: string, error?: string }>}
  */
-async function getConnectInfo() {
+async function getConnectInfo(qrColor) {
   if (!server) return { ok: false, error: 'SERVER_DOWN' };
   const ip = getLanIp();
   if (!ip) return { ok: false, error: 'NO_LAN' };
   const url = `https://${ip}:${actualPort}/?token=${token}`;
+  const dark = String(qrColor || '').trim() || '#c8f542';
   try {
     const QRCode = require('qrcode');
     const qrDataUrl = await QRCode.toDataURL(url, {
-      margin: 1,
-      width: 240,
-      color: { dark: '#FFFFFFFF', light: '#00000000' },
+      margin: 0,
+      width: 512,
+      errorCorrectionLevel: 'M',
+      color: { dark, light: '#00000000' },
     });
     return { ok: true, url, qrDataUrl };
   } catch (err) {

@@ -205,7 +205,7 @@ function applyHomeView(view) {
   const panel = document.getElementById('dock-home-panel');
   if (panel) {
     panel.setAttribute('data-home-view', homeView);
-    panel.classList.remove('is-file-preview');
+    panel.classList.toggle('is-file-preview', homeView === 'downloads' && imageDrawerIsOpen());
   }
   kickDownloadPreviews();
   if (homeView !== 'downloads') pauseDrawerVideo();
@@ -242,14 +242,15 @@ function syncDockHomeStripBtn() {
   const editorOpen = editor && !editor.classList.contains('hidden');
   const looseOpen = lnSurface && !lnSurface.classList.contains('hidden');
   const homeVisible = !editorOpen && !looseOpen;
+  const onNotes = homeVisible && homeView !== 'downloads';
+  const onDownloads = homeVisible && homeView === 'downloads';
   if (btn) {
-    btn.classList.toggle('is-active', homeVisible);
-    btn.setAttribute('aria-pressed', homeVisible ? 'true' : 'false');
+    btn.classList.toggle('is-active', onNotes);
+    btn.setAttribute('aria-pressed', onNotes ? 'true' : 'false');
   }
   if (downloadsBtn) {
-    const on = homeView === 'downloads' && homeVisible;
-    downloadsBtn.classList.toggle('is-active', on);
-    downloadsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    downloadsBtn.classList.toggle('is-active', onDownloads);
+    downloadsBtn.setAttribute('aria-pressed', onDownloads ? 'true' : 'false');
   }
 }
 
@@ -769,6 +770,25 @@ function downloadInProgress(d) {
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg', 'avif']);
 /** Formatos que Chromium reproduce en un <video>. El resto (mkv, avi, wmv…) sigue abriéndose con la app del sistema. */
 const VIDEO_EXTS = new Set(['mp4', 'm4v', 'webm', 'mov', 'ogv', 'ogg']);
+/** Videos que el filtro agrupa aunque no se puedan reproducir en el visor. */
+const FILTER_VIDEO_EXTS = new Set([...VIDEO_EXTS, 'mkv', 'avi', 'wmv', 'mpeg', 'mpg', 'm2ts', 'ts']);
+const FILTER_DOC_EXTS = new Set([
+  'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'csv', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp', 'md',
+]);
+const FILTER_AUDIO_EXTS = new Set(['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'wma', 'aiff']);
+const FILTER_ARCHIVE_EXTS = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'iso']);
+
+const downloadFilters = {
+  type: 'all',
+  date: 'all',
+  origin: 'all',
+  inProgress: false,
+  query: '',
+};
+
+const DOWNLOADS_EMPTY_DEFAULT =
+  'Acá aparece lo que llegue a Descargas o al Escritorio: desde tus ventanas, otros programas o tu teléfono.';
+const DOWNLOADS_EMPTY_FILTERED = 'Ningún archivo coincide con estos filtros.';
 
 /** Documentos cuya miniatura genera la propia app (no el shell de Windows). */
 const DOC_THUMB_EXTS = new Set(['pdf', 'xlsx', 'xlsm', 'xls', 'csv']);
@@ -1334,6 +1354,65 @@ function buildDownloadTile(d) {
   return cell;
 }
 
+function downloadTypeOf(d) {
+  const ext = extOfName(d && d.filename);
+  if (!ext) return 'other';
+  if (IMAGE_EXTS.has(ext)) return 'image';
+  if (FILTER_VIDEO_EXTS.has(ext)) return 'video';
+  if (ext === 'pdf') return 'pdf';
+  if (FILTER_DOC_EXTS.has(ext)) return 'doc';
+  if (FILTER_AUDIO_EXTS.has(ext)) return 'audio';
+  if (FILTER_ARCHIVE_EXTS.has(ext)) return 'archive';
+  return 'other';
+}
+
+function downloadOriginOf(d) {
+  const src = String((d && d.sourceName) || '');
+  if (src === 'Escritorio') return 'desktop';
+  if (src === 'Teléfono') return 'phone';
+  return 'downloads';
+}
+
+function downloadMatchesFilters(d, now, todayMs) {
+  if (downloadFilters.type !== 'all' && downloadTypeOf(d) !== downloadFilters.type) return false;
+  if (downloadFilters.origin !== 'all' && downloadOriginOf(d) !== downloadFilters.origin) return false;
+  if (downloadFilters.inProgress && !downloadInProgress(d)) return false;
+  if (downloadFilters.query) {
+    const name = String((d && d.filename) || '').toLowerCase();
+    if (!name.includes(downloadFilters.query)) return false;
+  }
+  if (downloadFilters.date === 'all') return true;
+  const ts = effectiveTsOf(d);
+  if (downloadFilters.date === 'today') return ts >= todayMs;
+  const windowMs = downloadFilters.date === '7d' ? 7 * 86400000 : 30 * 86400000;
+  return now - ts < windowMs;
+}
+
+function initDownloadFilters() {
+  const root = document.getElementById('downloads-filters');
+  if (!root || root.dataset.bound === '1') return;
+  root.dataset.bound = '1';
+  root.querySelectorAll('select[data-filter]').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      const key = sel.dataset.filter;
+      const value = String(sel.value || '');
+      if (!key || !(key in downloadFilters) || downloadFilters[key] === value) return;
+      downloadFilters[key] = value;
+      renderDownloadsHome();
+    });
+  });
+  const progressSel = document.getElementById('downloads-filter-progress');
+  progressSel?.addEventListener('change', () => {
+    downloadFilters.inProgress = progressSel.value === 'progress';
+    renderDownloadsHome();
+  });
+  const search = document.getElementById('downloads-filter-search');
+  search?.addEventListener('input', () => {
+    downloadFilters.query = String(search.value || '').trim().toLowerCase();
+    renderDownloadsHome();
+  });
+}
+
 /** Orden y atenuación por fecha de descarga. Abrir un archivo no lo mueve. */
 function effectiveTsOf(d) {
   return Number(d && d.startedAt) || 0;
@@ -1362,21 +1441,25 @@ function renderDownloadsHome() {
     (a, b) => effectiveTsOf(b) - effectiveTsOf(a),
   );
 
-  // El tile del QR (#downloads-phone-cell) es fijo y queda primero; solo se
-  // reemplazan los tiles generados dinámicamente.
-  for (const el of [...container.children]) {
-    if (el.id !== 'downloads-phone-cell') el.remove();
-  }
+  container.replaceChildren();
 
   const now = Date.now();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
+  const visible = items.filter((d) => downloadMatchesFilters(d, now, todayMs));
+
+  if (
+    imageDrawerState.download &&
+    !visible.some((d) => String(d.id) === String(imageDrawerState.download.id))
+  ) {
+    closeImageDrawer();
+  }
 
   // Sin divisores: los tiles fluyen continuos y se atenúan según su antigüedad
   // (recién = opaco, hoy = 70%, ayer o antes = 40%). El orden ya viene de más
   // nuevo a más viejo, así que los grupos quedan agrupados naturalmente.
-  for (const d of items) {
+  for (const d of visible) {
     const bucket = downloadBucketOf(effectiveTsOf(d), now, todayMs);
     const tile = buildDownloadTile(d);
     const cls = DOWNLOAD_BUCKET_CLASS[bucket];
@@ -1384,7 +1467,12 @@ function renderDownloadsHome() {
     container.appendChild(tile);
   }
 
-  if (empty) empty.classList.toggle('hidden', items.length > 0);
+  if (empty) {
+    empty.textContent = items.length > 0 && visible.length === 0
+      ? DOWNLOADS_EMPTY_FILTERED
+      : DOWNLOADS_EMPTY_DEFAULT;
+    empty.classList.toggle('hidden', visible.length > 0);
+  }
   schedulePointerPassthroughSync();
 }
 
@@ -1417,6 +1505,11 @@ function handleDownloadEvent(payload, phase) {
   }
 }
 
+function downloadQrThemeColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--secondary').trim()
+    || '#c8f542';
+}
+
 /* Tile del teléfono: QR generado en el main con la IP LAN actual. */
 function initPhoneUploadTile() {
   const tile = document.getElementById('downloads-phone-tile');
@@ -1426,10 +1519,11 @@ function initPhoneUploadTile() {
 
   const loadQr = async () => {
     qrImg.classList.add('hidden');
+    qrImg.removeAttribute('src');
     hint.classList.remove('hidden');
     hint.textContent = 'Generando…';
     try {
-      const info = await window.usualDesk.getPhoneUploadInfo();
+      const info = await window.usualDesk.getPhoneUploadInfo(downloadQrThemeColor());
       if (info && info.ok && info.qrDataUrl) {
         qrImg.src = info.qrDataUrl;
         qrImg.classList.remove('hidden');
@@ -1450,6 +1544,7 @@ function initPhoneUploadTile() {
 
 async function initDownloadsUI() {
   initPhoneUploadTile();
+  initDownloadFilters();
 
   if (window.usualDesk.onDownloadStarted) {
     window.usualDesk.onDownloadStarted((p) => handleDownloadEvent(p, 'started'));
@@ -1477,12 +1572,10 @@ async function initDownloadsUI() {
 /* ---------------- Visor fijo de vista previa / edición de imágenes ---------------- */
 
 /**
- * Panel fijo (1/3 derecho de la pantalla de inicio) para previsualizar
- * imágenes, PDFs y videos descargados, con edición mínima de imágenes: rotar 90°,
- * espejar horizontal y guardar (sobrescribe el archivo). Solo se puede
- * guardar en formatos re-codificables (png/jpg/webp); el resto (gif, svg,
- * ico…) se previsualiza en modo solo lectura. Al hacer click en otro archivo
- * se reemplaza la vista al instante; sin selección muestra un placeholder.
+ * Visor del tercio derecho. Aparece solo al abrir una imagen, un PDF o un
+ * video. Edición mínima de imágenes: rotar 90°, espejar horizontal y guardar
+ * (sobrescribe el archivo). Solo se puede guardar en formatos re-codificables
+ * (png/jpg/webp); el resto (gif, svg, ico…) se previsualiza en modo solo lectura.
  */
 const imageDrawerState = {
   download: null,
@@ -2671,20 +2764,28 @@ async function refreshOpenWebWindowKeys() {
 
 function applyWebInactiveClassToCard(card, shortcut) {
   if (!card || !shortcut) return;
+  if (shortcut.type === 'workspace') {
+    const key = `workspace:${shortcut.id}`;
+    const open = openWebWindowKeys.has(key);
+    card.classList.remove('shortcut-web-inactive');
+    card.classList.toggle('is-open', open);
+    card.classList.toggle('is-active', open && activeWebWindowKey === key);
+    return;
+  }
   if (shortcut.type !== 'web') {
     card.classList.remove('shortcut-web-inactive', 'is-open', 'is-active');
     return;
   }
-  const mapKey = webShortcutMapKey(shortcut);
-  const isOpen = openWebWindowKeys.has(mapKey);
-  // En navegación libre el seleccionado es el perfil, no un acceso.
+  const windowOpen = [...openWebWindowKeys].some((key) => shortcutMatchesOpenKey(shortcut, key));
+  const looseActive = !!(looseNavState && looseNavState.active);
+  const page = looseActive ? looseNavActivePage() : null;
+  const matchesPage = !!(page && findShortcutForLooseNavTab(page)?.id === shortcut.id);
+  const prendida = windowOpen || matchesPage;
   const selected =
-    isOpen &&
-    !!activeWebWindowKey &&
-    mapKey === activeWebWindowKey &&
-    !(looseNavState && looseNavState.active);
-  card.classList.toggle('shortcut-web-inactive', !isOpen);
-  card.classList.toggle('is-open', isOpen);
+    matchesPage
+    || (!looseActive && windowOpen && !!activeWebWindowKey && shortcutMatchesOpenKey(shortcut, activeWebWindowKey));
+  card.classList.toggle('shortcut-web-inactive', !prendida);
+  card.classList.toggle('is-open', prendida);
   card.classList.toggle('is-active', selected);
 }
 
@@ -3470,6 +3571,7 @@ function applyShortcutsEditModeUi() {
 }
 
 function renderShortcuts() {
+  window.UsualDeskWorkspace?.close();
   if (shortcutReorder) {
     finishShortcutReorder(shortcutReorder, {
       save: shortcutReorder.active === true,
@@ -3496,6 +3598,7 @@ function renderShortcuts() {
     if (shortcut.iconInverted) card.classList.add('is-icon-inverted');
     card.dataset.shortcutId = shortcut.id;
     card.dataset.shortcutType = shortcut.type || '';
+    if (shortcut.type === 'workspace') card.classList.add('is-workspace');
     if (index === 0) {
       // Bandera para que el wizard de onboarding pueda hacer spotlight sobre
       // el primer icono del usuario en los pasos "Cerrar" y "Modo Foco".
@@ -3509,19 +3612,30 @@ function renderShortcuts() {
     const badgeAria = showBadge
       ? ` aria-label="${bc} notificaciones" aria-hidden="false"`
       : ' aria-hidden="true"';
-    const iconHtml = shortcut.icon
-      ? shortcutIconMarkup(shortcut.icon)
-      : shortcutFallbackMarkup(shortcut.name);
-    card.innerHTML = `
+    if (shortcut.type === 'workspace' && window.UsualDeskWorkspace) {
+      const wrap = document.createElement('span');
+      wrap.className = 'shell-shortcut-icon-wrap';
+      wrap.appendChild(window.UsualDeskWorkspace.folderGlyph(shortcut.members));
+      card.appendChild(wrap);
+      card.insertAdjacentHTML(
+        'beforeend',
+        `<span class="shortcut-badge shell-strip-badge"${badgeHidden}${badgeAria}>${badgeText}</span>`,
+      );
+    } else {
+      const iconHtml = shortcut.icon
+        ? shortcutIconMarkup(shortcut.icon)
+        : shortcutFallbackMarkup(shortcut.name);
+      card.innerHTML = `
       <span class="shell-shortcut-icon-wrap">${iconHtml}</span>
       <span class="shortcut-badge shell-strip-badge"${badgeHidden}${badgeAria}>${badgeText}</span>
     `;
+    }
 
     let ignoreClickUntil = 0;
     card.addEventListener('click', () => {
       if (Date.now() < ignoreClickUntil) return;
       if (Date.now() < shortcutReorderSuppressClicksUntil) return;
-      if (shortcutsEditMode) {
+      if (shortcutsEditMode && shortcut.type !== 'workspace') {
         // En modo edición el clic abre el editor del acceso: ahí se cambia o se elimina.
         openEditModal(shortcut);
         return;
@@ -3551,7 +3665,7 @@ function renderShortcuts() {
       bindShortcutReorder(card, () => {
         ignoreClickUntil = Date.now() + 500;
       });
-    } else if (shortcut.type === 'web') {
+    } else if (shortcut.type === 'web' || shortcut.type === 'workspace') {
       const suppressMs =
         (window.UsualDeskStripGestures && window.UsualDeskStripGestures.SUPPRESS_CLICK_MS) || 900;
       bindDockShortcutGestures(card, shortcut, () => {
@@ -3575,6 +3689,7 @@ function renderShortcuts() {
   }
   syncDockHomeStripBtn();
   if (endActions) shortcutsContainer.appendChild(endActions);
+  window.UsualDeskTabPinDrag?.consumePop(shortcutsContainer);
 }
 
 /**
@@ -3614,8 +3729,10 @@ function updateAllShortcutFocusMemberStates() {
 function bindDockShortcutGestures(card, shortcut, suppressNextClick) {
   const gestures = window.UsualDeskStripGestures;
   if (!gestures || typeof gestures.bindIconStripGestures !== 'function') return;
-  const mapKey = webShortcutMapKey(shortcut);
-  const isOpen = openWebWindowKeys.has(mapKey);
+  const mapKey = shortcut.type === 'workspace'
+    ? `workspace:${shortcut.id}`
+    : webShortcutMapKey(shortcut);
+  const isOpen = !!mapKey && openWebWindowKeys.has(mapKey);
   gestures.bindIconStripGestures(card, {
     onClose: isOpen && mapKey
       ? () => {
@@ -3625,12 +3742,14 @@ function bindDockShortcutGestures(card, shortcut, suppressNextClick) {
           }
         }
       : null,
-    onLongPressFocus: () => {
-      suppressNextClick();
-      if (window.usualDesk.toggleFocusModeMember) {
-        window.usualDesk.toggleFocusModeMember(String(shortcut.id)).catch(() => {});
-      }
-    },
+    onLongPressFocus: shortcut.type === 'web'
+      ? () => {
+          suppressNextClick();
+          if (window.usualDesk.toggleFocusModeMember) {
+            window.usualDesk.toggleFocusModeMember(String(shortcut.id)).catch(() => {});
+          }
+        }
+      : null,
     suppressNextActivation: suppressNextClick,
   });
 }
@@ -3665,6 +3784,18 @@ window.usualDesk.onSidebarState((expanded) => {
   if (expanded === true) kickDownloadPreviews();
   else pauseDrawerVideo();
 });
+
+shortcutsContainer?.addEventListener('pointerdown', (ev) => {
+  const target = ev.target instanceof Element ? ev.target : null;
+  if (!target || !target.closest('.shortcut-card')) return;
+  if (shortcutsEditMode) return;
+  looseNavResumePending = false;
+  blockLooseNavResume = true;
+  window.usualDesk.suppressDockExpand?.();
+  setTimeout(() => {
+    blockLooseNavResume = false;
+  }, 700);
+}, true);
 
 // Clic fuera del panel (capa transparente a pantalla completa)
 if (sidebarBackdrop) {
@@ -3755,13 +3886,15 @@ if (dockHomeBtn) {
   dockHomeBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    goToDockWelcomeHome(homeView).catch(() => {});
+    goToDockWelcomeHome('todos').catch(() => {});
   });
 }
 
 if (dockDownloadsBtn) {
-  dockDownloadsBtn.addEventListener('click', () => {
-    goToDockWelcomeHome(homeView === 'downloads' ? 'todos' : 'downloads').catch(() => {});
+  dockDownloadsBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    goToDockWelcomeHome('downloads').catch(() => {});
   });
 }
 
@@ -4654,6 +4787,57 @@ if (shortcutMoveDownBtn) {
 
 bindUrlDropTargets();
 bindFileDropToDownloads();
+bindLooseNavTabPinDrag();
+
+let shortcutsReloadGen = 0;
+async function reloadShortcutsFromStore() {
+  if (shortcutReorder) return;
+  const gen = ++shortcutsReloadGen;
+  let list;
+  try {
+    list = await window.usualDesk.getShortcuts();
+  } catch {
+    return;
+  }
+  if (gen !== shortcutsReloadGen || shortcutReorder) return;
+  if (!Array.isArray(list)) return;
+  shortcuts = list;
+  renderShortcuts();
+  syncLooseNavAddShortcutBtn();
+}
+
+window.usualDesk.onShortcutsChanged?.(() => {
+  reloadShortcutsFromStore().catch(() => {});
+});
+
+/** Soltar una pestaña del navegador sobre la franja crea el acceso en ese hueco. */
+function bindLooseNavTabPinDrag() {
+  const root = document.getElementById('loose-nav-tabs-strip');
+  const pin = window.UsualDeskTabPinDrag;
+  if (!root || !pin) return;
+  pin.bind({
+    root,
+    tabSelector: '.loose-nav-tab',
+    ignoreSelector: '.loose-nav-tab-close, .loose-nav-tab-audio',
+    strip: () => document.getElementById('shortcuts-container'),
+    pageFromTab(el) {
+      const tab = (looseNavState.tabs || []).find((item) => String(item.id) === String(el.dataset.tabId));
+      if (!tab) return null;
+      const url = String(tab.url || '');
+      if (!/^https?:\/\//i.test(url) || isLooseNavStartPage(url)) return null;
+      const title = String(tab.title || '').trim();
+      return {
+        url,
+        title: title && title !== 'Cargando…' ? title : '',
+        sessionId: looseNavTabSessionId(tab),
+        favicon: typeof tab.favicon === 'string' ? tab.favicon : '',
+      };
+    },
+    onPin: (page, index, ontoId) => window.usualDesk.pinTabAsShortcut({ ...page, index, ontoId }),
+    onArm() { setDragOperationActive(true); },
+    onEnd() { setDragOperationActive(false); },
+  });
+}
 bindTypeSegmented();
 if (window.usualDesk && typeof window.usualDesk.onGestureCoachShow === 'function') {
   window.usualDesk.onGestureCoachShow(() => {
@@ -4729,16 +4913,31 @@ function findLooseShortcut() {
 function computeViewportBoundsPayload() {
   if (!dockViewport) return null;
   const r = dockViewport.getBoundingClientRect();
+  const bar = document.getElementById('loose-nav-bar');
+  const barVisible = !!(
+    bar
+    && !bar.classList.contains('hidden')
+    && bar.classList.contains('is-search-revealed')
+  );
+  const barRect = barVisible ? bar.getBoundingClientRect() : null;
+  let top = r.top;
+  let height = r.height;
+  // La página nativa tapa el HTML: si el buscador queda debajo de su borde, se corre.
+  if (barRect && barRect.height > 0 && barRect.bottom > top + 1) {
+    const shift = barRect.bottom - top;
+    top = barRect.bottom;
+    height -= shift;
+  }
   const w = Math.max(0, Math.round(r.width));
   // El dropdown de sugerencias no puede dibujarse sobre la vista nativa: en vez
   // de taparla, empujamos la página hacia abajo `inset` px y mostramos el
   // dropdown (DOM) en el hueco que queda bajo la barra.
   const inset = (looseNavSuggestInset || 0) + (looseNavProfileMenuInset || 0);
-  const h = Math.max(0, Math.round(r.height) - inset);
+  const h = Math.max(0, Math.round(height) - inset);
   if (w <= 0 || h <= 0) return null;
   return {
     x: Math.max(0, Math.round(r.left)),
-    y: Math.max(0, Math.round(r.top) + inset),
+    y: Math.max(0, Math.round(top) + inset),
     width: w,
     height: h,
   };
@@ -4821,13 +5020,14 @@ function closeLooseNavSuggest() {
 function positionLooseNavSuggest() {
   if (!looseNavSuggest.box || !looseNavSuggest.inputEl || !dockViewport) return;
   // Verticalmente va en el hueco al tope del área de contenido (donde empujamos
-  // la vista nativa). Horizontalmente se alinea al ancho de la barra de
-  // direcciones, como la omnibox de Chrome (no ocupa toda la pantalla).
+  // la vista nativa). Horizontalmente arranca debajo de la lupa / texto escrito.
   const anchor = looseNavSuggest.inputEl.closest('.loose-nav-omnibox') || looseNavSuggest.inputEl;
   const ar = anchor.getBoundingClientRect();
+  const ir = looseNavSuggest.inputEl.getBoundingClientRect();
   const vr = dockViewport.getBoundingClientRect();
-  const left = Math.max(vr.left, Math.round(ar.left));
-  const width = Math.min(Math.round(vr.width), Math.max(320, Math.round(ar.width)));
+  const textLeft = ir.width > 40 ? ir.left - 8 : ar.left;
+  const left = Math.max(vr.left, Math.round(textLeft));
+  const width = Math.min(Math.round(vr.right - left), Math.max(320, Math.round(ar.right - left)));
   looseNavSuggest.box.style.top = `${Math.round(vr.top)}px`;
   looseNavSuggest.box.style.left = `${left}px`;
   looseNavSuggest.box.style.width = `${width}px`;
@@ -5084,7 +5284,21 @@ function renderLooseNavControls(state) {
       reload: makeLooseNavIconButton('loose-nav-tab-nav-btn', 'Recargar', LOOSE_NAV_RELOAD_SVG, false,
         () => window.usualDesk.looseNavReload().catch(() => {})),
     };
-    looseNavControls.append(looseNavControlButtons.back, looseNavControlButtons.forward, looseNavControlButtons.reload);
+    looseNavControls.append(
+      looseNavControlButtons.back,
+      looseNavControlButtons.forward,
+      looseNavControlButtons.reload,
+    );
+    const host = looseNavControls.parentElement;
+    let divider = host && host.querySelector(':scope > .loose-nav-controls-divider');
+    if (!divider) {
+      divider = document.createElement('div');
+      divider.className = 'loose-nav-controls-divider';
+      divider.setAttribute('aria-hidden', 'true');
+    }
+    if (looseNavControls.nextElementSibling !== divider) {
+      looseNavControls.insertAdjacentElement('afterend', divider);
+    }
   }
   const active = state.tabs.find((t) => t.isActive);
   looseNavControlButtons.back.disabled = !active?.canGoBack;
@@ -5144,6 +5358,7 @@ function elementBehindUrlEditor(editor, x, y) {
 /** Pone el cursor en la barra de dirección; `clear` la deja vacía para escribir de cero. */
 function focusLooseNavOmnibox({ clear = false } = {}) {
   if (!looseNavOmniboxInput || !looseNavState.active) return;
+  setSearchBarRevealed(true, { guard: true });
   if (clear) looseNavBlankAddress = true;
   looseNavOmniboxInput.focus();
   if (clear) looseNavOmniboxInput.value = '';
@@ -5152,16 +5367,47 @@ function focusLooseNavOmnibox({ clear = false } = {}) {
 
 /** Seed pendiente del buscador de la franja → omnibox (handoff tipo Arc). */
 let stripSearchHandoff = null;
+/** La lupa busca en Sin sesión / incógnito (no en el perfil del riel). */
+let stripSearchPreferGuest = false;
+/** La lupa del perfil principal tiene abierta la barra, y Enter va a ese perfil. */
+let profileLupaOpen = false;
 /** Mientras escribís tras el handoff: sin BrowserView (Google no roba el teclado). */
 let stripComposeActive = false;
 let stripComposeTimer = 0;
 /** Rect del pill al iniciar el handoff (para FLIP de la omnibox). */
 let stripMorphFromRect = null;
 
-function stripSearchRailPartition() {
+/** El buscador de arriba ya no es el incógnito: no toma el marco de esa sesión. */
+function syncStripSearchGuestActive() {
+  document.getElementById('strip-search')?.classList.remove('is-guest-active');
+}
+
+/** La pestaña activa es Sin sesión / incógnito. */
+function looseNavActiveIsGuest() {
+  if (!looseNavState.active) return true;
+  const active = String(looseNavState.activePartition || '');
+  if (!active) return true;
+  return active === looseNavGuestPartition();
+}
+
+/** Partition de "Sin sesión" (incógnito) del riel. */
+function looseNavGuestPartition() {
+  const accounts = (looseNavState.accounts && looseNavState.accounts.accounts) || [];
+  const guest = accounts.find((a) => a && (a.incognito || /browse-guest/.test(String(a.partition || ''))));
+  if (guest && guest.partition) return String(guest.partition);
   const rail = document.getElementById('loose-nav-accounts');
-  const btn = rail && rail.querySelector('.loose-nav-account[data-partition]');
-  return (btn && btn.dataset.partition) || looseNavOmniboxPartition() || '';
+  const btn = rail && rail.querySelector('.loose-nav-account[data-incognito="1"][data-partition]');
+  if (btn && btn.dataset.partition) return String(btn.dataset.partition);
+  const withGlyph = rail
+    && [...rail.querySelectorAll('.loose-nav-account[data-partition]')].find(
+      (el) => el.querySelector('.loose-nav-account-incognito')
+    );
+  return (withGlyph && withGlyph.dataset.partition) || 'persist:browse-guest';
+}
+
+/** La lupa siempre abre / busca en Sin sesión. */
+function stripSearchRailPartition() {
+  return looseNavGuestPartition();
 }
 
 /**
@@ -5177,6 +5423,7 @@ function setStripCompose(on, { origin = 'strip' } = {}) {
 
   if (next === stripComposeActive) {
     if (next) window.usualDesk.setUrlPromptOpen?.(true);
+    syncBarSproutAttr();
     return;
   }
 
@@ -5186,6 +5433,7 @@ function setStripCompose(on, { origin = 'strip' } = {}) {
 
   if (next) {
     root.classList.add('is-strip-compose');
+    syncBarSproutAttr();
     scheduleLooseNavViewportSync();
     stripComposeTimer = window.setTimeout(() => {
       if (document.activeElement === looseNavOmniboxInput) return;
@@ -5196,6 +5444,7 @@ function setStripCompose(on, { origin = 'strip' } = {}) {
 
   root.classList.remove('is-strip-compose');
   delete root.dataset.urlSlide;
+  syncBarSproutAttr();
   scheduleLooseNavViewportSync();
 }
 
@@ -5321,10 +5570,29 @@ function syncStripMorphText() {
 
 function commitLooseNavOmniboxValue(val) {
   const value = String(val || '').trim();
-  if (!value || !looseNavState.active) return;
+  window.UsualDeskStripProfileSearch?.setOpen(false);
+  if (!value) return;
+  if (profileLupaOpen) {
+    const partition = profileLupaPartition();
+    endProfileLupaWaiting();
+    setStripCompose(false);
+    forgetLooseNavBlankAddress();
+    if (looseNavOmniboxInput) looseNavOmniboxInput.blur();
+    looseNavOmniboxGo(value, partition ? { partition } : undefined).catch(() => {});
+    return;
+  }
+  if (!looseNavState.active) return;
+  // Solo la lupa / la sesión incógnita fuerzan Sin sesión. Un perfil real no hereda eso.
+  const guestSession = looseNavActiveIsGuest();
+  const preferGuest = guestSession && (
+    stripSearchPreferGuest
+    || document.documentElement.dataset.barSprout === 'lupa'
+  );
+  const guestPartition = preferGuest ? looseNavGuestPartition() : '';
+  stripSearchPreferGuest = false;
   setStripCompose(false);
   if (looseNavOmniboxInput) looseNavOmniboxInput.blur();
-  looseNavOmniboxGo(value).catch(() => {});
+  looseNavOmniboxGo(value, guestPartition ? { partition: guestPartition } : undefined).catch(() => {});
 }
 
 /** Aplica el texto del strip a la omnibox cuando la navegación suelta ya está activa. */
@@ -5340,6 +5608,8 @@ function applyStripSearchHandoff() {
   if (tabId) looseNavBlankTabId = tabId;
 
   setStripCompose(true, { origin: 'strip' });
+  // Placeholder de la lupa = Sin sesión (no el mail del perfil activo).
+  renderLooseNavOmnibox(looseNavState);
   // clear:false: el listener de focus ya no debe borrar el seed.
   if (!looseNavOmniboxInput.value) focusLooseNavOmnibox({ clear: true });
   else focusLooseNavOmnibox({ clear: false });
@@ -5367,27 +5637,43 @@ function applyStripSearchHandoff() {
 /**
  * El buscador de la franja no navega solo: abre la omnibox (única caja real).
  * `commit` true = Enter en el strip con texto (navega al llegar a la omnibox).
+ * Siempre en Sin sesión / incógnito (la lupa no hereda el perfil del riel).
  */
 function handoffStripSearchToOmnibox(seed = '', { commit = false } = {}) {
   const text = String(seed || '');
+  setSearchBarRevealed(true, { guard: true });
   // Rect del icono de lupa para el slide.
   captureStripMorphFromRect();
   const stripBtn = document.getElementById('strip-search');
   if (stripBtn && document.activeElement === stripBtn) stripBtn.blur();
 
+  stripSearchPreferGuest = true;
   stripSearchHandoff = { seed: text.trim(), commit: commit === true && !!text.trim() };
   setStripCompose(true, { origin: 'strip' });
 
-  if (looseNavState.active) {
+  const partition = stripSearchRailPartition();
+  const alreadyGuest = !!partition && looseNavOmniboxPartition() === partition;
+
+  if (looseNavState.active && alreadyGuest) {
     requestAnimationFrame(() => applyStripSearchHandoff());
     return;
   }
 
-  const partition = stripSearchRailPartition();
+  if (looseNavState.active && partition) {
+    // Cambiá a Sin sesión para que el placeholder y Enter queden en esa lupa.
+    Promise.resolve(window.usualDesk.looseNavUseAccount?.({ partition }))
+      .catch(() => {})
+      .finally(() => {
+        requestAnimationFrame(() => applyStripSearchHandoff());
+      });
+    return;
+  }
+
   looseNavBlankAddress = true;
   looseNavBlankTabId = '';
   window.usualDesk.looseNavNewTab('', partition ? { partition } : undefined).catch(() => {
     stripSearchHandoff = null;
+    stripSearchPreferGuest = false;
     setStripCompose(false);
     forgetLooseNavBlankAddress();
   });
@@ -5395,9 +5681,41 @@ function handoffStripSearchToOmnibox(seed = '', { commit = false } = {}) {
 
 window.__dockHandoffStripSearch = handoffStripSearchToOmnibox;
 
+/** El + abre la barra. Con la barra abierta el mismo botón es la cruz y la cierra. */
+function revealNavBarWithTabs() {
+  const open = !!(
+    looseNavBar
+    && !looseNavBar.classList.contains('hidden')
+    && looseNavBar.classList.contains('is-search-revealed')
+  );
+  if (open) {
+    endProfileLupaWaiting();
+    forgetLooseNavBlankAddress();
+    navBarUserClosed = true;
+    setSearchBarRevealed(false);
+    if (looseNavState && Array.isArray(looseNavState.tabs)) renderLooseNavTabs(looseNavState);
+    return;
+  }
+  navBarUserClosed = false;
+  if (looseNavBar) looseNavBar.classList.add('is-tabs-forced');
+  setSearchBarRevealed(true, { guard: true });
+  if (looseNavState && Array.isArray(looseNavState.tabs)) renderLooseNavTabs(looseNavState);
+  if (!looseNavState.active) {
+    Promise.resolve(window.usualDesk.looseNavOpen?.()).catch(() => {});
+  }
+  requestAnimationFrame(() => focusOmniboxFromHotkey());
+}
+
+window.__dockRevealNavBar = revealNavBarWithTabs;
+
 /** Como Chrome: el "+" abre la pestaña y lleva a la barra de dirección para escribir ahí. */
 function openLooseNavBlankTab() {
   if (!looseNavState.active) return;
+  if (profileLupaOpen) {
+    endProfileLupaWaiting();
+    forgetLooseNavBlankAddress();
+  }
+  setSearchBarRevealed(true, { guard: true });
   looseNavBlankAddress = true;
   looseNavBlankTabId = '';
   setStripCompose(true, { origin: 'strip' });
@@ -5413,8 +5731,10 @@ function focusFreshAddress() {
   if (!looseNavOmniboxInput || !looseNavState.active) return;
   const url = String(looseNavState.activeUrl || '');
   if (url && !isLooseNavStartPage(url) && !looseNavAddressOnly(looseNavState)) return;
+  setSearchBarRevealed(true, { guard: true });
   const field = looseNavOmniboxInput;
-  const typed = field.value.trim();
+  const rawTyped = field.value.trim();
+  const typed = isLooseNavStartPage(rawTyped) ? '' : rawTyped;
   // Handoff / compose: no borrar lo que el usuario ya tipeó en la omnibox.
   if (stripSearchHandoff) return;
   if (stripComposeActive && typed) {
@@ -5441,6 +5761,43 @@ function looseNavTabsRowVisible(state) {
   const root = document.documentElement;
   if (stripComposeActive && root.dataset.urlSlide === 'down') return false;
   return true;
+}
+
+/** Toggle sin pestañas del perfil: la primera es el acceso que está abierto (WhatsApp, etc.). */
+function paintActiveShortcutAsTab() {
+  if (!looseNavTabsStrip || !shortcutsContainer) return;
+  const card = shortcutsContainer.querySelector('.shortcut-card.is-active[data-shortcut-id]');
+  if (!card) return;
+  const shortcut = shortcuts.find((item) => item && item.id === card.dataset.shortcutId && item.type === 'web');
+  if (!shortcut) return;
+  const el = document.createElement('div');
+  el.className = 'loose-nav-tab is-active';
+  el.setAttribute('role', 'tab');
+  el.setAttribute('aria-selected', 'true');
+  const tip = shortcut.name || shortcut.url || 'Pestaña';
+  el.setAttribute('data-tooltip', tip);
+  el.setAttribute('data-tooltip-placement', 'bottom');
+  const icon = String(shortcut.icon || '');
+  if (/^(https?:|data:|file:)/i.test(icon)) {
+    const img = document.createElement('img');
+    img.className = 'loose-nav-tab-fav';
+    img.src = icon;
+    img.alt = '';
+    img.addEventListener('error', () => img.replaceWith(faviconFallbackEl(tip)));
+    el.appendChild(img);
+  } else {
+    el.appendChild(faviconFallbackEl(tip));
+  }
+  const titleEl = document.createElement('span');
+  titleEl.className = 'loose-nav-tab-title';
+  titleEl.textContent = tip;
+  el.appendChild(titleEl);
+  el.addEventListener('click', () => {
+    const key = webShortcutMapKey(shortcut);
+    if (!key || !window.usualDesk.focusWebWindowByMapKey) return;
+    window.usualDesk.focusWebWindowByMapKey(key).catch(() => {});
+  });
+  looseNavTabsStrip.appendChild(el);
 }
 
 function renderLooseNavTabs(state) {
@@ -5554,6 +5911,10 @@ function renderLooseNavTabs(state) {
     });
 
     looseNavTabsStrip.appendChild(el);
+  }
+
+  if (sessionTabs.length === 0 && looseNavBar && looseNavBar.classList.contains('is-tabs-forced')) {
+    paintActiveShortcutAsTab();
   }
 
   if (tabsVisible) {
@@ -5705,6 +6066,7 @@ function looseNavAccountButton(profile) {
   btn.type = 'button';
   btn.className = 'loose-nav-account';
   if (partition) btn.dataset.partition = partition;
+  if (profile.incognito) btn.dataset.incognito = '1';
   const tooltip = looseNavProfilesEditMode
     ? `${label} · clic para editarlo${partition ? ' · arrastrá para moverlo' : ''}`
     : profile.tooltip;
@@ -5716,11 +6078,18 @@ function looseNavAccountButton(profile) {
   if (looseNavAccountBusy === key) btn.classList.add('is-busy');
   btn.appendChild(looseNavProfileAvatarNode(profile));
   if (looseNavProfilesEditMode && partition) bindLooseNavProfileReorder(btn);
+  // pointerdown: el clic se pierde si la vista nativa se mueve antes del mouseup.
+  btn.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || looseNavProfilesEditMode) return;
+    ev.stopPropagation();
+    document.querySelectorAll('.loose-nav-account.is-active').forEach((el) => {
+      if (el !== btn) el.classList.remove('is-active');
+    });
+    btn.classList.add('is-active');
+    runLooseNavAccountAction(key, btn, onClick);
+  });
   btn.addEventListener('click', () => {
-    if (!looseNavProfilesEditMode) {
-      runLooseNavAccountAction(key, btn, onClick);
-      return;
-    }
+    if (!looseNavProfilesEditMode) return;
     if (Date.now() < looseNavProfileDragSuppressClicksUntil) return;
     // En modo edición el clic abre el editor del perfil: ahí se cambia o se quita.
     openProfileEditor(profile);
@@ -5741,11 +6110,24 @@ function looseNavAccountButton(profile) {
  * como predeterminada de las pestañas nuevas.
  */
 function activateLooseNavAccount(payload) {
+  const partition = payload && typeof payload.partition === 'string' ? payload.partition : '';
+  const stayingGuest = !!partition && partition === looseNavGuestPartition();
+  if (!stayingGuest) {
+    // Salir de la lupa: el marco y el próximo Enter van a este perfil, no a incógnito.
+    stripSearchPreferGuest = false;
+    stripSearchHandoff = null;
+    document.getElementById('strip-search')?.classList.remove('is-guest-active');
+    if (stripComposeActive && document.documentElement.dataset.urlSlide === 'down') {
+      setStripCompose(false);
+    }
+    syncBarSproutAttr();
+  }
   return window.usualDesk.looseNavUseAccount?.(payload);
 }
 
 function renderLooseNavAccounts(state) {
   if (!looseNavAccountsRail) return;
+  syncStripSearchGuestActive(state);
   const accounts = (state.accounts && state.accounts.accounts) || [];
   const chrome = (state.accounts && state.accounts.chrome) || [];
   const counts = state.tabCounts || {};
@@ -5775,6 +6157,8 @@ function renderLooseNavAccounts(state) {
     railItems.push({
       key: opts.key,
       active: !!opts.active,
+      isDefault: !!opts.isDefault,
+      partition: typeof opts.partition === 'string' ? opts.partition : '',
       label: opts.label,
       detail: opts.detail,
       icon: typeof opts.avatar === 'string' && opts.avatar.startsWith('data:image/') ? opts.avatar : '',
@@ -5784,17 +6168,23 @@ function renderLooseNavAccounts(state) {
     });
   };
 
-  for (const a of accounts) {
-    const display = a.incognito ? `${a.name} (incógnito)` : a.name || a.email;
-    const who = a.name && a.email ? `${a.name} (${a.email})` : display;
+  const railAccounts = [
+    ...accounts.filter((a) => !a.incognito),
+    ...accounts.filter((a) => a.incognito),
+  ];
+  for (const a of railAccounts) {
+    const display = a.name || a.email || a.label;
+    const who = a.incognito
+      ? 'Sin sesión'
+      : (a.name && a.email ? `${a.name} (${a.email})` : display);
     const count = counts[a.partition] || 0;
     const tabsLabel = count === 1 ? '1 pestaña' : `${count} pestañas`;
     const isDefault = a.partition === defaultPartition;
     remember({
       key: a.partition,
-      label: a.name || a.email,
+      label: a.incognito ? 'Sin sesión' : (a.name || a.email),
       detail: [a.incognito ? 'Incógnito' : a.name ? a.email : '', tabsLabel].filter(Boolean).join(' · '),
-      tooltip: `${who} · ${tabsLabel} · ${isDefault ? 'predeterminado' : 'clic derecho: usar como predeterminado'}`,
+      tooltip: `${who} · ${tabsLabel} · ${isDefault ? 'perfil principal' : 'clic derecho: dejar como principal'}`,
       avatar: a.avatar,
       seed: a.email || a.partition,
       incognito: !!a.incognito,
@@ -5813,7 +6203,7 @@ function renderLooseNavAccounts(state) {
       label: c.email || c.name,
       detail: 'Perfil de Chrome · se trae a inplaize la primera vez que lo usás',
       fromChrome: true,
-      tooltip: `${who} · traer desde Chrome · clic derecho: usar como predeterminado`,
+      tooltip: `${who} · traer desde Chrome · clic derecho: dejar como principal`,
       avatar: c.avatar,
       seed: c.email || c.name,
       active: false,
@@ -5823,9 +6213,18 @@ function renderLooseNavAccounts(state) {
     });
   }
 
+  const editing = looseNavProfilesEditMode;
+  const primary = railItems.find((item) => item.isDefault) || railItems[0] || null;
+  const rest = primary && !editing ? railItems.filter((item) => item !== primary) : railItems;
+  window.UsualDeskStripProfileSearch?.sync({
+    profile: editing ? null : primary,
+    mountAvatar: primary && !editing ? () => primary.mount() : null,
+    onSubmit: (value) => quickSearchInProfile(value, primary && primary.partition),
+    editing,
+  });
   const split = window.UsualDeskProfileRail
-    ? window.UsualDeskProfileRail.pickVisible(railItems, looseNavProfilesEditMode)
-    : { visible: railItems, overflow: [] };
+    ? window.UsualDeskProfileRail.pickVisible(rest, editing, editing ? undefined : 2)
+    : { visible: rest, overflow: [] };
   for (const item of split.visible) looseNavAccountsRail.appendChild(item.mount());
   // Menú de tres puntos: gestionar tilde / riel aunque no haya overflow.
   if (window.UsualDeskProfileRail && railItems.length > 1) {
@@ -5834,6 +6233,93 @@ function renderLooseNavAccounts(state) {
       window.UsualDeskProfileRail.menuItems(split),
     );
   }
+}
+
+function profileLupaPartition() {
+  const fromStrip = window.UsualDeskStripProfileSearch?.partition?.() || '';
+  if (fromStrip) return fromStrip;
+  const fallback = looseNavState.defaultProfile && looseNavState.defaultProfile.partition;
+  return typeof fallback === 'string' ? fallback.trim() : '';
+}
+
+function profileLupaLabel() {
+  return window.UsualDeskStripProfileSearch?.label?.() || 'el perfil principal';
+}
+
+/** Suelta la lupa sin cerrar la barra: la búsqueda ya se mandó, o el + tomó la fila. */
+function endProfileLupaWaiting() {
+  profileLupaOpen = false;
+  delete document.documentElement.dataset.profileLupa;
+  window.UsualDeskStripProfileSearch?.setOpen(false);
+  stripSearchPreferGuest = false;
+}
+
+/** Cierra el buscador que abrió la lupa. Si ya hay pestañas, la fila de la URL se queda. */
+function closeProfileLupa() {
+  if (!profileLupaOpen) return;
+  const idle = !looseNavHasOpenTabs(looseNavState);
+  endProfileLupaWaiting();
+  setStripCompose(false);
+  forgetLooseNavBlankAddress();
+  if (looseNavOmniboxInput && document.activeElement === looseNavOmniboxInput) {
+    looseNavOmniboxInput.blur();
+  }
+  if (looseNavOmniboxInput) renderLooseNavOmnibox(looseNavState);
+  if (idle) {
+    navBarUserClosed = true;
+    setSearchBarRevealed(false);
+  }
+}
+
+/** Abre la misma barra de dirección, vacía, atada al perfil principal. */
+function openProfileLupa() {
+  profileLupaOpen = true;
+  document.documentElement.dataset.profileLupa = 'on';
+  window.UsualDeskStripProfileSearch?.setOpen(true);
+  stripSearchPreferGuest = false;
+  stripSearchHandoff = null;
+  looseNavBlankAddress = true;
+  navBarUserClosed = false;
+  if (looseNavBar) looseNavBar.classList.remove('is-tabs-forced');
+  if (looseNavOmniboxInput) looseNavOmniboxInput.value = '';
+  setStripCompose(true, { origin: 'strip' });
+  setSearchBarRevealed(true, { guard: true });
+  requestAnimationFrame(() => {
+    if (!profileLupaOpen || !looseNavOmniboxInput) return;
+    looseNavOmniboxInput.value = '';
+    looseNavOmniboxInput.placeholder = `Buscar con ${profileLupaLabel()}`;
+    looseNavOmniboxInput.focus();
+    window.UsualDeskTabStripFit?.paintAddressFace(
+      document.getElementById('loose-nav-omnibox-face'),
+      ''
+    );
+  });
+}
+
+window.__dockToggleProfileSearch = () => {
+  if (profileLupaOpen) closeProfileLupa();
+  else openProfileLupa();
+};
+
+window.__dockCloseProfileSearch = () => {
+  closeProfileLupa();
+};
+
+/** Enter en el buscador del perfil principal: abre la barra y busca en esa sesión. */
+function quickSearchInProfile(value, partition) {
+  const text = String(value || '').trim();
+  endProfileLupaWaiting();
+  document.querySelector('#strip-profile-search .loose-nav-account')?.classList.add('is-active');
+  if (!text) return;
+  const forced = typeof partition === 'string' ? partition.trim() : '';
+  if (!forced || forced !== looseNavGuestPartition()) {
+    stripSearchPreferGuest = false;
+    stripSearchHandoff = null;
+  }
+  navBarUserClosed = false;
+  if (looseNavBar) looseNavBar.classList.add('is-tabs-forced');
+  setSearchBarRevealed(true, { guard: true });
+  Promise.resolve(looseNavOmniboxGo(text, forced ? { partition: forced } : undefined)).catch(() => {});
 }
 
 window.__dockRefreshProfileRail = () => {
@@ -5907,13 +6393,13 @@ function renderProfileEditor(profile) {
       'p',
       'profile-panel-help',
       profile.isDefault
-        ? 'Es el perfil predeterminado: las pestañas nuevas se abren con esta sesión.'
-        : 'Las pestañas nuevas se abren con el perfil predeterminado.',
+        ? 'Es el perfil principal: la lupa de arriba y las pestañas nuevas usan esta sesión.'
+        : 'La lupa de arriba y las pestañas nuevas usan el perfil principal.',
     ),
   );
   defaultRow.appendChild(defaultText);
   if (!profile.isDefault && profile.onSetDefault) {
-    const setDefault = profilePanelNode('button', 'btn-secondary', 'Usar como predeterminado');
+    const setDefault = profilePanelNode('button', 'btn-secondary', 'Usar como principal');
     setDefault.addEventListener('click', async () => {
       const ok = await runProfilePanelAction(profile.onSetDefault);
       if (profilePanel.hidden) return;
@@ -6049,6 +6535,7 @@ function looseNavSessionTabs(state) {
 /**
  * Perfil sin ventanas “reales”: solo páginas de inicio.
  * Ahí se muestra solo el buscador a 100%; la pestaña aparece al Enter.
+ * Buscar en incógnito no cuenta: si ya hay pestañas, siguen visibles.
  */
 function looseNavAddressOnly(state) {
   if (!state || !state.active) return false;
@@ -6059,13 +6546,14 @@ function looseNavAddressOnly(state) {
 
 function syncLooseNavAddressOnly(state) {
   const root = document.documentElement;
-  const next = looseNavAddressOnly(state) || (stripComposeActive && root.dataset.urlSlide === 'down');
+  const next = looseNavAddressOnly(state);
   const prev = root.dataset.addressOnly === 'on';
   root.dataset.addressOnly = next ? 'on' : 'off';
   if (next && !prev && state && state.active) {
-    /* Primera apertura del perfil / sesión vacía: foco en el buscador vacío. */
     looseNavBlankAddress = true;
-    requestAnimationFrame(() => focusFreshAddress());
+    if (looseNavBar && looseNavBar.classList.contains('is-search-revealed')) {
+      requestAnimationFrame(() => focusFreshAddress());
+    }
   }
 }
 
@@ -6094,15 +6582,18 @@ function noteLooseNavBlankTab(state, previousTabId) {
 function looseNavDisplayUrl(state) {
   const url = state && state.active && state.activeTabId ? String(state.activeUrl || '') : '';
   if (!url || /^about:/i.test(url)) return '';
-  if (looseNavBlankAddress && isLooseNavStartPage(url)) return '';
-  /* Sesión vacía / solo NTP: el campo queda para buscar, no muestra google.com. */
-  if (looseNavAddressOnly(state) && isLooseNavStartPage(url)) return '';
+  if (isLooseNavStartPage(url)) {
+    if (looseNavBlankAddress || (state && state.promptAddress)) return '';
+    if (stripComposeActive && document.documentElement.dataset.urlSlide === 'down') return '';
+    if (looseNavAddressOnly(state)) return '';
+  }
   return url;
 }
 
 function looseNavOmniboxPartition() {
   return looseNavState.activePartition
     || (looseNavState.activeProfile && looseNavState.activeProfile.partition)
+    || (looseNavState.defaultProfile && looseNavState.defaultProfile.partition)
     || '';
 }
 
@@ -6113,11 +6604,20 @@ let looseNavKnownTabIds = null;
 /**
  * Enter: si el perfil recién abre (solo NTP), navega esa pestaña;
  * si ya hay ventanas reales, abre una pestaña nueva al final.
+ * `opts.partition` fuerza la sesión (p. ej. Sin sesión desde la lupa).
  */
-function looseNavOmniboxGo(value) {
+function looseNavOmniboxGo(value, opts = {}) {
+  const forced = opts && typeof opts.partition === 'string' ? opts.partition.trim() : '';
+  const partition = forced || looseNavOmniboxPartition();
+  if (!looseNavState.active) {
+    looseNavPendingTabSlide = true;
+    return window.usualDesk.looseNavNewTab(value, partition ? { partition } : undefined);
+  }
   const active = looseNavState.tabs.find((t) => t.isActive);
+  const samePartition = !forced || !active || active.partition === forced;
   if (
     active
+    && samePartition
     && isLooseNavStartPage(active.url)
     && looseNavAddressOnly(looseNavState)
   ) {
@@ -6133,7 +6633,7 @@ function looseNavOmniboxGo(value) {
     return window.usualDesk.looseNavNavigate(value);
   }
   looseNavPendingTabSlide = true;
-  return window.usualDesk.looseNavNewTab(value, { partition: looseNavOmniboxPartition() });
+  return window.usualDesk.looseNavNewTab(value, partition ? { partition } : undefined);
 }
 
 /** El acceso abre con la misma sesión que el perfil de la pestaña: `persist:<sessionId>`. */
@@ -6147,19 +6647,73 @@ function looseNavActivePage() {
   return tab;
 }
 
+function shortcutSessionId(shortcut) {
+  return normalizeSessionId((shortcut && shortcut.sessionId) || '');
+}
+
+function urlsMatchShortcut(liveUrl, savedUrl) {
+  const live = normalizeUrlKey(liveUrl);
+  const saved = normalizeUrlKey(savedUrl);
+  if (!live || !saved) return false;
+  if (live === saved) return true;
+  if (live.startsWith(`${saved}/`) || saved.startsWith(`${live}/`)) return true;
+  try {
+    const a = new URL(live.startsWith('http') ? live : `https://${live}`);
+    const b = new URL(saved.startsWith('http') ? saved : `https://${saved}`);
+    const hostA = a.hostname.replace(/^www\./, '');
+    const hostB = b.hostname.replace(/^www\./, '');
+    if (hostA !== hostB) return false;
+    const pathA = a.pathname.replace(/\/+$/, '') || '/';
+    const pathB = b.pathname.replace(/\/+$/, '') || '/';
+    return pathA === pathB || pathA.startsWith(`${pathB}/`) || pathB.startsWith(`${pathA}/`);
+  } catch {
+    return false;
+  }
+}
+
+/** La página abierta en el dock corresponde a este acceso (misma URL y perfil). */
 function findShortcutForLooseNavTab(tab) {
-  const key = normalizeUrlKey(tab.url);
-  const sessionId = looseNavTabSessionId(tab);
-  return shortcuts.find(
-    (s) => s.type === 'web' && normalizeUrlKey(s.url || '') === key && (s.sessionId || '') === sessionId,
-  ) || null;
+  if (!tab) return null;
+  const sessionId = normalizeSessionId(looseNavTabSessionId(tab));
+  const sameUrl = [];
+  for (const shortcut of shortcuts) {
+    if (!shortcut) continue;
+    const pages = shortcut.type === 'workspace' && Array.isArray(shortcut.members)
+      ? shortcut.members
+      : [shortcut];
+    for (const page of pages) {
+      if (page && page.type === 'web' && urlsMatchShortcut(tab.url, page.url || '')) sameUrl.push(page);
+    }
+  }
+  return sameUrl.find((s) => {
+    const sid = shortcutSessionId(s);
+    if (sid === sessionId) return true;
+    return !sid && (sessionId === '' || sessionId === 'dock-default');
+  }) || sameUrl[0] || null;
+}
+
+function shortcutMatchesOpenKey(shortcut, key) {
+  if (!shortcut || shortcut.type !== 'web' || !key) return false;
+  if (webShortcutMapKey(shortcut) === key) return true;
+  const sep = String(key).indexOf('::');
+  if (sep < 0) return false;
+  if (String(key).slice(0, sep) !== partitionStringForWebWindowKey(shortcut)) return false;
+  const live = String(key).slice(sep + 2);
+  const saved = normalizeUrlKey(shortcut.url || '');
+  if (!live || !saved) return false;
+  return live === saved || live.startsWith(`${saved}/`) || saved.startsWith(`${live}/`);
 }
 
 function syncLooseNavAddShortcutBtn() {
   if (!looseNavAddShortcutBtn) return;
   const tab = looseNavState.active ? looseNavActivePage() : null;
-  looseNavAddShortcutBtn.hidden = !tab;
-  if (!tab) return;
+  const pinnable = !!(tab && !isLooseNavStartPage(tab.url));
+  looseNavAddShortcutBtn.hidden = false;
+  looseNavAddShortcutBtn.disabled = !pinnable;
+  if (!pinnable) {
+    looseNavAddShortcutBtn.classList.remove('is-saved');
+    return;
+  }
   const saved = !!findShortcutForLooseNavTab(tab);
   looseNavAddShortcutBtn.classList.toggle('is-saved', saved);
   looseNavAddShortcutBtn.querySelector('.loose-nav-add-shortcut-label').textContent = saved
@@ -6227,16 +6781,34 @@ async function addLooseNavPageShortcut() {
   });
 }
 
+function looseNavActiveFavicon(state) {
+  const tab = state && Array.isArray(state.tabs) ? state.tabs.find((item) => item.isActive) : null;
+  const icon = tab && tab.favicon;
+  return icon && /^(https?:|data:)/i.test(icon) ? icon : '';
+}
+
 /** Dirección en la misma fila que las pestañas: muestra la URL de la pestaña activa. */
 let looseNavShownTabId = '';
 function renderLooseNavOmnibox(state) {
   if (!looseNavOmniboxInput) return;
+  const fromLupa = !profileLupaOpen && (
+    stripSearchPreferGuest
+    || document.documentElement.dataset.barSprout === 'lupa'
+  );
   const profile = state.activeProfile || state.defaultProfile || null;
-  const label = profile && profile.label ? profile.label : '';
-  const hint = label ? `Abrir en ${label}` : 'Abrir en el perfil seleccionado';
-  looseNavOmniboxInput.placeholder = label
-    ? `Buscá o escribí un enlace para abrir en ${label}`
-    : 'Buscá en Google o escribí un enlace';
+  const label = fromLupa
+    ? 'Sin sesión'
+    : (profile && profile.label ? profile.label : '');
+  const hint = profileLupaOpen
+    ? `Buscar con ${profileLupaLabel()}`
+    : (fromLupa
+      ? 'Buscar en Sin sesión (incógnito)'
+      : (label ? `Abrir en ${label}` : 'Abrir en el perfil seleccionado'));
+  looseNavOmniboxInput.placeholder = profileLupaOpen
+    ? hint
+    : (label
+      ? `Buscá o escribí un enlace para abrir en ${label}`
+      : 'Buscá en Google o escribí un enlace');
   looseNavOmniboxInput.setAttribute('aria-label', hint);
   const tabId = state && state.activeTabId ? String(state.activeTabId) : '';
   const previousTabId = looseNavShownTabId;
@@ -6244,12 +6816,20 @@ function renderLooseNavOmnibox(state) {
   noteLooseNavBlankTab(state, previousTabId);
   looseNavShownTabId = tabId;
   const typingBlank = looseNavBlankAddress && document.activeElement === looseNavOmniboxInput;
-  if (!typingBlank && (document.activeElement !== looseNavOmniboxInput || tabChanged)) {
+  const keepTyped = document.documentElement.dataset.searchIdle === 'on'
+    && !!looseNavOmniboxInput.value.trim()
+    && document.activeElement !== looseNavOmniboxInput;
+  if (!profileLupaOpen && !typingBlank && !keepTyped && (document.activeElement !== looseNavOmniboxInput || tabChanged)) {
     looseNavOmniboxInput.value = looseNavDisplayUrl(state);
   }
+  const faceValue = (profileLupaOpen || document.activeElement === looseNavOmniboxInput || keepTyped)
+    ? looseNavOmniboxInput.value
+    : looseNavDisplayUrl(state);
+  const liveUrl = looseNavDisplayUrl(state);
   window.UsualDeskTabStripFit?.paintAddressFace(
     document.getElementById('loose-nav-omnibox-face'),
-    document.activeElement === looseNavOmniboxInput ? looseNavOmniboxInput.value : looseNavDisplayUrl(state)
+    faceValue,
+    faceValue && faceValue === liveUrl ? looseNavActiveFavicon(state) : ''
   );
   syncLooseNavAddShortcutBtn();
 }
@@ -6258,18 +6838,48 @@ function initLooseNavOmnibox() {
   if (!looseNavOmnibox || !looseNavOmniboxInput) return;
   looseNavOmnibox.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    window.UsualDeskStripProfileSearch?.setOpen(false);
     const val = looseNavOmniboxInput.value.trim();
-    if (!val || !looseNavState.active) return;
+    if (!val) return;
     /* Enter: suelta compose y recién ahí navega / abre la pestaña. */
+    searchBarHold = true;
     setStripCompose(false);
     looseNavOmniboxInput.blur();
+    if (profileLupaOpen) {
+      const partition = profileLupaPartition();
+      endProfileLupaWaiting();
+      forgetLooseNavBlankAddress();
+      try {
+        await looseNavOmniboxGo(val, partition ? { partition } : undefined);
+      } catch {
+        searchBarHold = false;
+        openProfileLupa();
+        requestAnimationFrame(() => {
+          if (!looseNavOmniboxInput) return;
+          looseNavOmniboxInput.value = val;
+          looseNavOmniboxInput.focus();
+        });
+      }
+      searchBarHold = false;
+      return;
+    }
+    const guestSession = looseNavActiveIsGuest();
+    const preferGuest = guestSession && (
+      stripSearchPreferGuest
+      || document.documentElement.dataset.barSprout === 'lupa'
+    );
+    const guestPartition = preferGuest ? looseNavGuestPartition() : '';
+    stripSearchPreferGuest = false;
     try {
-      await looseNavOmniboxGo(val);
+      await looseNavOmniboxGo(val, guestPartition ? { partition: guestPartition } : undefined);
     } catch {
+      searchBarHold = false;
+      setSearchBarRevealed(true);
       setStripCompose(true, { origin: 'strip' });
       looseNavOmniboxInput.value = val;
       looseNavOmniboxInput.focus();
     }
+    searchBarHold = false;
   });
   looseNavAddShortcutBtn?.addEventListener('mousedown', (ev) => {
     ev.preventDefault();
@@ -6308,6 +6918,7 @@ function initLooseNavOmnibox() {
     // Con dirección en blanco NO vaciar acá: los nudges de blank-address
     // re-enfocan y borraban el tipeado del handoff Arc.
     if (looseNavBlankAddress) return;
+    if (document.documentElement.dataset.searchIdle === 'on') return;
     looseNavOmniboxInput.select();
   });
   looseNavOmniboxInput.addEventListener('input', () => {
@@ -6315,23 +6926,172 @@ function initLooseNavOmnibox() {
   });
   looseNavOmniboxInput.addEventListener('blur', () => {
     setTimeout(() => closeLooseNavSuggest(), 150);
-    // Esperá un toque por si el blur es del handoff / re-focus.
+    // Esperá un toque por si el blur es del handoff / re-focus entre ventanas.
     window.setTimeout(() => {
+      if (searchBarHold || Date.now() < searchRevealGuardUntil) return;
       if (document.activeElement === looseNavOmniboxInput) return;
+      if (looseNavFocusIsEditor(document.activeElement)) return;
+      if (document.activeElement instanceof Element && document.activeElement.closest('#loose-nav-bar, #strip-search, #strip-profile-search, .loose-nav-suggest')) return;
+      if (profileLupaOpen) {
+        closeProfileLupa();
+        return;
+      }
+      if (searchManualReveal) setSearchBarRevealed(false);
       if (stripComposeActive) setStripCompose(false);
     }, 180);
+    if (
+      document.documentElement.dataset.searchIdle === 'on'
+      && looseNavOmniboxInput.value.trim()
+    ) {
+      window.UsualDeskTabStripFit?.paintAddressFace(
+        document.getElementById('loose-nav-omnibox-face'),
+        looseNavOmniboxInput.value
+      );
+      return;
+    }
     looseNavOmniboxInput.value = looseNavDisplayUrl(looseNavState);
     window.UsualDeskTabStripFit?.paintAddressFace(
       document.getElementById('loose-nav-omnibox-face'),
-      looseNavOmniboxInput.value
+      looseNavOmniboxInput.value,
+      looseNavActiveFavicon(looseNavState)
     );
   });
   looseNavOmniboxInput.addEventListener('keydown', (ev) => {
     if (looseNavSuggestKeydown(ev, looseNavOmniboxInput)) return;
     if (ev.key !== 'Escape') return;
     ev.preventDefault();
+    if (profileLupaOpen) {
+      closeProfileLupa();
+      return;
+    }
+    setSearchBarRevealed(false);
+    if (stripComposeActive) setStripCompose(false);
     looseNavOmniboxInput.blur();
   });
+}
+
+function looseNavFocusIsEditor(el) {
+  if (!el || el === looseNavOmniboxInput || !(el instanceof Element)) return false;
+  return !!el.closest('.loose-nav-suggest, input, textarea, select, [contenteditable="true"], .modal:not(.hidden), .doc-modal-overlay:not(.hidden)');
+}
+
+function looseNavHasOpenTabs(state) {
+  return !!(state && state.active && !looseNavAddressOnly(state));
+}
+
+let searchBarHold = false;
+let searchManualReveal = false;
+let searchRevealGuardUntil = 0;
+/** La cruz cerró la barra a propósito: no vuelve sola aunque haya pestañas. */
+let navBarUserClosed = false;
+
+function paintStripNavToggle(visible) {
+  const btn = document.getElementById('strip-search');
+  if (!btn) return;
+  btn.setAttribute('aria-expanded', visible ? 'true' : 'false');
+  btn.setAttribute('aria-label', visible ? 'Cerrar la barra de pestañas' : 'Mostrar la barra de pestañas');
+  btn.dataset.tooltip = visible ? 'Cerrar pestañas' : 'Mostrar pestañas';
+}
+
+function syncBarSproutAttr() {
+  const root = document.documentElement;
+  const visible = !!(
+    looseNavBar
+    && !looseNavBar.classList.contains('hidden')
+    && looseNavBar.classList.contains('is-search-revealed')
+  );
+  if (!visible) {
+    delete root.dataset.barSprout;
+    if (!stripSearchHandoff) stripSearchPreferGuest = false;
+    return;
+  }
+  if (profileLupaOpen) {
+    delete root.dataset.barSprout;
+    return;
+  }
+  const guestSession = looseNavActiveIsGuest();
+  // Perfil real: la lupa no se queda con el marco ni con el Enter.
+  if (looseNavState.active && !guestSession && !stripSearchHandoff) {
+    stripSearchPreferGuest = false;
+  }
+  const searchIdle = root.dataset.searchIdle === 'on';
+  const composingDown = stripComposeActive && root.dataset.urlSlide === 'down';
+  // Con pestañas reales, buscar en incógnito no pasa a lupa: eso las esconde.
+  const fromLupa = !looseNavHasOpenTabs(looseNavState) && (
+    !!stripSearchHandoff
+    || (stripSearchPreferGuest && guestSession)
+    || (guestSession && (searchIdle || composingDown))
+  );
+  root.dataset.barSprout = fromLupa ? 'lupa' : 'session';
+}
+
+function syncLooseNavBarVisibility() {
+  if (!looseNavBar) return;
+  const hasTabs = looseNavHasOpenTabs(looseNavState);
+  const visible = !navBarUserClosed && (hasTabs || searchManualReveal);
+  const wasRevealed = looseNavBar.classList.contains('is-search-revealed');
+  const wasHidden = looseNavBar.classList.contains('hidden');
+  if (wasRevealed === visible && wasHidden === !visible) {
+    if (!visible) looseNavBar.classList.remove('is-tabs-forced');
+    paintStripNavToggle(visible);
+    syncBarSproutAttr();
+    if (!visible) invalidateLooseNavViewport();
+    return;
+  }
+  looseNavBar.classList.toggle('is-search-revealed', visible);
+  looseNavBar.classList.toggle('hidden', !visible);
+  if (!visible) looseNavBar.classList.remove('is-tabs-forced');
+  paintStripNavToggle(visible);
+  if (visible) void looseNavBar.offsetHeight;
+  syncBarSproutAttr();
+  if (!visible && looseNavOmniboxInput && document.documentElement.dataset.searchIdle === 'on') {
+    looseNavOmniboxInput.value = '';
+    window.UsualDeskTabStripFit?.paintAddressFace(
+      document.getElementById('loose-nav-omnibox-face'),
+      ''
+    );
+  }
+  invalidateLooseNavViewport();
+}
+
+function setSearchBarRevealed(on, { guard = false } = {}) {
+  const next = on === true;
+  searchManualReveal = next;
+  if (next) navBarUserClosed = false;
+  if (!next && looseNavBar) looseNavBar.classList.remove('is-tabs-forced');
+  if (next && guard) searchRevealGuardUntil = Date.now() + 600;
+  syncLooseNavBarVisibility();
+}
+
+/** Cursor en el buscador. `force` ignora si el foco estaba en notas u otro campo. */
+function focusSearchBarIfIdle({ force = false } = {}) {
+  if (!looseNavOmniboxInput) return;
+  if (document.documentElement.dataset.searchIdle !== 'on') return;
+  if (!force && !document.hasFocus()) return;
+  if (!force && looseNavFocusIsEditor(document.activeElement)) return;
+  setSearchBarRevealed(true, { guard: true });
+  if (!looseNavState.active) {
+    looseNavOmniboxInput.focus();
+    const len = looseNavOmniboxInput.value.length;
+    try { looseNavOmniboxInput.setSelectionRange(len, len); } catch { /* ignore */ }
+    return;
+  }
+  focusFreshAddress();
+}
+
+function focusOmniboxFromHotkey() {
+  if (!looseNavOmniboxInput) return;
+  if (document.documentElement.dataset.searchIdle === 'on') {
+    focusSearchBarIfIdle({ force: true });
+    return;
+  }
+  if (!looseNavState.active) {
+    setSearchBarRevealed(true, { guard: true });
+    looseNavOmniboxInput.focus();
+    return;
+  }
+  setSearchBarRevealed(true, { guard: true });
+  focusLooseNavOmnibox({ clear: false });
 }
 
 function renderLooseNavBar(state) {
@@ -6354,7 +7114,6 @@ function renderLooseNavBar(state) {
     looseNavKnownTabIds = null;
     looseNavPendingTabSlide = false;
   }
-  looseNavBar.classList.toggle('hidden', !show);
   if (looseNavSurface) looseNavSurface.classList.toggle('hidden', !show);
   document.documentElement.setAttribute('data-loose-nav', show ? 'on' : 'off');
   if (window.InplaizeDocumentModal && typeof window.InplaizeDocumentModal.syncWithBrowser === 'function') {
@@ -6370,6 +7129,7 @@ function renderLooseNavBar(state) {
   updateAllShortcutWebInactiveStates();
 
   renderLooseNavAccounts(looseNavState);
+  renderLooseNavControls(looseNavState);
   renderLooseNavOmnibox(looseNavState);
   if (show) {
     syncLooseNavAddressOnly(looseNavState);
@@ -6389,15 +7149,37 @@ function renderLooseNavBar(state) {
   } else {
     lastSentViewportBounds = null;
     stripSearchHandoff = null;
+    stripSearchPreferGuest = false;
     document.documentElement.dataset.addressOnly = 'off';
     if (stripComposeActive) setStripCompose(false);
     if (wasLoose) window.usualDesk.hideMenuOverlay?.();
   }
+  const searchIdle = !show || looseNavAddressOnly(looseNavState);
+  looseNavBar.classList.toggle('is-search-idle', searchIdle);
+  document.documentElement.dataset.searchIdle = searchIdle ? 'on' : 'off';
+  if (!searchIdle) {
+    // Al menos una pestaña real abierta: la fila se mantiene visible por sí sola.
+    searchManualReveal = false;
+  } else if (show && looseNavState.promptAddress) {
+    // Lupa / nueva pestaña vacía: abre el buscador y enfoca la dirección.
+    searchManualReveal = true;
+    searchRevealGuardUntil = Date.now() + 600;
+  } else if (!show && wasLoose && !stripSearchHandoff && !stripComposeActive) {
+    searchManualReveal = false;
+  }
+  syncLooseNavBarVisibility();
+  if (show && searchIdle && looseNavState.promptAddress) {
+    requestAnimationFrame(() => focusFreshAddress());
+  }
   syncDockHomeStripBtn();
+  invalidateLooseNavViewport();
 }
 
 function initLooseNavUiEvents() {
   if (!looseNavBar) return;
+  renderLooseNavControls(looseNavState);
+  syncLooseNavAddShortcutBtn();
+  setSearchBarRevealed(false);
 
   looseNavNewTabBtn?.addEventListener('click', () => {
     openLooseNavBlankTab();
@@ -6442,12 +7224,16 @@ function initLooseNavUiEvents() {
   });
 
   const runLooseNavShortcut = (action) => {
-    if (action === 'edit-address') focusLooseNavOmnibox();
-    else if (action === 'new-tab') openLooseNavBlankTab();
-    else if (action === 'blank-address') focusFreshAddress();
-    else if (action === 'exit-profiles-edit') setLooseNavProfilesEditMode(false);
+    const cmd = String(action || '');
+    if (cmd === 'edit-address') focusLooseNavOmnibox();
+    else if (cmd === 'new-tab') openLooseNavBlankTab();
+    else if (cmd === 'blank-address') focusFreshAddress();
+    else if (cmd === 'exit-profiles-edit') setLooseNavProfilesEditMode(false);
   };
   window.usualDesk.onLooseNavShortcut?.(runLooseNavShortcut);
+  window.usualDesk.onFocusSearchBar?.(() => {
+    setTimeout(() => focusOmniboxFromHotkey(), 40);
+  });
   document.addEventListener('keydown', (ev) => {
     if (!looseNavState.active) return;
     const target = ev.target instanceof Element ? ev.target : null;
@@ -6469,6 +7255,18 @@ function initLooseNavUiEvents() {
   });
 
   window.addEventListener('resize', () => scheduleLooseNavViewportSync());
+
+  document.addEventListener('pointerdown', (ev) => {
+    if (!searchManualReveal && !profileLupaOpen) return;
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target) return;
+    if (target.closest('#loose-nav-bar, #strip-search, #strip-profile-search, .loose-nav-suggest, .loose-nav-account, .loose-nav-accounts')) return;
+    if (profileLupaOpen) {
+      closeProfileLupa();
+      return;
+    }
+    setSearchBarRevealed(false);
+  });
 
   if (typeof ResizeObserver === 'function' && dockViewport) {
     const ro = new ResizeObserver(() => scheduleLooseNavViewportSync());

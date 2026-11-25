@@ -76,6 +76,20 @@ assert.deepStrictEqual(
 assert.deepStrictEqual(shown(['=100', '=total + 21%', '=total']), ['100', '121', '0']);
 assert.deepStrictEqual(shown(['=100', '=total: 5', '=total']), ['100', '5', '5']);
 
+// ANS: un renglón que empieza con un operador usa el resultado anterior.
+assert.deepStrictEqual(
+  shown(['=123+2', '+2', '=sueldo=120000', 'sueldo*1450', '/12']),
+  ['125', '127', '120.000', '174.000.000', '14.500.000'],
+);
+assert.deepStrictEqual(shown(['=100', '+21%', '*2', '-10', '/2']), ['100', '121', '242', '232', '116']);
+assert.deepStrictEqual(shown(['=50', '/2']), ['50', '25']);
+assert.strictEqual(one('=+2'), '2');
+assert.strictEqual(one('=/12'), null);
+assert.deepStrictEqual(shown(['=80', '', '/2']), ['80', null, null]);
+assert.deepStrictEqual(shown(['=80', '', '=10', '/2']), ['80', null, '10', '5']);
+assert.deepStrictEqual(shown(['=10', 'una nota', '/2']), ['10', null, '5']);
+assert.strictEqual(evaluateLines(['=100', '/4'])[1].text, '/4 = 25');
+
 // Modo cálculo: un "=" lo abre y sigue hasta el primer renglón vacío.
 assert.deepStrictEqual(
   shown(['sueldo*3', '=sueldo=3000', 'sueldo*3', 'una nota', 'extra: 500', 'sueldo + extra', 'total', '', 'sueldo*3', '100', '=sueldo']),

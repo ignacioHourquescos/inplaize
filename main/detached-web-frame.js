@@ -17,12 +17,13 @@ const {
   attachPageHistoryNav,
 } = require('./page-history-nav');
 const { popupPageMenu, attachPageShortcuts, findInPage, stopFindInPage } = require('./page-menu');
+const { applyTabNavigation, pickPageFavicon } = require('./web-favicon');
 /** Debe coincidir con --ud-chrome-strip-h en chrome-strip.css. */
 const DETACHED_CHROME_H = 58;
-/** Pestañas y dirección en una fila. Debe coincidir con .shortcut-browser en web-shell.css. */
-const DETACHED_TABSTRIP_H = 40;
+/** Pestañas y dirección en una fila. Debe coincidir con --ud-chrome-search-h. */
+const DETACHED_TABSTRIP_H = 48;
 /** La dirección se esconde al scrollear, pero la fila no cambia de alto. */
-const DETACHED_TABS_ONLY_H = 40;
+const DETACHED_TABS_ONLY_H = 48;
 
 const WEB_NOTIFICATION_FOCUS_PRELOAD = path.join(__dirname, 'web-notification-focus-preload.js');
 
@@ -54,6 +55,30 @@ function buildDetachedChromePayload(activeMapKey) {
   const items = shortcuts.map((s) => {
     const name = (s.name && String(s.name)) || '';
     const icon = iconFromShortcut(s);
+    if (s.type === 'workspace') {
+      const members = (Array.isArray(s.members) ? s.members : []).map((member) => ({
+        id: String(member.id),
+        type: member.type || 'web',
+        name: (member.name && String(member.name)) || '',
+        icon: iconFromShortcut(member),
+        iconInverted: member.iconInverted === true,
+        url: typeof member.url === 'string' ? member.url : '',
+        sessionId: typeof member.sessionId === 'string' ? member.sessionId : '',
+      }));
+      const workspaceKey = `workspace:${s.id}`;
+      return {
+        id: String(s.id),
+        type: 'workspace',
+        name,
+        icon: '',
+        iconInverted: false,
+        members,
+        mapKey: workspaceKey,
+        isOpen: openKeys.has(workspaceKey),
+        isActive: activeMapKey === workspaceKey,
+        isFocusMember: false,
+      };
+    }
     if (s.type === 'web') {
       const mk = webMapKey(s);
       return {
@@ -243,18 +268,48 @@ function hostShowsTabChrome(host) {
   return state.order.length > 1;
 }
 
+function hostSearchRowVisible(host) {
+  if (!host || host.__usualDeskEmbeddedDesktop) return false;
+  /* La cruz cerró la fila: la página sube aunque haya más de una pestaña. */
+  if (host.__usualDeskNavRowHidden) return false;
+  if (hostShowsTabChrome(host)) return true;
+  return !!(host.__usualDeskSearchRevealed || host.__usualDeskUrlCompose || host.__usualDeskAddressPeek);
+}
+
 function chromeHeightFor(host) {
-  if (!hostShowsTabChrome(host)) {
-    if (host && host.__usualDeskAddressPeek && !host.__usualDeskEmbeddedDesktop) {
-      return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
-    }
+  /* Sin pestañas extra ni buscador pedido, la página pega a la franja de iconos. */
+  if (!hostSearchRowVisible(host)) {
     return DETACHED_CHROME_H;
   }
-  /* Peek de dirección (una pestaña): misma fila, solo omnibox. */
-  if (host.__usualDeskAddressPeek) return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
-  /* URL oculta al scrollear: la fila sigue midiendo lo mismo. */
-  if (host.__usualDeskUrlBarHidden) return DETACHED_CHROME_H + DETACHED_TABS_ONLY_H;
+  if (host && host.__usualDeskUrlBarHidden && hostShowsTabChrome(host)) {
+    return DETACHED_CHROME_H + DETACHED_TABS_ONLY_H;
+  }
   return DETACHED_CHROME_H + DETACHED_TABSTRIP_H;
+}
+
+/** La cruz ocultó la fila de pestañas. El BrowserView no debe reservar ese alto. */
+function setNavRowHidden(host, hidden) {
+  if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
+  const next = hidden === true;
+  if (!!host.__usualDeskNavRowHidden === next) {
+    layoutActiveTabView(host);
+    return;
+  }
+  host.__usualDeskNavRowHidden = next;
+  layoutActiveTabView(host);
+}
+
+/** El renderer muestra u oculta la fila de búsqueda; el BrowserView debe seguir ese alto. */
+function setSearchRevealed(host, on) {
+  if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
+  const next = on === true;
+  if (!!host.__usualDeskSearchRevealed === next) {
+    layoutActiveTabView(host);
+    return;
+  }
+  host.__usualDeskSearchRevealed = next;
+  if (next) host.__usualDeskUrlBarHidden = false;
+  layoutActiveTabView(host);
 }
 
 /** Compose desde Buscar: foco en la omnibox (misma fila que las pestañas). */
@@ -263,24 +318,26 @@ function setUrlCompose(host, on) {
   const next = on === true;
   if (!!host.__usualDeskUrlCompose === next) return;
   host.__usualDeskUrlCompose = next;
-  if (next) host.__usualDeskUrlBarHidden = false;
+  if (next) {
+    host.__usualDeskUrlBarHidden = false;
+    host.__usualDeskSearchRevealed = true;
+  }
   try {
     host.webContents.send('detached-url-compose', next);
   } catch {
     /* cerrando */
   }
-  /* El alto del chrome ya no cambia: dirección y pestañas comparten fila. */
-  if (next) layoutActiveTabView(host);
+  layoutActiveTabView(host);
 }
 
-/** Esconde o muestra la dirección y le deja ese lugar a la página. */
+/** La dirección se queda visible: es la app fijada, no una pestaña de la fila. */
 function setUrlBarHidden(host, hidden) {
   if (!host || host.isDestroyed() || !host.__usualDeskDetachedChromeHost) return;
-  const next = hidden === true && hostShowsTabChrome(host);
-  if (!!host.__usualDeskUrlBarHidden === next) return;
-  host.__usualDeskUrlBarHidden = next;
+  if (!host.__usualDeskUrlBarHidden) return;
+  void hidden;
+  host.__usualDeskUrlBarHidden = false;
   try {
-    host.webContents.send('detached-url-bar', next);
+    host.webContents.send('detached-url-bar', false);
   } catch {
     /* la ventana se está cerrando */
   }
@@ -312,24 +369,52 @@ function setHostUrlPromptOpen(host, open) {
   attachActiveTabViewOnly(host);
 }
 
+function placeActiveTabView(host, tab, top) {
+  const [w, h] = host.getContentSize();
+  const y = Math.max(0, Math.round(top));
+  try {
+    tab.view.setBounds({
+      x: 0,
+      y,
+      width: Math.max(0, w),
+      height: Math.max(0, h - y),
+    });
+  } catch {
+    /* noop */
+  }
+}
+
 function layoutActiveTabView(host) {
   if (host && (host.__usualDeskUrlPromptOpen || host.__usualDeskEmbeddedDesktop)) return;
   const state = tabStateOf(host);
   if (!state) return;
   const tab = state.tabs.get(state.activeId);
   if (!tab) return;
-  const [w, h] = host.getContentSize();
-  const top = chromeHeightFor(host);
-  try {
-    tab.view.setBounds({
-      x: 0,
-      y: top,
-      width: Math.max(0, w),
-      height: Math.max(0, h - top),
-    });
-  } catch {
-    /* noop */
-  }
+  placeActiveTabView(host, tab, chromeHeightFor(host));
+  // El alto real del buscador manda: si la página quedó encima, se corre.
+  host.webContents
+    .executeJavaScript(
+      `(() => {
+        const bar = document.getElementById('shortcut-browser');
+        if (!bar || bar.hidden) return 0;
+        const rect = bar.getBoundingClientRect();
+        return rect.height > 0 ? Math.round(rect.bottom) : 0;
+      })()`,
+      true,
+    )
+    .then((measured) => {
+      if (host.isDestroyed()) return;
+      const live = tabStateOf(host);
+      const current = live && live.tabs.get(live.activeId);
+      if (!current || current.id !== tab.id) return;
+      if (host.__usualDeskNavRowHidden) {
+        placeActiveTabView(host, current, chromeHeightFor(host));
+        return;
+      }
+      if (!measured) return;
+      placeActiveTabView(host, current, measured);
+    })
+    .catch(() => {});
   try {
     require('./menu-overlay').raise(host);
   } catch {
@@ -439,11 +524,15 @@ function pageIsPinned(url, sessionId) {
   const key = normalizeUrlKey(url);
   if (!key) return false;
   const session = String(sessionId || '');
-  return loadShortcuts().some(
-    (item) => item.type === 'web'
-      && normalizeUrlKey(item.url || '') === key
-      && String(item.sessionId || '') === session,
-  );
+  return loadShortcuts().some((item) => {
+    const pages = item && item.type === 'workspace' && Array.isArray(item.members)
+      ? item.members
+      : [item];
+    return pages.some((page) => page
+      && page.type === 'web'
+      && normalizeUrlKey(page.url || '') === key
+      && String(page.sessionId || '') === session);
+  });
 }
 
 function pinTitleFor(tab) {
@@ -529,10 +618,10 @@ function attachSubTabEvents(host, tab) {
   });
 
   wc.on('page-favicon-updated', (_e, favicons) => {
-    if (Array.isArray(favicons) && favicons.length) {
-      tab.favicon = String(favicons[0] || '');
-      broadcastTabsToHost(host);
-    }
+    const picked = pickPageFavicon(favicons, tab.url);
+    if (!picked || picked === tab.favicon) return;
+    tab.favicon = picked;
+    broadcastTabsToHost(host);
   });
 
   wc.on('did-start-loading', () => {
@@ -541,11 +630,13 @@ function attachSubTabEvents(host, tab) {
   });
 
   const rememberSubPage = () => {
+    let next = tab.url;
     try {
-      tab.url = wc.getURL() || tab.url;
+      next = wc.getURL() || tab.url;
     } catch {
       /* noop */
     }
+    if (applyTabNavigation(tab, next)) broadcastTabsToHost(host);
   };
   wc.on('did-navigate', rememberSubPage);
   wc.on('did-navigate-in-page', rememberSubPage);
@@ -894,11 +985,20 @@ function registerDetachedFrameIpc() {
         setUrlCompose(win, arg === true);
         return true;
       }
+      case 'set-search-revealed': {
+        setSearchRevealed(win, arg === true);
+        return true;
+      }
+      case 'set-nav-row-hidden': {
+        setNavRowHidden(win, arg === true);
+        return true;
+      }
       case 'activate': {
         const id = arg == null ? '' : String(arg);
         if (!id) return false;
         const list = loadShortcuts();
-        const s = list.find((x) => String(x.id) === id);
+        const { findShortcutById } = require('./shortcuts-store');
+        const s = findShortcutById(list, id);
         if (!s) return false;
         const { openShortcut } = require('./open-shortcut');
         await openShortcut(s);
@@ -939,6 +1039,11 @@ function registerDetachedFrameIpc() {
       case 'new-subtab': {
         const { LOOSE_NAV_NEW_TAB_URL } = require('./constants');
         const typed = addressToUrl(arg);
+        try {
+          require('./embed-app-host').suspendOnHost(win);
+        } catch {
+          /* sin app de escritorio encima, la pestaña se ve igual */
+        }
         await openSubTabInHost(win, typed || LOOSE_NAV_NEW_TAB_URL);
         return true;
       }
@@ -1033,13 +1138,15 @@ function createMainPageView(host, shortcut, mapKey) {
     loading: false,
     isMain: true,
   };
+  if (prev && prev.workspaceUrl) tab.workspaceUrl = prev.workspaceUrl;
+  if (prev && prev.partition) tab.partition = prev.partition;
   state.tabs.set(state.mainId, tab);
   bindHostPageNav(host, tab);
   attachPageShortcuts(wc, pageMenuContextFor(host));
 
   const rememberMainPage = () => {
     try {
-      tab.url = wc.getURL() || tab.url;
+      applyTabNavigation(tab, wc.getURL() || tab.url);
       const title = wc.getTitle();
       if (title) tab.title = title;
     } catch {
@@ -1052,10 +1159,10 @@ function createMainPageView(host, shortcut, mapKey) {
     broadcastTabsToHost(host);
   });
   wc.on('page-favicon-updated', (_e, favicons) => {
-    if (Array.isArray(favicons) && favicons.length) {
-      tab.favicon = String(favicons[0] || '');
-      broadcastTabsToHost(host);
-    }
+    const picked = pickPageFavicon(favicons, tab.url);
+    if (!picked || picked === tab.favicon) return;
+    tab.favicon = picked;
+    broadcastTabsToHost(host);
   });
   wc.on('did-navigate', rememberMainPage);
   wc.on('did-navigate-in-page', rememberMainPage);
@@ -1128,6 +1235,31 @@ async function hibernateHost(host) {
  * @param {Electron.BrowserWindow} host
  * @returns {boolean}
  */
+/** La ventana nace con show:false. Hay que mostrarla aunque ready-to-show ya haya pasado. */
+function revealDetachedHost(host) {
+  if (!host || host.isDestroyed()) return;
+  try {
+    if (host.isMinimized()) host.restore();
+  } catch {
+    /* noop */
+  }
+  try {
+    if (!host.isMaximized()) host.maximize();
+  } catch {
+    /* noop */
+  }
+  try {
+    host.show();
+  } catch {
+    /* noop */
+  }
+  try {
+    require('./window-focus').forceWindowForeground(host);
+  } catch {
+    /* noop */
+  }
+}
+
 function wakeHost(host) {
   if (!host || host.isDestroyed()) return false;
   const sleeping = host.__usualDeskHibernated;
@@ -1192,6 +1324,8 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
   });
 
   host.__usualDeskDetachedChromeHost = true;
+  host.__usualDeskSearchRevealed = false;
+  host.__usualDeskUrlCompose = false;
   host.__usualDeskDetachedOwnMapKey = mapKey;
   brandWindow(host);
   attachWindowHistoryNav(host, () => activeHostWebContents(host));
@@ -1242,40 +1376,46 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
     destroyAllHostTabs(host);
   });
 
+  function sendMaximized() {
+    if (!host || host.isDestroyed()) return;
+    try {
+      host.webContents.send('detached-window-maximized', host.isMaximized());
+    } catch {
+      /* noop */
+    }
+  }
+
+  let revealed = false;
+  const revealOnce = () => {
+    if (revealed || host.isDestroyed()) return;
+    revealed = true;
+    revealDetachedHost(host);
+    sendMaximized();
+  };
+  /* Antes de loadFile: ready-to-show suele dispararse mientras la promesa sigue en curso. */
+  host.once('ready-to-show', revealOnce);
+  host.on('maximize', sendMaximized);
+  host.on('unmaximize', sendMaximized);
+
   try {
     await host.loadFile(path.join(root, 'detached-web-frame.html'));
     lockWindowZoom(host.webContents);
+    try {
+      require('./strip-chrome-lock-inject').attachStripChromeLock(host.webContents);
+    } catch {
+      /* noop */
+    }
 
     attachActiveTabViewOnly(host);
 
-    host.webContents.once('did-finish-load', () => {
-      try {
-        host.webContents.send('detached-chrome', buildDetachedChromePayload(mapKey));
-      } catch {
-        /* noop */
-      }
-      broadcastTabsToHost(host);
-    });
-
-    function sendMaximized() {
-      if (!host || host.isDestroyed()) return;
-      try {
-        host.webContents.send('detached-window-maximized', host.isMaximized());
-      } catch {
-        /* noop */
-      }
+    try {
+      host.webContents.send('detached-chrome', buildDetachedChromePayload(mapKey));
+    } catch {
+      /* noop */
     }
+    broadcastTabsToHost(host);
 
-    host.on('maximize', sendMaximized);
-    host.on('unmaximize', sendMaximized);
-
-    host.once('ready-to-show', () => {
-      if (!host.isDestroyed()) {
-        host.maximize();
-        host.show();
-        sendMaximized();
-      }
-    });
+    if (!revealed) revealOnce();
 
     await loadWebContentsUrl(wc, shortcut.url || 'about:blank');
     if (!wc.isDestroyed()) {
@@ -1299,15 +1439,29 @@ async function createDetachedWebHostWindow(shortcut, mapKey, partition) {
   }
 }
 
+/**
+ * Acceso dueño de una ventana: una web por su clave, o el workspace si la ventana es suya.
+ * @param {string} mk
+ * @returns {string | null}
+ */
+function shortcutIdForHostMapKey(mk) {
+  if (!mk || typeof mk !== 'string') return null;
+  const list = loadShortcuts();
+  if (mk.startsWith('workspace:')) {
+    const id = mk.slice('workspace:'.length);
+    const folder = list.find((x) => x && x.type === 'workspace' && String(x.id) === id);
+    return folder && folder.id != null ? String(folder.id) : null;
+  }
+  const s = list.find((x) => x && x.type === 'web' && webMapKey(x) === mk);
+  return s && s.id != null ? String(s.id) : null;
+}
+
 /** Acceso asociado a la ventana independiente enfocada (modo ventanas separadas). */
 function getFocusedDetachedHostShortcutId() {
   const focused = BrowserWindow.getFocusedWindow();
   if (!focused || focused.isDestroyed() || !focused.__usualDeskDetachedChromeHost) return null;
   const mk = focused.__usualDeskDetachedOwnMapKey;
-  if (!mk || typeof mk !== 'string') return null;
-  const list = loadShortcuts();
-  const s = list.find((x) => x && x.type === 'web' && webMapKey(x) === mk);
-  return s && s.id != null ? String(s.id) : null;
+  return shortcutIdForHostMapKey(typeof mk === 'string' ? mk : '');
 }
 
 module.exports = {
@@ -1318,6 +1472,7 @@ module.exports = {
   broadcastTitleBadgeToDetachedHosts,
   buildDetachedChromePayload,
   getFocusedDetachedHostShortcutId,
+  shortcutIdForHostMapKey,
   openSubTabInHost,
   subTabWindowOpenResponse,
   selectHostTab,

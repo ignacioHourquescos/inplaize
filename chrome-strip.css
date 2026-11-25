@@ -7,16 +7,46 @@
  */
 :root {
   --ud-chrome-strip-h: 58px;
+  /* Fila de búsqueda / dirección. Debe coincidir con DETACHED_TABSTRIP_H. */
+  --ud-chrome-search-h: 48px;
   --ud-chrome-strip-pad-y: 8px;
   --ud-chrome-strip-pad-x: 8px;
   --ud-chrome-strip-gap: 6px;
   --ud-chrome-icon: 40px;
+  /* Divisor entre perfiles y accesos: la línea y el control que abre la barra. */
+  --ud-chrome-split: 26px;
+  /* inplaize y Descargas: mismo alto que el resto, pastilla un poco menor. */
+  --ud-chrome-home-icon: 40px;
+  --ud-chrome-home-mark: 26px;
+  /* Aire entre inplaize y Descargas. El pull los acerca sin achicar el botón. */
+  --ud-chrome-home-gap: 8px;
+  --ud-chrome-home-pull: 4px;
+  --ud-chrome-home-trail: 10px;
+  /* Hasta el divisor: inplaize y Descargas. Abajo, atrás / adelante / recargar. */
+  --ud-chrome-home-cluster: calc(
+    var(--ud-chrome-home-icon) * 2
+    + (var(--ud-chrome-home-gap) - var(--ud-chrome-home-pull))
+    + var(--ud-chrome-home-trail)
+  );
+  --ud-chrome-nav-pin: 24px;
+  --ud-chrome-nav-icon: color-mix(in srgb, var(--ud-chrome-text) 92%, transparent);
+  --ud-chrome-nav-icon-off: color-mix(in srgb, var(--ud-chrome-text) 70%, transparent);
   /* Margen + "www" + espacio + línea de color: mismo ancho que el menú lateral de WhatsApp Web. */
   --ud-chrome-lead-w: 64px;
   --ud-chrome-open-url-w: calc(var(--ud-chrome-lead-w) - var(--ud-chrome-strip-pad-x) - var(--ud-chrome-strip-gap) - 2px);
   --ud-chrome-action-w: 46px;
+  /* El cuadrado visible del + está centrado en el botón de 40px (la marca mide 28). */
+  --ud-chrome-url-inset: calc((var(--ud-chrome-icon) - 28px) / 2);
+  /* Borde izquierdo del cuadrado del +: pad + cluster + divisor + gap + inset. */
+  --ud-chrome-lupa-x: calc(
+    var(--ud-chrome-strip-pad-x)
+    + var(--ud-chrome-home-cluster)
+    + 1px
+    + var(--ud-chrome-strip-gap)
+    + var(--ud-chrome-url-inset)
+  );
   /* Columna de dirección a la izquierda de las pestañas (misma fila). */
-  --ud-url-col: clamp(260px, 34vw, 440px);
+  --ud-url-col: clamp(310px, 36vw, 490px);
   /* Leading = perfiles + Buscar (contenido), no imita una columna de URL. */
   --ud-chrome-leading-offset: calc(
     var(--ud-chrome-strip-pad-x) + var(--ud-chrome-icon) + var(--ud-chrome-strip-gap)
@@ -55,6 +85,8 @@
   --key-close: #ff9a9a;
   --key-line: #a78bfa;
   --accent-ink: #a5a0f2;
+  /* Mismo grosor en el borde del icono, el arco y la línea de la barra. */
+  --ud-sprout-stroke: 2px;
 }
 
 /* ==========================================================================
@@ -186,12 +218,12 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   filter: none;
 }
 
-/* Seleccionado (el que estás mirando): borde violeta inplaize. */
+/* Seleccionado (el que estás mirando): borde de color cerrado. */
 .shell-shortcut-item.is-active,
 .shell-shortcut-item.is-active:hover,
 .shell-shortcut-item.is-active:active {
   background: var(--ud-chrome-icon-active-bg);
-  border: 2px solid var(--ud-chrome-edit-tab);
+  border: 2px solid var(--key-line);
   box-shadow: none;
   opacity: 1;
   filter: none;
@@ -237,11 +269,11 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
 }
 
 /* Cerrada: el dibujo va a gris. Si la ventana está abierta, el icono queda a color. */
-.shell-shortcut-item:not(.is-open):not(.is-active):not(.strip-add-shortcut):not(.reorder-ghost):not(.shortcut-card-editing) .shell-shortcut-icon-wrap {
+.shell-shortcut-item:not(.is-open):not(.is-active):not(.strip-add-shortcut):not(.reorder-ghost):not(.shortcut-card-editing):not(.is-workspace) .shell-shortcut-icon-wrap {
   filter: grayscale(1) !important;
 }
 
-.shell-shortcut-item:not(.is-open):not(.is-active):not(.strip-add-shortcut):not(.reorder-ghost):not(.shortcut-card-editing):hover .shell-shortcut-icon-wrap {
+.shell-shortcut-item:not(.is-open):not(.is-active):not(.strip-add-shortcut):not(.reorder-ghost):not(.shortcut-card-editing):not(.is-workspace):hover .shell-shortcut-icon-wrap {
   filter: grayscale(0.35) !important;
 }
 
@@ -269,18 +301,73 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   color: var(--ud-chrome-icon-muted);
 }
 
-/* Logo violeta de inplaize: pastilla del tema y la marca (cuadrado blanco, punto). */
+/* inplaize y Descargas: fondo negro y dibujo blanco en oscuro; al revés en claro. El borde es el color del dibujo. */
 .dock-home-logo-mark {
   display: block;
+  box-sizing: border-box;
   width: 26px;
   height: 26px;
   border-radius: 8px;
   position: relative;
-  color: #fff;
-  background: linear-gradient(145deg, #a78bfa, #6d28d9);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 1px 2px rgba(0, 0, 0, 0.16);
+  color: var(--ud-chrome-text);
+  background: var(--ud-chrome-strip-bg);
+  border: 1.5px solid var(--ud-chrome-text);
+  box-shadow: none;
+}
+
+/* La pastilla violeta del switch viejo no puede volver a pintar inplaize ni Descargas. */
+.dock-home-strip-btn,
+.dock-downloads-strip-btn,
+.shell-home-strip-btn,
+.shell-downloads-strip-btn,
+.dock-home-strip-btn:hover,
+.dock-downloads-strip-btn:hover,
+.shell-home-strip-btn:hover,
+.shell-downloads-strip-btn:hover,
+.dock-home-strip-btn.is-active,
+.dock-downloads-strip-btn.is-active,
+.shell-home-strip-btn.is-active,
+.shell-downloads-strip-btn.is-active {
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.dock-home-strip-btn .dock-home-logo-mark,
+.dock-downloads-strip-btn .dock-home-logo-mark,
+.shell-home-strip-btn .dock-home-logo-mark,
+.shell-downloads-strip-btn .dock-home-logo-mark,
+.strip-mode-seg .dock-home-logo-mark,
+.strip-mode-seg .shell-shortcut-item.is-active .dock-home-logo-mark,
+.strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark {
+  width: var(--ud-chrome-home-mark, 26px) !important;
+  height: var(--ud-chrome-home-mark, 26px) !important;
+  border-radius: 8px !important;
+  color: var(--ud-chrome-text) !important;
+  background: var(--ud-chrome-strip-bg) !important;
+  background-image: none !important;
+  border: 1.5px solid var(--ud-chrome-text) !important;
+  box-shadow: none !important;
+}
+
+.strip-mode-seg::before,
+.strip-mode-seg::after {
+  content: none !important;
+  opacity: 0 !important;
+  background: none !important;
+}
+
+.dock-home-logo-mark .logo-mark rect {
+  fill: currentColor;
+}
+
+.dock-home-logo-mark .logo-mark circle {
+  fill: var(--ud-chrome-strip-bg);
+}
+
+.dock-home-logo-mark .logo-mark path {
+  stroke: currentColor;
 }
 
 .dock-home-logo-mark .logo-mark {
@@ -303,12 +390,16 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
 }
 
 .dock-home-strip-btn:hover .dock-home-logo-mark,
-.shell-home-strip-btn:hover .dock-home-logo-mark {
+.dock-downloads-strip-btn:hover .dock-home-logo-mark,
+.shell-home-strip-btn:hover .dock-home-logo-mark,
+.shell-downloads-strip-btn:hover .dock-home-logo-mark {
   filter: brightness(1.08);
 }
 
 .dock-home-strip-btn:active .dock-home-logo-mark,
-.shell-home-strip-btn:active .dock-home-logo-mark {
+.dock-downloads-strip-btn:active .dock-home-logo-mark,
+.shell-home-strip-btn:active .dock-home-logo-mark,
+.shell-downloads-strip-btn:active .dock-home-logo-mark {
   transform: scale(0.94);
 }
 
@@ -323,9 +414,10 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
   -webkit-app-region: no-drag;
 }
 
-/* Tareas, descargas e internet: mismo tamaño que el resto, sin marco. */
+/* Tareas, descargas e internet: mismo tamaño que el resto, sin marco en reposo. */
 .dock-strip-lead .shell-shortcut-item,
 .shell-home-strip-btn,
+.shell-downloads-strip-btn,
 .open-url-btn {
   border-color: transparent !important;
   background: transparent !important;
@@ -340,6 +432,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
 
 .dock-strip-lead .shell-shortcut-item.file-drag-hover,
 .shell-home-strip-btn.file-drag-hover,
+.shell-downloads-strip-btn.file-drag-hover,
 .open-url-btn.file-drag-hover {
   border-color: var(--accent, #7c5cff) !important;
   box-shadow: 0 0 0 2px var(--accent, #7c5cff) !important;
@@ -374,18 +467,12 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
    al cargar), aparece directamente. */
 .strip-mode-seg::before,
 .strip-mode-seg::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: var(--strip-seg-w);
-  height: var(--strip-seg-h);
-  border-radius: 8px;
-  pointer-events: none;
-  z-index: 0;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  opacity: 0;
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
 }
 
 .strip-mode-seg::after {
@@ -438,6 +525,7 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
 .strip-mode-seg .open-url-btn.is-active .open-url-icon,
 .strip-mode-seg .shell-shortcut-item.is-active .dock-home-logo-mark {
   background: transparent;
+  border-color: transparent;
   box-shadow: none;
   color: #fff;
 }
@@ -450,8 +538,15 @@ html[data-dock-layout='topbar'] #shortcuts-container > .strip-end-actions,
 
 .strip-mode-seg .shell-shortcut-item:not(.is-active) .dock-home-logo-mark {
   background: transparent;
+  border-color: transparent;
   box-shadow: none;
   color: var(--ud-chrome-seg-muted);
+}
+
+.strip-mode-seg .dock-home-logo-mark .logo-mark circle,
+.strip-mode-seg .shell-shortcut-item.is-active .dock-home-logo-mark .logo-mark circle,
+.dock-home-logo-mark .logo-mark circle {
+  fill: var(--ud-chrome-strip-bg) !important;
 }
 
 .strip-mode-seg .open-url-btn:not(.is-active):hover .open-url-icon,
@@ -831,7 +926,7 @@ html.focus-mode-active .shell-top::before {
   min-width: 0;
   height: 100%;
   margin: 0;
-  padding: 0 8px 0 2px;
+  padding: 0 8px 0 var(--ud-chrome-url-inset, 6px);
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -846,6 +941,15 @@ html.focus-mode-active .shell-top::before {
 .loose-nav-omnibox.is-editing .omnibox-face,
 .shortcut-browser-toolbar.is-editing .omnibox-face {
   display: none;
+}
+
+.omnibox-favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  object-fit: contain;
 }
 
 .omnibox-scheme {
@@ -873,8 +977,31 @@ html.focus-mode-active .shell-top::before {
   opacity: 0.48;
 }
 
-/* Perfiles + buscador, en la misma fila, antes de la línea y de los accesos.
-   Ancho por contenido (la URL vive en su propia fila a 100%). */
+/* Misma columna que la dirección: los perfiles quedan a la izquierda y el resto, hasta esa línea, vacío. */
+.strip-url-cluster {
+  display: flex;
+  flex: 0 0 var(--ud-url-col) !important;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  align-self: stretch;
+  width: var(--ud-url-col) !important;
+  min-width: var(--ud-url-col) !important;
+  max-width: var(--ud-url-col) !important;
+  gap: var(--ud-chrome-strip-gap);
+  box-sizing: border-box;
+  overflow: visible;
+  -webkit-app-region: no-drag;
+}
+
+html[data-profiles-edit='on'] .strip-url-cluster {
+  flex: 0 1 auto !important;
+  width: max-content !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+/* Perfiles y el + de pestañas, en la misma fila, antes de la línea y de los accesos. */
 .strip-leading {
   display: flex !important;
   flex: 0 1 auto !important;
@@ -892,7 +1019,7 @@ html.focus-mode-active .shell-top::before {
 }
 
 html[data-loose-nav='on'] .strip-leading,
-body:has(#shortcut-browser:not([hidden])) .strip-leading {
+body:has(#shortcut-browser.is-search-revealed:not([hidden]):not(.is-search-idle)) .strip-leading {
   overflow: visible;
 }
 
@@ -911,65 +1038,331 @@ html[data-dock-layout='topbar'] .strip-leading > .loose-nav-accounts {
   overflow: visible;
 }
 
-/* Solo icono de lupa: al tocarlo enfoca la omnibox de la fila de pestañas. */
-.strip-leading > .strip-search {
-  margin-left: 0;
+.strip-leading > .strip-search,
+#sidebar-chrome > .strip-search,
+.shell-top > .strip-search {
+  /* Misma posición con la barra abierta o cerrada: el centro cae en el borde de la columna. */
+  margin-left: calc(-1 * (var(--ud-chrome-strip-gap) + var(--ud-chrome-split) / 2));
+  margin-right: 0;
+}
+
+.strip-url-cluster > .strip-leading {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+/* Perfil principal + lupa. Cerrada es el icono; abierta crece un input en la misma fila. */
+.strip-profile-search {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: var(--ud-chrome-strip-gap);
+  width: max-content;
+  min-width: 0;
+  height: var(--ud-chrome-icon, 40px);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  color: var(--ud-chrome-text, #e8e8ef);
+  -webkit-app-region: no-drag;
+}
+
+.strip-profile-search[hidden],
+html[data-profiles-edit='on'] .strip-profile-search {
+  display: none !important;
+}
+
+.strip-profile-search-avatar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.strip-profile-search-avatar .loose-nav-account,
+.strip-profile-search-avatar .loose-nav-account:hover,
+.strip-profile-search.is-open .strip-profile-search-avatar .loose-nav-account.is-active,
+.strip-profile-search.is-open .strip-profile-search-avatar .loose-nav-account.is-active:hover {
+  opacity: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+/* Mientras se escribe, el perfil no suma otro marco adentro del recuadro. */
+html[data-bar-sprout] .strip-profile-search.is-open .strip-profile-search-avatar .loose-nav-account.is-active,
+html[data-bar-sprout] .strip-profile-search.is-open .strip-profile-search-avatar .loose-nav-account.is-active:hover {
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  padding: 7px !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  anchor-name: none !important;
+}
+
+html[data-bar-sprout] .strip-profile-search.is-open .strip-profile-search-avatar .loose-nav-account::before,
+html[data-bar-sprout] .strip-profile-search.is-open .strip-profile-search-avatar .loose-nav-account::after {
+  content: none !important;
+  display: none !important;
+}
+
+.strip-profile-search-lupa {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: var(--ud-chrome-icon, 40px);
+  min-width: var(--ud-chrome-icon, 40px);
+  height: var(--ud-chrome-icon, 40px);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  position: relative;
+  overflow: visible;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
+.strip-profile-search-lupa:focus,
+.strip-profile-search-lupa:focus-visible {
+  outline: none;
+}
+
+.strip-profile-search-lupa:hover .strip-search-mark {
+  filter: brightness(1.08);
+}
+
+.strip-profile-search-lupa:active .strip-search-mark {
+  transform: scale(0.94);
+}
+
+.strip-profile-search-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+  pointer-events: none;
+}
+
+/* La lupa es el primer icono, el texto crece en el medio y el perfil queda a la derecha, adentro del borde. */
+.strip-profile-search-field {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  width: calc(var(--ud-chrome-icon, 40px) * 2);
+  height: var(--ud-chrome-icon, 40px);
+  box-sizing: border-box;
+  padding: 0;
+  border: 0 solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  overflow: hidden;
+  transition: width 180ms ease, border-color 180ms ease, background 180ms ease, padding 180ms ease;
+}
+
+.strip-profile-search.is-open .strip-profile-search-field {
+  width: 248px;
+  padding-right: 8px;
+  border-width: 1px;
+  border-color: var(--key-line);
+  background: var(--ud-chrome-strip-bg, #121216);
+}
+
+.strip-profile-search:not(.is-open) .strip-profile-search-field {
+  width: calc(var(--ud-chrome-icon, 40px) * 2);
+  max-width: calc(var(--ud-chrome-icon, 40px) * 2);
+  padding: 0;
+  border-width: 0;
+  border-color: transparent;
+  background: transparent;
+  overflow: visible;
+}
+
+.strip-profile-search:not(.is-open) .strip-profile-search-input {
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  opacity: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+.strip-profile-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 0 0 2px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  -webkit-app-region: no-drag;
+}
+
+.strip-profile-search-input::placeholder {
+  color: var(--ud-chrome-icon-muted, #c8c8d4);
 }
 
 .strip-search {
-  flex: 0 0 auto !important;
+  flex: 0 0 var(--ud-chrome-split, 18px) !important;
   box-sizing: border-box;
-  width: var(--ud-chrome-icon, 40px) !important;
-  min-width: var(--ud-chrome-icon, 40px) !important;
-  max-width: var(--ud-chrome-icon, 40px) !important;
-  height: var(--ud-chrome-icon, 40px) !important;
+  width: var(--ud-chrome-split, 18px) !important;
+  min-width: var(--ud-chrome-split, 18px) !important;
+  max-width: var(--ud-chrome-split, 18px) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
   margin: 0;
+  /* El hueco de la franja empuja la línea: se anula para que caiga en el borde de la columna de dirección. */
+  margin-left: calc(-1 * (var(--ud-chrome-strip-gap) + var(--ud-chrome-split) / 2));
   padding: 0;
-  align-self: center;
+  align-self: stretch;
   display: flex !important;
   align-items: center;
   justify-content: center;
+  gap: 0;
   visibility: visible !important;
   opacity: 1 !important;
   position: relative;
   z-index: 4;
   border: none;
-  border-radius: 10px;
+  border-radius: 0;
   background: transparent;
-  color: var(--secondary, #c8f542);
+  color: var(--ud-chrome-icon-muted, #c8c8d4);
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
+  outline: none;
   -webkit-app-region: no-drag;
 }
 
-.strip-search:hover {
-  background: var(--ud-chrome-icon-bg-hover, #36363f);
-  color: var(--secondary, #c8f542);
+/* Línea de alto completo. El control queda en el medio y tapa el trazo. */
+.strip-search-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--ud-chrome-divider, #3f3f48);
+  pointer-events: none;
 }
 
+.strip-search:focus,
 .strip-search:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent, #7c6cff) 65%, transparent);
-  outline-offset: 1px;
+  outline: none;
+}
+
+.strip-url-cluster > .dock-home-strip-btn,
+.strip-url-cluster > .dock-downloads-strip-btn,
+.strip-url-cluster > .shell-home-strip-btn,
+.strip-url-cluster > .shell-downloads-strip-btn {
+  width: var(--ud-chrome-home-icon) !important;
+  min-width: var(--ud-chrome-home-icon) !important;
+  max-width: var(--ud-chrome-home-icon) !important;
+  height: var(--ud-chrome-home-icon) !important;
+  min-height: var(--ud-chrome-home-icon) !important;
+  max-height: var(--ud-chrome-home-icon) !important;
+  flex: 0 0 var(--ud-chrome-home-icon) !important;
+}
+
+.strip-url-cluster .dock-home-logo-mark {
+  width: var(--ud-chrome-home-mark);
+  height: var(--ud-chrome-home-mark);
+  border-radius: 8px;
+}
+
+.strip-search-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+.strip-search-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  color: #14140f;
+  background: var(--key-line);
+  box-shadow: none;
+}
+
+html[data-canvas-theme='light'] .strip-search-mark {
+  color: #fff;
+}
+
+#strip-search .strip-search-mark,
+html[data-canvas-theme='light'] #strip-search .strip-search-mark,
+html[data-dock-layout='topbar'] #strip-search .strip-search-mark,
+html[data-bar-sprout] #strip-search .strip-search-mark {
+  width: 22px !important;
+  height: 18px !important;
+  min-width: 22px !important;
+  min-height: 18px !important;
+  border-radius: 6px !important;
+  color: var(--ud-chrome-icon-muted, #c8c8d4) !important;
+  background: var(--ud-chrome-strip-bg, #121216) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  z-index: 1;
+}
+
+#strip-search .strip-search-icon {
+  width: 15px;
+  height: 15px;
+}
+
+#strip-search:hover .strip-search-mark,
+#strip-search[aria-expanded='true'] .strip-search-mark {
+  filter: none;
+  color: var(--ud-chrome-text, #e8e8ef);
+}
+
+.strip-search:hover .strip-search-mark {
+  filter: brightness(1.08);
+}
+
+.strip-search:active .strip-search-mark {
+  transform: scale(0.94);
 }
 
 .strip-search-icon {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   display: block;
-  flex-shrink: 0;
+  pointer-events: none;
+  transform-origin: center;
+  transform: rotate(0deg);
 }
 
-.strip-search-input {
-  display: none !important;
+/* Quieto: chevron hacia abajo si la barra está cerrada, hacia arriba si está abierta. */
+.strip-search[aria-expanded='true'] .strip-search-icon {
+  transform: rotate(180deg);
 }
 
-/* Divisor a la izquierda de la lupa. La lupa queda en el mismo grupo que los perfiles. */
+/* Divisor entre inplaize / Descargas y el + (primer ítem de los perfiles). */
+.strip-rail-divider.strip-search-divider,
 .strip-search-divider,
 .strip-leading > .strip-search-divider {
   flex: 0 0 1px;
   align-self: stretch;
   width: 1px;
-  margin: 0 4px 0 calc(-1 * var(--ud-chrome-strip-gap));
+  /* El pull de Descargas se compensa para dejar --ud-chrome-home-trail antes del divisor. */
+  margin: 0 0 0 calc(var(--ud-chrome-home-trail) - var(--ud-chrome-strip-gap) + var(--ud-chrome-home-pull));
   background: var(--ud-chrome-divider, #3f3f48);
   -webkit-app-region: no-drag;
 }
@@ -979,19 +1372,21 @@ html[data-dock-layout='topbar'] .strip-leading > .loose-nav-accounts {
 }
 
 /* ==========================================================================
-   Encuadre de sesión: el icono conserva su tamaño/posición (no mueve la fila).
-   El puente (::before/::after) es absoluto hasta la barra de pestañas.
+   Encuadre hacia la barra inferior:
+   Con la barra abierta (toggle, una sola dirección o pestañas) la línea de color
+   sale del icono elegido — acceso o perfil — y se une a la barra.
+   El divisor del toggle no brota.
    ========================================================================== */
-html[data-loose-nav='on'] .shell-shortcut-item.is-active,
-html[data-loose-nav='on'] .shell-shortcut-item.is-active:hover,
-html[data-loose-nav='on'] .shell-shortcut-item.is-active:active,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active:hover,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active:active,
-html[data-loose-nav='on'] .loose-nav-account.is-active,
-html[data-loose-nav='on'] .loose-nav-account.is-active:hover,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active:hover {
+html[data-bar-sprout] .strip-leading,
+html[data-profile-lupa='on'] .strip-leading {
+  overflow: visible !important;
+}
+
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn),
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):hover,
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):active,
+html[data-bar-sprout] .loose-nav-account.is-active,
+html[data-bar-sprout] .loose-nav-account.is-active:hover {
   box-sizing: border-box !important;
   align-self: center !important;
   width: var(--ud-chrome-icon) !important;
@@ -1002,7 +1397,7 @@ body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active:hover {
   max-height: var(--ud-chrome-icon) !important;
   margin: 0 !important;
   padding: 0 !important;
-  border: 2px solid var(--key-line) !important;
+  border: var(--ud-sprout-stroke) solid var(--key-line) !important;
   border-bottom: none !important;
   border-radius: 10px 10px 0 0 !important;
   background: var(--ud-chrome-strip-bg) !important;
@@ -1012,20 +1407,23 @@ body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active:hover {
   anchor-name: --ud-session;
 }
 
-/* Perfil activo: avatar fijo centrado (no se deforma). */
-html[data-loose-nav='on'] .loose-nav-account.is-active,
-html[data-loose-nav='on'] .loose-nav-account.is-active:hover,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active:hover {
+/* La línea queda en el borde de la columna de dirección, igual que la de abajo. */
+html[data-bar-sprout] .strip-leading > .strip-search,
+html[data-bar-sprout] #sidebar-chrome > .strip-search,
+html[data-bar-sprout] .shell-top > .strip-search {
+  margin-left: calc(-1 * (var(--ud-chrome-strip-gap) + var(--ud-chrome-split) / 2)) !important;
+  margin-right: 0 !important;
+}
+
+/* Perfil activo con la barra abierta: avatar fijo centrado (no se deforma). */
+html[data-bar-sprout] .loose-nav-account.is-active,
+html[data-bar-sprout] .loose-nav-account.is-active:hover {
   padding: 6px !important;
 }
 
-html[data-loose-nav='on'] .loose-nav-account.is-active > img,
-html[data-loose-nav='on'] .loose-nav-account.is-active > .loose-nav-account-letter,
-html[data-loose-nav='on'] .loose-nav-account.is-active > .loose-nav-account-incognito,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active > img,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active > .loose-nav-account-letter,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active > .loose-nav-account-incognito {
+html[data-bar-sprout] .loose-nav-account.is-active > img,
+html[data-bar-sprout] .loose-nav-account.is-active > .loose-nav-account-letter,
+html[data-bar-sprout] .loose-nav-account.is-active > .loose-nav-account-incognito {
   width: 26px !important;
   height: 26px !important;
   max-width: 26px !important;
@@ -1034,75 +1432,221 @@ body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active > .loose-
   object-fit: cover !important;
 }
 
-/* Cuartos de círculo reales (el mismo raster que el borde): entran suaves en la barra. */
-html[data-loose-nav='on'] .shell-shortcut-item.is-active::before,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active::before,
-html[data-loose-nav='on'] .loose-nav-account.is-active::before,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active::before,
-html[data-loose-nav='on'] .shell-shortcut-item.is-active::after,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active::after,
-html[data-loose-nav='on'] .loose-nav-account.is-active::after,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active::after {
-  content: '';
+/* La franja no reserva 1px de borde: si no, el icono queda a 8.5px y el arco no cae en la línea. */
+html[data-bar-sprout] .shell-top,
+html[data-bar-sprout] #sidebar-chrome,
+html[data-profile-lupa='on'] .shell-top,
+html[data-profile-lupa='on'] #sidebar-chrome {
+  border-bottom-width: 0;
+}
+
+/* Arco de grosor constante. El tramo recto solapa el borde del icono y la línea
+   para que la esquina no se abra. La máscara es el trazo; el color sale de background. */
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::before,
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::after,
+html[data-bar-sprout] .loose-nav-account.is-active::before,
+html[data-bar-sprout] .loose-nav-account.is-active::after {
+  content: '' !important;
   position: absolute;
-  bottom: -11.5px;
-  width: 13px;
-  height: 14px;
+  bottom: -11px;
+  width: 15px;
+  height: 15px;
   box-sizing: border-box;
-  border: 2px solid transparent;
-  background: transparent;
+  border: none;
+  background: var(--key-line);
   pointer-events: none;
-  z-index: 3;
+  z-index: 8;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15'><path d='M14 1 L14 4 A10 10 0 0 1 4 14 L1 14' fill='none' stroke='black' stroke-width='2' stroke-linecap='butt'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15'><path d='M14 1 L14 4 A10 10 0 0 1 4 14 L1 14' fill='none' stroke='black' stroke-width='2' stroke-linecap='butt'/></svg>");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
 }
 
-html[data-loose-nav='on'] .shell-shortcut-item.is-active::before,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active::before,
-html[data-loose-nav='on'] .loose-nav-account.is-active::before,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active::before {
-  left: -13px;
-  border-right-color: var(--key-line);
-  border-bottom-color: var(--key-line);
-  border-bottom-right-radius: 12px;
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::before,
+html[data-bar-sprout] .loose-nav-account.is-active::before {
+  left: -15px;
 }
 
-html[data-loose-nav='on'] .shell-shortcut-item.is-active::after,
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active::after,
-html[data-loose-nav='on'] .loose-nav-account.is-active::after,
-body:has(#shortcut-browser:not([hidden])) .loose-nav-account.is-active::after {
-  right: -13px;
-  border-left-color: var(--key-line);
-  border-bottom-color: var(--key-line);
-  border-bottom-left-radius: 12px;
-}
-
-/* Tapa el trazo recto bajo el acceso, igual que el puente de un perfil.
-   No depende de anchor(): el icono vive más adentro (celda de la franja). */
-body:has(#shortcut-browser:not([hidden])) .shell-shortcut-item.is-active .shell-shortcut-icon-wrap::before {
-  content: '';
-  position: absolute;
-  z-index: 2;
-  left: 0;
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::after,
+html[data-bar-sprout] .loose-nav-account.is-active::after {
   right: 0;
-  bottom: -12px;
-  height: 5px;
-  background: var(--ud-chrome-strip-bg);
-  pointer-events: none;
+  transform: scaleX(-1);
+  transform-origin: right center;
 }
 
-/* Tapa la línea recta debajo del icono. El ancla tiene que vivir en un
-   ancestro del icono: si no, anchor() no resuelve y la línea cruza el arco. */
-html[data-loose-nav='on']:has(.loose-nav-account.is-active, .shell-shortcut-item.is-active) #sidebar-chrome::before,
-body:has(#shortcut-browser:not([hidden])):has(.loose-nav-account.is-active, .shell-shortcut-item.is-active) .shell-top::after {
+/* Tapa la línea solo entre las dos curvas. El recorte evita que la sombra
+   caiga sobre el icono de al lado; las esquinas de arriba siguen redondas. */
+html[data-bar-sprout] .loose-nav-account.is-active,
+html[data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn) {
+  box-shadow:
+    10px 12px 0 0 var(--ud-chrome-strip-bg),
+    -10px 12px 0 0 var(--ud-chrome-strip-bg),
+    0 12px 0 0 var(--ud-chrome-strip-bg) !important;
+  /* 1px de más en el contorno para no recortar el borde redondo al escalar la pantalla. */
+  clip-path: path("M9 -1 H31 A11 11 0 0 1 41 10 V41 H56 V54 H-16 V41 H-1 V10 A11 11 0 0 1 9 -1 Z");
+}
+
+/* Un acceso (Gmail, carpeta, etc.) es el único icono encendido. El perfil no compite. */
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) #strip-search.is-guest-active,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) #strip-search.is-guest-active:hover,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) #strip-search.is-guest-active:active,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .loose-nav-accounts .loose-nav-account.is-active,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .loose-nav-accounts .loose-nav-account.is-active:hover {
+  border: none !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  anchor-name: none !important;
+}
+
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .loose-nav-accounts .loose-nav-account.is-active,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .loose-nav-accounts .loose-nav-account.is-active:hover {
+  border: 1px solid transparent !important;
+  padding: 7px !important;
+}
+
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) #strip-search.is-guest-active::before,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) #strip-search.is-guest-active::after,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .loose-nav-accounts .loose-nav-account.is-active::before,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .loose-nav-accounts .loose-nav-account.is-active::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* La búsqueda de la lupa ya se fue a la barra: el perfil queda seleccionado. */
+html[data-bar-sprout] .strip-profile-search:not(.is-open) .strip-profile-search-avatar .loose-nav-account.is-active,
+html[data-bar-sprout] .strip-profile-search:not(.is-open) .strip-profile-search-avatar .loose-nav-account.is-active:hover {
+  box-sizing: border-box !important;
+  width: var(--ud-chrome-icon) !important;
+  min-width: var(--ud-chrome-icon) !important;
+  max-width: var(--ud-chrome-icon) !important;
+  height: var(--ud-chrome-icon) !important;
+  min-height: var(--ud-chrome-icon) !important;
+  max-height: var(--ud-chrome-icon) !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  border: var(--ud-sprout-stroke) solid var(--key-line) !important;
+  border-bottom: none !important;
+  border-radius: 10px 10px 0 0 !important;
+  background: var(--ud-chrome-strip-bg) !important;
+  opacity: 1 !important;
+  z-index: 8;
+  overflow: visible !important;
+  position: relative;
+  anchor-name: --ud-session;
+  box-shadow:
+    10px 12px 0 0 var(--ud-chrome-strip-bg),
+    -10px 12px 0 0 var(--ud-chrome-strip-bg),
+    0 12px 0 0 var(--ud-chrome-strip-bg) !important;
+  clip-path: path("M9 -1 H31 A11 11 0 0 1 41 10 V41 H56 V54 H-16 V41 H-1 V10 A11 11 0 0 1 9 -1 Z") !important;
+}
+
+html[data-bar-sprout] .strip-profile-search:not(.is-open) .strip-profile-search-avatar .loose-nav-account.is-active::before,
+html[data-bar-sprout] .strip-profile-search:not(.is-open) .strip-profile-search-avatar .loose-nav-account.is-active::after {
+  content: '' !important;
+  display: block !important;
+}
+
+/* Un acceso (WhatsApp, Gmail…) es lo que está elegido. El perfil no queda marcado. */
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .strip-profile-search-avatar .loose-nav-account.is-active,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .strip-profile-search-avatar .loose-nav-account.is-active:hover {
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  padding: 7px !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  anchor-name: none !important;
+  opacity: 1 !important;
+}
+
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .strip-profile-search-avatar .loose-nav-account.is-active::before,
+html:not([data-profiles-edit='on']):has(.shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):not(.strip-add-shortcut)) .strip-profile-search-avatar .loose-nav-account.is-active::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* La lupa del perfil abre la misma barra: el arco sale de la lupa, no del perfil ni del acceso. */
+html[data-profile-lupa='on'] .strip-profile-search-lupa,
+html[data-profile-lupa='on'] .strip-profile-search-lupa:hover,
+html[data-profile-lupa='on'] .strip-profile-search-lupa:active {
+  box-sizing: border-box !important;
+  align-self: center !important;
+  width: var(--ud-chrome-icon) !important;
+  min-width: var(--ud-chrome-icon) !important;
+  max-width: var(--ud-chrome-icon) !important;
+  height: var(--ud-chrome-icon) !important;
+  min-height: var(--ud-chrome-icon) !important;
+  max-height: var(--ud-chrome-icon) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: var(--ud-sprout-stroke) solid var(--key-line) !important;
+  border-bottom: none !important;
+  border-radius: 10px 10px 0 0 !important;
+  background: var(--ud-chrome-strip-bg) !important;
+  z-index: 8;
+  overflow: visible !important;
+  position: relative;
+  anchor-name: --ud-session;
+  box-shadow:
+    10px 12px 0 0 var(--ud-chrome-strip-bg),
+    -10px 12px 0 0 var(--ud-chrome-strip-bg),
+    0 12px 0 0 var(--ud-chrome-strip-bg) !important;
+  clip-path: path("M9 -1 H31 A11 11 0 0 1 41 10 V41 H56 V54 H-16 V41 H-1 V10 A11 11 0 0 1 9 -1 Z");
+}
+
+html[data-profile-lupa='on'] .strip-profile-search-lupa::before,
+html[data-profile-lupa='on'] .strip-profile-search-lupa::after {
   content: '';
   position: absolute;
-  position-anchor: --ud-session;
-  left: calc(anchor(left) - 11px);
-  width: calc(anchor-size(width) + 22px);
-  top: calc(anchor(bottom) + 9.5px);
-  height: 2px;
-  background: var(--ud-chrome-strip-bg);
+  bottom: -11px;
+  width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  border: none;
+  background: var(--key-line);
   pointer-events: none;
-  z-index: 1;
+  z-index: 8;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15'><path d='M14 1 L14 4 A10 10 0 0 1 4 14 L1 14' fill='none' stroke='black' stroke-width='2' stroke-linecap='butt'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 15 15'><path d='M14 1 L14 4 A10 10 0 0 1 4 14 L1 14' fill='none' stroke='black' stroke-width='2' stroke-linecap='butt'/></svg>");
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+html[data-profile-lupa='on'] .strip-profile-search-lupa::before {
+  left: -15px;
+}
+
+html[data-profile-lupa='on'] .strip-profile-search-lupa::after {
+  right: 0;
+  transform: scaleX(-1);
+  transform-origin: right center;
+}
+
+html[data-profile-lupa='on'][data-bar-sprout] .loose-nav-account.is-active,
+html[data-profile-lupa='on'][data-bar-sprout] .loose-nav-account.is-active:hover,
+html[data-profile-lupa='on'][data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn),
+html[data-profile-lupa='on'][data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):hover,
+html[data-profile-lupa='on'][data-bar-sprout] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):active {
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  anchor-name: none !important;
+}
+
+html[data-profile-lupa='on'] .loose-nav-account.is-active::before,
+html[data-profile-lupa='on'] .loose-nav-account.is-active::after,
+html[data-profile-lupa='on'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::before,
+html[data-profile-lupa='on'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::after {
+  content: none !important;
+  display: none !important;
 }
 
 /* Buscar + divisor: siempre visibles en la franja. */
@@ -1252,4 +1796,231 @@ body:has(#shortcut-browser:not([hidden])):has(.loose-nav-account.is-active, .she
 /* Reserva el hueco a la izquierda aunque no haya tilde, para alinear avatares. */
 .profile-rail-menu-check:empty {
   visibility: hidden;
+}
+
+/* Arrastre de una pestaña hacia la franja de accesos. */
+html.is-tab-pin-drag,
+html.is-tab-pin-drag * {
+  cursor: grabbing !important;
+}
+
+html.is-tab-pin-armed #sidebar-chrome,
+html.is-tab-pin-armed #shortcuts-container,
+html.is-tab-pin-armed .shell-top,
+html.is-tab-pin-armed .shortcut-strip,
+html.is-tab-pin-drag #sidebar-chrome,
+html.is-tab-pin-drag #shortcuts-container,
+html.is-tab-pin-drag .shell-top,
+html.is-tab-pin-drag .shortcut-strip {
+  -webkit-app-region: no-drag !important;
+}
+
+#shortcuts-container.is-tab-drop,
+.shortcut-strip.is-tab-drop {
+  background: color-mix(in srgb, var(--secondary, #c8f542) 16%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--secondary, #c8f542) 55%, transparent);
+}
+
+.shortcut-card.is-tab-insert-before,
+.shell-shortcut-cell.is-tab-insert-before {
+  box-shadow: -2px 0 0 var(--secondary, #c8f542);
+}
+
+#shortcuts-container.is-tab-insert-end,
+.shortcut-strip.is-tab-insert-end {
+  box-shadow: inset -3px 0 0 var(--secondary, #c8f542);
+}
+
+.loose-nav-tab.is-pin-source,
+.subtab.is-pin-source {
+  opacity: 0.45;
+}
+
+.tab-pin-ghost {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border-radius: 8px;
+  background: var(--ud-chrome-icon-active-bg, #3d3d48);
+  color: var(--ud-chrome-text, #e8e8ef);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.tab-pin-ghost img,
+.tab-pin-ghost-letter {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.tab-pin-ghost-letter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--secondary, #c8f542);
+  color: #1a1a1a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.tab-pin-ghost-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-card.is-tab-stack,
+.shell-shortcut-cell.is-tab-stack .shell-shortcut-item {
+  transform: scale(1.12);
+  background: color-mix(in srgb, var(--secondary, #c8f542) 24%, transparent);
+  border-radius: 14px;
+}
+
+.shell-shortcut-item.is-workspace .shell-shortcut-icon-wrap,
+.shell-shortcut-item.is-workspace:hover .shell-shortcut-icon-wrap {
+  filter: none !important;
+}
+
+.workspace-glyph {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  width: 26px;
+  height: 26px;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ud-chrome-text) 14%, var(--ud-chrome-icon-bg, #2a2a32));
+}
+
+.workspace-glyph-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.workspace-glyph-cell .shell-shortcut-icon-img,
+.workspace-glyph-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+.workspace-glyph-cell .shell-shortcut-icon-fallback,
+.workspace-glyph-cell .shell-shortcut-icon-emoji {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.workspace-folder {
+  position: fixed;
+  z-index: 40;
+  min-width: 168px;
+  max-width: 280px;
+  padding: 10px 10px 12px;
+  border-radius: 18px;
+  background: var(--ud-chrome-strip-bg, #121216);
+  border: 1px solid var(--ud-chrome-strip-border, #33333d);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.46);
+}
+
+.workspace-folder-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ud-chrome-text, #e8e8ef);
+}
+
+.workspace-folder-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.workspace-folder-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 68px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ud-chrome-text, #e8e8ef);
+  cursor: pointer;
+  font: inherit;
+}
+
+.workspace-folder-item:hover {
+  background: var(--ud-chrome-icon-bg-hover, #36363f);
+}
+
+.workspace-folder-item .shell-shortcut-icon-wrap {
+  filter: none !important;
+}
+
+.workspace-folder-label {
+  max-width: 64px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-card.is-just-pinned,
+.shell-shortcut-item.is-just-pinned {
+  animation: tab-pin-pop 320ms ease-out;
+}
+
+@keyframes tab-pin-pop {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--secondary, #c8f542) 75%, transparent); }
+  100% { box-shadow: 0 0 0 10px transparent; }
+}
+
+/* El buscador ya no es el icono de incógnito: no hereda el arco de la lupa. */
+html[data-bar-sprout='lupa'] .strip-search::before,
+html[data-bar-sprout='lupa'] .strip-search::after,
+html[data-bar-sprout='session'] #strip-search.is-guest-active::before,
+html[data-bar-sprout='session'] #strip-search.is-guest-active::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Barra vacía ("Buscá en Google"): no hay pestaña, así que el acceso no se une con una línea. */
+html[data-bar-sprout='lupa'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn),
+html[data-bar-sprout='lupa'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):hover,
+html[data-bar-sprout='lupa'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn):active {
+  border: none !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+  anchor-name: none !important;
+}
+
+html[data-bar-sprout='lupa'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::before,
+html[data-bar-sprout='lupa'] .shell-shortcut-item.is-active:not(.dock-home-strip-btn):not(.dock-downloads-strip-btn):not(.shell-home-strip-btn):not(.shell-downloads-strip-btn)::after {
+  content: none !important;
+  display: none !important;
 }

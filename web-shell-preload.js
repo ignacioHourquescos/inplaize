@@ -31,6 +31,11 @@ contextBridge.exposeInMainWorld('usualDeskShell', {
       ...(profile && profile.slideIn ? { slideIn: true } : {}),
     }),
   looseNavUseAccount: (payload) => ipcRenderer.invoke('loose-nav-use-account', payload || {}),
+  looseNavSetDefaultProfile: (target) =>
+    ipcRenderer.invoke('loose-nav-set-default-profile', {
+      partition: target && target.partition ? String(target.partition) : '',
+      chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
+    }),
   popupProfileRail: (payload) => ipcRenderer.invoke('profile-rail-popup', payload || {}),
   popupStripSearch: (payload) => ipcRenderer.invoke('strip-search-popup', payload || {}),
   onLooseNavState: (callback) => {

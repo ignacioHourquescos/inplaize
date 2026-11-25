@@ -7,6 +7,8 @@
  */
 (function initProfileRailMenu(global) {
   const VISIBLE = 3;
+  /** Tope del riel. Quien saca al principal al input pide 2 y se siguen viendo tres. */
+  let railCap = VISIBLE;
   const DOTS =
     '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">' +
     '<circle cx="12" cy="5" r="1.7" fill="currentColor"/>' +
@@ -30,10 +32,15 @@
     return item && item.key != null && item.key !== '' ? String(item.key) : '';
   }
 
+  function shownCap() {
+    return railCap > 0 ? railCap : VISIBLE;
+  }
+
   function defaultShownKeys(list) {
-    const visible = list.slice(0, Math.min(VISIBLE, list.length));
+    const max = shownCap();
+    const visible = list.slice(0, Math.min(max, list.length));
     const activeAt = list.findIndex((item) => item && item.active);
-    if (activeAt >= VISIBLE && list.length > VISIBLE) visible[VISIBLE - 1] = list[activeAt];
+    if (activeAt >= max && list.length > max) visible[max - 1] = list[activeAt];
     return visible.map(itemKey).filter(Boolean);
   }
 
@@ -44,17 +51,30 @@
     return railShownKeys;
   }
 
-  function pickVisible(items, editing) {
+  function pickVisible(items, editing, limit) {
     const list = Array.isArray(items) ? items.slice() : [];
+    if (Number.isFinite(limit) && limit > 0) railCap = Math.floor(limit);
+    const max = shownCap();
     if (editing) return { visible: list, overflow: [] };
     if (!list.length) return { visible: [], overflow: [] };
 
-    if (railShownKeys == null && list.length <= VISIBLE) {
+    if (railShownKeys == null && list.length <= max) {
       return { visible: list, overflow: [] };
     }
 
+    const before = railShownKeys == null ? 0 : railShownKeys.length;
     const keys = ensureShownKeys(list);
+    const dropped = before - keys.length;
     const want = new Set(keys);
+    if (dropped > 0 && keys.length < max) {
+      for (const item of list) {
+        if (keys.length >= max) break;
+        const key = itemKey(item);
+        if (!key || want.has(key)) continue;
+        keys.push(key);
+        want.add(key);
+      }
+    }
     const visible = list.filter((item) => want.has(itemKey(item)));
     const shown = new Set(visible);
     return { visible, overflow: list.filter((item) => !shown.has(item)) };
@@ -85,8 +105,9 @@
     if (railShownKeys == null) railShownKeys = [];
     railShownKeys = railShownKeys.filter((x) => x !== k);
     railShownKeys.push(k);
-    if (railShownKeys.length > VISIBLE) {
-      railShownKeys = railShownKeys.slice(railShownKeys.length - VISIBLE);
+    const max = shownCap();
+    if (railShownKeys.length > max) {
+      railShownKeys = railShownKeys.slice(railShownKeys.length - max);
     }
     return true;
   }

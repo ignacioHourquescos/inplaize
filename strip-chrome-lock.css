@@ -1,0 +1,120 @@
+/* Última palabra de la franja: inplaize y Descargas van con contorno,
+   y el toggle es la línea entre perfiles y accesos. La lupa no entra acá. */
+
+#dock-home-btn,
+#dock-downloads-btn,
+#shell-home-btn,
+#shell-downloads-btn,
+#dock-home-btn.is-active,
+#dock-downloads-btn.is-active,
+#shell-home-btn.is-active,
+#shell-downloads-btn.is-active,
+#dock-home-btn:hover,
+#dock-downloads-btn:hover,
+#shell-home-btn:hover,
+#shell-downloads-btn:hover {
+  background: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#dock-home-btn::before,
+#dock-home-btn::after,
+#dock-downloads-btn::before,
+#dock-downloads-btn::after,
+#shell-home-btn::before,
+#shell-home-btn::after,
+#shell-downloads-btn::before,
+#shell-downloads-btn::after,
+#dock-home-btn .dock-home-logo-mark::before,
+#dock-home-btn .dock-home-logo-mark::after,
+#dock-downloads-btn .dock-home-logo-mark::before,
+#dock-downloads-btn .dock-home-logo-mark::after,
+#shell-home-btn .dock-home-logo-mark::before,
+#shell-home-btn .dock-home-logo-mark::after,
+#shell-downloads-btn .dock-home-logo-mark::before,
+#shell-downloads-btn .dock-home-logo-mark::after,
+.strip-mode-seg::before,
+.strip-mode-seg::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  background-image: none !important;
+  opacity: 0 !important;
+}
+
+#dock-home-btn .dock-home-logo-mark,
+#dock-downloads-btn .dock-home-logo-mark,
+#shell-home-btn .dock-home-logo-mark,
+#shell-downloads-btn .dock-home-logo-mark {
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  border-radius: 8px !important;
+  color: var(--ud-chrome-text, #e8e8ef) !important;
+  background: var(--ud-chrome-strip-bg, #121216) !important;
+  background-image: none !important;
+  border: 1.5px solid var(--ud-chrome-text, #e8e8ef) !important;
+  box-shadow: none !important;
+}
+
+#strip-search,
+html[data-dock-layout='topbar'] #strip-search,
+html[data-bar-sprout] #strip-search,
+html[data-dock-layout='topbar'] #sidebar-chrome > #strip-search,
+.shell-top > #strip-search {
+  flex: 0 0 26px !important;
+  width: 26px !important;
+  min-width: 26px !important;
+  max-width: 26px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  align-self: stretch !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  clip-path: none !important;
+}
+
+#strip-search::before,
+#strip-search::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+
+#strip-search .strip-search-line {
+  display: block !important;
+  position: absolute !important;
+  left: 50% !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 1px !important;
+  height: auto !important;
+  transform: translateX(-50%) !important;
+  background: var(--ud-chrome-divider, #3f3f48) !important;
+}
+
+#strip-search .strip-search-mark,
+#strip-search:hover .strip-search-mark,
+#strip-search[aria-expanded='true'] .strip-search-mark {
+  width: 22px !important;
+  height: 18px !important;
+  min-width: 22px !important;
+  min-height: 18px !important;
+  border-radius: 6px !important;
+  background: var(--ud-chrome-strip-bg, #121216) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--ud-chrome-icon-muted, #c8c8d4) !important;
+}
+
+#strip-search:hover .strip-search-mark,
+#strip-search[aria-expanded='true'] .strip-search-mark {
+  color: var(--ud-chrome-text, #e8e8ef) !important;
+}

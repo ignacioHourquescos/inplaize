@@ -22,6 +22,11 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
       ...(profile && profile.slideIn ? { slideIn: true } : {}),
     }),
   looseNavUseAccount: (payload) => ipcRenderer.invoke('loose-nav-use-account', payload || {}),
+  looseNavSetDefaultProfile: (target) =>
+    ipcRenderer.invoke('loose-nav-set-default-profile', {
+      partition: target && target.partition ? String(target.partition) : '',
+      chromeDirectory: target && target.chromeDirectory ? String(target.chromeDirectory) : '',
+    }),
   popupProfileRail: (payload) => ipcRenderer.invoke('profile-rail-popup', payload || {}),
   popupStripSearch: (payload) => ipcRenderer.invoke('strip-search-popup', payload || {}),
   onLooseNavState: (callback) => {
@@ -30,6 +35,7 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   setUrlPromptOpen: (open) => ipcRenderer.invoke('url-prompt-open', open === true),
   openAddShortcut: () => ipcRenderer.invoke('chrome-open-add-shortcut'),
   openAddShortcutForPage: (page) => ipcRenderer.invoke('chrome-open-add-shortcut-for-page', page || {}),
+  pinTabAsShortcut: (page) => ipcRenderer.invoke('pin-tab-as-shortcut', page || {}),
   openAppearance: () => ipcRenderer.invoke('chrome-open-appearance'),
   enterShortcutsEditMode: () => ipcRenderer.invoke('chrome-enter-shortcuts-edit-mode'),
   collapseDockSidebar: () => ipcRenderer.invoke('collapse-sidebar'),
@@ -64,6 +70,9 @@ contextBridge.exposeInMainWorld('usualDeskDetached', {
   },
   onTabs: (cb) => {
     ipcRenderer.on('detached-tabs', (_e, payload) => cb(payload));
+  },
+  onFocusSearchBar: (cb) => {
+    ipcRenderer.on('focus-search-bar', () => cb());
   },
   onUrlBarHidden: (cb) => {
     ipcRenderer.on('detached-url-bar', (_e, hidden) => cb(hidden === true));

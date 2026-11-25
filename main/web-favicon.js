@@ -101,12 +101,85 @@ function parseLinkIcons(html, baseUrl) {
   return out;
 }
 
+function hostOf(raw) {
+  try {
+    return new URL(String(raw || '')).hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/** El icono de la página anterior no sirve cuando cambia el sitio. */
+function navigationKeepsFavicon(previousUrl, nextUrl) {
+  const prev = hostOf(previousUrl);
+  const next = hostOf(nextUrl);
+  if (!prev || !next) return true;
+  return prev === next;
+}
+
+/**
+ * @param {string} pageUrl
+ * @param {string} nextUrl
+ * @param {{ url?: string, favicon?: string }} tab
+ * @returns {boolean} true si hubo que soltar el favicon viejo
+ */
+function applyTabNavigation(tab, nextUrl) {
+  if (!tab) return false;
+  const next = String(nextUrl || '');
+  if (!next) return false;
+  const dropIcon = !!(tab.favicon && tab.url && !navigationKeepsFavicon(tab.url, next));
+  tab.url = next;
+  if (dropIcon) tab.favicon = '';
+  return dropIcon;
+}
+
+/**
+ * Prioriza el .ico del propio sitio. Un data URL cuenta como de esta página
+ * (el navegador ya lo decodificó). Si no hay nada del sitio, queda el primero.
+ * @param {string[]} favicons
+ * @param {string} pageUrl
+ * @returns {string}
+ */
+function pickPageFavicon(favicons, pageUrl) {
+  const list = (Array.isArray(favicons) ? favicons : [])
+    .map((item) => String(item || '').trim())
+    .filter((item) => /^(https?:|data:image\/)/i.test(item));
+  if (!list.length) return '';
+  const pageHost = hostOf(pageUrl);
+  const rank = (href) => {
+    const own = !pageHost || href.startsWith('data:image/') || hostOf(href) === pageHost ? 4 : 0;
+    const ico = /\.ico(?:[?#]|$)/i.test(href) ? 2 : 0;
+    return own + ico;
+  };
+  let best = list[0];
+  let bestRank = rank(best);
+  for (let i = 1; i < list.length; i += 1) {
+    const score = rank(list[i]);
+    if (score > bestRank) {
+      best = list[i];
+      bestRank = score;
+    }
+  }
+  return best;
+}
+
+/** Hint usable para bajar el icono: solo una URL http(s) del mismo sitio. */
+function sameSiteIconHint(pageUrl, iconUrl) {
+  const hint = toHttpUrl(String(iconUrl || ''), pageUrl);
+  if (!hint) return '';
+  const pageHost = hostOf(pageUrl);
+  const hintHost = hostOf(hint);
+  if (!pageHost || pageHost !== hintHost) return '';
+  return hint;
+}
+
 function scoreLink(link) {
   const href = String(link.href || '').toLowerCase();
   const type = String(link.type || '').toLowerCase();
   const rel = String(link.rel || '').toLowerCase();
   let score = 0;
   if (href.includes('.ico') || type.includes('icon')) score += 100;
+  if (/\/favicon\.ico(?:[?#]|$)/i.test(href)) score += 40;
   if (type.includes('png') || href.includes('.png')) score += 30;
   if (rel.includes('apple-touch')) score -= 25;
   if (rel.includes('mask-icon')) score -= 40;
@@ -289,19 +362,7 @@ async function resolveWebFavicon(pageUrlRaw, iconUrlHint) {
     const page = normalizePageUrl(pageUrlRaw);
     if (!page) return null;
     const deadline = Date.now() + BUDGET_MS;
-    const hint = toHttpUrl(String(iconUrlHint || ''), page.href);
-    if (hint) {
-      const img = await fetchBytes(
-        hint,
-        signal,
-        remaining(deadline),
-        ICON_MAX,
-        'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8',
-      );
-      if (signal.aborted) return null;
-      const dataUrl = img ? imageDataUrl(img.buf, img.contentType, hint) : '';
-      if (dataUrl) return dataUrl;
-    }
+    const hint = sameSiteIconHint(page.href, iconUrlHint);
     let links = [];
     const htmlRes = await fetchBytes(
       page.href,
@@ -317,7 +378,14 @@ async function resolveWebFavicon(pageUrlRaw, iconUrlHint) {
       links = parseLinkIcons(html, base);
     }
     const candidates = buildCandidateList(links, page.origin);
-    for (const href of candidates) {
+    const icos = candidates.filter((href) => /\.ico(?:[?#]|$)/i.test(href));
+    const rest = candidates.filter((href) => !/\.ico(?:[?#]|$)/i.test(href));
+    const queue = [...icos];
+    if (hint && !queue.includes(hint)) queue.push(hint);
+    for (const href of rest) {
+      if (href !== hint && !queue.includes(href)) queue.push(href);
+    }
+    for (const href of queue) {
       if (signal.aborted || remaining(deadline) < 400) return null;
       const img = await fetchBytes(
         href,
@@ -345,4 +413,8 @@ module.exports = {
   buildCandidateList,
   normalizePageUrl,
   imageDataUrl,
+  pickPageFavicon,
+  applyTabNavigation,
+  sameSiteIconHint,
+  navigationKeepsFavicon,
 };
