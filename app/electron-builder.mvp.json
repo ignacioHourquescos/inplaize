@@ -1,0 +1,28 @@
+{
+  "extends": null,
+  "appId": "com.inplaize.mvp",
+  "productName": "inplaize",
+  "executableName": "inplaize",
+  "asar": true,
+  "npmRebuild": false,
+  "directories": {
+    "output": "release/mvp"
+  },
+  "files": [
+    "app/**/*",
+    "assets/icon.png",
+    "assets/icon.ico",
+    "package.json",
+    "!app/electron-builder.mvp.json",
+    "!**/node_modules/**"
+  ],
+  "extraFiles": [
+    { "from": "app/LEEME.txt", "to": "LEEME.txt" }
+  ],
+  "win": {
+    "target": ["zip"],
+    "icon": "assets/icon.ico",
+    "artifactName": "inplaize-mvp-${version}-windows.${ext}",
+    "signAndEditExecutable": false
+  }
+}
