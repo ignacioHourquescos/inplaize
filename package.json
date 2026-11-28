@@ -1,12 +1,14 @@
 {
   "name": "inplaize",
   "version": "1.6.8",
-  "description": "Floating dock of quick-access shortcuts for your desktop",
-  "main": "main/index.js",
+  "description": "inplaize MVP: barra, perfiles, notas y navegación",
+  "main": "app/main/index.js",
   "scripts": {
     "postinstall": "node scripts/brand-dev-electron.js",
     "prestart": "node scripts/brand-dev-electron.js",
     "start": "electron .",
+    "test:mvp": "node scripts/test-mvp.js",
+    "build:mvp": "electron-builder --config app/electron-builder.mvp.json --win zip --publish never",
     "predev": "node scripts/brand-dev-electron.js",
     "dev": "electronmon .",
     "preview:onboarding": "node scripts/onboarding-preview-server.js",

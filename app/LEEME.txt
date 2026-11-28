@@ -1,0 +1,11 @@
+inplaize MVP
+
+Descomprimí esta carpeta y abrí inplaize.exe.
+
+Qué podés probar
+- La home arranca vacía: escribí notas. Enter crea otro renglón. / cambia entre texto, tarea y viñeta.
+- El lápiz deja agregar perfiles (a la izquierda) y accesos. Cada perfil y cada acceso guardan su sesión aparte.
+- El chevron abre la barra de pestañas. La línea violeta del tema une el perfil o el acceso activo con esa barra.
+- Ctrl+Alt+D muestra u oculta todo. Clic derecho sobre un acceso abierto cierra esa ventana.
+
+Los datos quedan en tu equipo, en la carpeta inplaize-mvp. Esta versión no tiene descargas, documentos ni importación de Chrome.

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es" data-mode="home" data-bar="closed">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://www.google.com https://*.gstatic.com data:; style-src 'self'; script-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>inplaize</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="strip">
+      <button type="button" id="home-btn" class="mark" title="inplaize" aria-label="inplaize">
+        <svg viewBox="0 0 26 26" aria-hidden="true">
+          <rect x="7.5" y="7.5" width="11" height="11" rx="3" fill="currentColor"/>
+          <circle cx="13" cy="13" r="2" fill="var(--strip)"/>
+        </svg>
+      </button>
+      <span class="divider" aria-hidden="true"></span>
+      <nav id="profiles" aria-label="Perfiles"></nav>
+      <button type="button" id="chevron" title="Mostrar pestañas" aria-label="Mostrar pestañas" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6.5 9.5 12 15l5.5-5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <nav id="shortcuts" aria-label="Accesos"></nav>
+      <span class="grow"></span>
+      <button type="button" id="edit-btn" class="tool" title="Editar" aria-label="Editar accesos y perfiles" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          <path d="m13.5 6.5 4 4" fill="none" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </button>
+      <button type="button" id="menu-btn" class="tool" title="Menú" aria-label="Menú" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="windows" aria-label="Ventana">
+        <button type="button" id="win-min" title="Minimizar" aria-label="Minimizar">–</button>
+        <button type="button" id="win-max" title="Maximizar" aria-label="Maximizar">□</button>
+        <button type="button" id="win-close" title="Cerrar" aria-label="Cerrar">×</button>
+      </div>
+    </header>
+
+    <div id="bar" hidden>
+      <form id="omnibox">
+        <button type="button" id="back" class="nav" title="Atrás" aria-label="Atrás" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6.5 9 12l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="forward" class="nav" title="Adelante" aria-label="Adelante" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.5 15 12l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="reload" class="nav" title="Recargar" aria-label="Recargar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2-4.9M19 5v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <input id="address" type="text" spellcheck="false" autocomplete="off" placeholder="Buscá en Google o escribí un enlace" aria-label="Dirección" />
+      </form>
+      <div id="tabs" role="tablist"></div>
+      <button type="button" id="new-tab" title="Nueva pestaña" aria-label="Nueva pestaña">+</button>
+    </div>
+
+    <main id="home">
+      <div id="notes" aria-label="Notas"></div>
+    </main>
+  </div>
+
+  <div id="menu" hidden role="menu">
+    <p class="menu-hint">Ctrl + Alt + D muestra u oculta todo.</p>
+    <button type="button" id="menu-quit" role="menuitem">Cerrar inplaize</button>
+  </div>
+
+  <div id="sheet" hidden>
+    <form id="sheet-form">
+      <h2 id="sheet-title"></h2>
+      <label id="sheet-name-label">Nombre<input id="sheet-name" type="text" maxlength="40" /></label>
+      <label id="sheet-url-label">Enlace<input id="sheet-url" type="text" placeholder="gmail.com" /></label>
+      <p id="sheet-error" hidden></p>
+      <div class="sheet-actions">
+        <button type="button" id="sheet-cancel">Cancelar</button>
+        <button type="submit" id="sheet-save">Agregar</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="slash" hidden role="menu"></div>
+  <script src="renderer.js"></script>
+</body>
+</html>
